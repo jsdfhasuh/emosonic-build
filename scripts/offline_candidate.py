@@ -14,8 +14,8 @@ import pipeline as p
 
 SHA = "601d6b4d811da18f8b437febe6f677df5cfa4da2"
 SOURCE_REF = "refs/heads/codex/offline-browsing-and-playback-20261017"
-PARENT = "f12dc154d0d8131fda516e7c4a1b5bde836ef3b0"
-MESSAGE = "build: run fixed offline Android candidate 601d6b4"
+PARENT = "b19087a0fc8d2a27b35d8151c5a59fa791c8c4db"
+MESSAGE = "build: retry offline candidate 601d6b4 with explicit SDK tools"
 REQUEST_PATH = "requests/offline-601d6b4.json"
 SOURCE_VERSION = "1.0.6+23"
 VERSION_NAME = "1.0.6-offline.601d6b4"
@@ -24,7 +24,7 @@ PACKAGE_VERSION = VERSION_NAME + "+" + str(VERSION_CODE)
 APK_NAME = "emosonic_android_offline_601d6b4_v" + PACKAGE_VERSION + ".apk"
 BASELINE_URL = "https://github.com/jsdfhasuh/emosonic-releases/releases/download/v1.0.6%2B23/emosonic_android_v1.0.6%2B23.apk"
 REQUEST = {"source_sha": SHA, "source_version": SOURCE_VERSION,
-           "version_name": VERSION_NAME, "version_code": VERSION_CODE, "mode": "build-only"}
+           "version_name": VERSION_NAME, "version_code": VERSION_CODE, "mode": "build-only", "attempt": 2}
 
 
 def context():
@@ -54,6 +54,19 @@ def context():
         p.require(os.environ.get(name) == value, "Candidate source or version override rejected.")
     p.require(not os.environ.get("RELEASE_WRITE_TOKEN") and not os.environ.get("RELEASE_MODE"),
               "Release credentials and release modes are forbidden in the test workflow.")
+
+
+def tools():
+    """Use installed inspection tools; sdkmanager is not necessarily on PATH."""
+    sdk = Path(os.environ["ANDROID_HOME"])
+    build_tools = sdk / "build-tools" / p.POLICY["android_build_tools"]
+    if not all((build_tools / name).is_file() for name in ("aapt", "apksigner")):
+        manager = sdk / "cmdline-tools/latest/bin/sdkmanager"
+        p.require(manager.is_file(), "Android SDK command-line tools are missing from the runner.")
+        p.quiet([str(manager), "build-tools;" + p.POLICY["android_build_tools"]])
+    p.require(all((build_tools / name).is_file() for name in ("aapt", "apksigner")),
+              "Pinned Android inspection tools are missing after setup.")
+    print("Pinned Android inspection tools are available.")
 
 
 def baseline():
@@ -160,7 +173,7 @@ def verify():
 def main():
     try:
         context()
-        stages = {"baseline": baseline, "fetch": fetch, "build": build, "verify": verify, "cleanup": p.cleanup}
+        stages = {"tools": tools, "baseline": baseline, "fetch": fetch, "build": build, "verify": verify, "cleanup": p.cleanup}
         p.require(len(sys.argv) == 2 and sys.argv[1] in stages, "Invalid candidate stage; publishing is unavailable.")
         stages[sys.argv[1]]()
     except p.GateError as error:

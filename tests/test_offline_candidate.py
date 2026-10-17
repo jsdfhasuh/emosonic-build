@@ -95,6 +95,34 @@ class CandidateTests(unittest.TestCase):
         inspect.assert_not_called()
         self.assertFalse((self.root / "baseline.apk").exists())
 
+    def test_tools_use_installed_version_without_sdkmanager_on_path(self):
+        sdk = self.root / "sdk"
+        build_tools = sdk / "build-tools" / c.p.POLICY["android_build_tools"]
+        build_tools.mkdir(parents=True)
+        for name in ("aapt", "apksigner"):
+            (build_tools / name).write_text("synthetic")
+        with patch.dict(os.environ, {"ANDROID_HOME": str(sdk)}), patch.object(c.p, "quiet") as quiet:
+            c.tools()
+        quiet.assert_not_called()
+
+    def test_tools_call_absolute_sdkmanager_only_when_needed(self):
+        sdk = self.root / "sdk"
+        manager = sdk / "cmdline-tools/latest/bin/sdkmanager"
+        manager.parent.mkdir(parents=True)
+        manager.write_text("synthetic")
+        def install(args):
+            self.assertEqual(args, [str(manager), "build-tools;36.0.0"])
+            target = sdk / "build-tools/36.0.0"
+            target.mkdir(parents=True)
+            for name in ("aapt", "apksigner"):
+                (target / name).write_text("synthetic")
+        with patch.dict(os.environ, {"ANDROID_HOME": str(sdk)}), patch.object(c.p, "quiet", side_effect=install):
+            c.tools()
+
+    def test_tools_fail_closed_without_official_manager(self):
+        with patch.dict(os.environ, {"ANDROID_HOME": str(self.root / "missing")}), self.assertRaises(c.p.GateError):
+            c.tools()
+
     def make_bundle(self):
         apk = self.root / "synthetic.apk"
         apk.write_bytes(b"synthetic-apk")

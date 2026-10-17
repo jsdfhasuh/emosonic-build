@@ -5,7 +5,7 @@ from the offline browsing/playback candidate. Do not merge or modify source mast
 publish a release, change Secrets/permissions, or alter the stable workflow.
 
 The isolated workflow is armed only for a main push from builder parent
-`f12dc154d0d8131fda516e7c4a1b5bde836ef3b0`, changing the dedicated request file,
+`b19087a0fc8d2a27b35d8151c5a59fa791c8c4db`, changing the dedicated request file,
 with the exact documented commit message. Later ordinary pushes cannot build.
 Retries of that same GitHub run are allowed; there is no new dispatch endpoint.
 
@@ -29,3 +29,15 @@ upload private source, raw logs, symbols, credential files or dependency caches.
 Validate with all existing pipeline tests, focused candidate gate/provenance and
 APK tests, Python compilation and workflow syntax checks. Real-device offline
 browsing/playback, coverage install and data preservation remain user validation.
+
+## Tool setup retry, 2026-10-17
+
+Original run [39024877575](https://github.com/jsdfhasuh/emosonic-build/actions/runs/39024877575)
+started a public Ubuntu runner and passed all 50 tests. It failed before any
+private-source/signing step because sdkmanager was not on PATH (exit 127).
+The original failure is retained. Request attempt 2 explicitly arms one new
+transition from b19087a, with commit message
+`build: retry offline candidate 601d6b4 with explicit SDK tools`.
+It first uses already-installed pinned inspection tools, otherwise invokes
+sdkmanager by its official SDK path. Source, signing, version and no-publish
+restrictions are unchanged. Later unrelated pushes remain rejected.
