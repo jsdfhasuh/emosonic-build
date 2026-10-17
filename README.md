@@ -2,7 +2,9 @@
 
 固定从私有 `jsdfhasuh/emosonic` 的 **`refs/heads/master`** 构建正式签名 Android APK 和 Windows x64 Inno Setup 安装包，统一发布到公开 [emosonic-releases](https://github.com/jsdfhasuh/emosonic-releases)。公开仓库只保存自编构建基础设施，不保存产品源码、keystore 或 token；不构建 iOS。
 
-**正式 Android + Windows [1.0.7+24](https://github.com/jsdfhasuh/emosonic-releases/releases/tag/v1.0.7%2B24) 已于 2026-10-17 11:24:12 UTC 发布为 stable latest。** [最终运行 39027937897](https://github.com/jsdfhasuh/emosonic-build/actions/runs/39027937897) 的六个 jobs 全部成功；六个资产齐备并核对摘要。两平台同源 `ec2f9dedd04a11ccdbcf72b8eedf8e91502a5c9c`，builder `949660021c8fb9e165dcef96e8675ae3a395660a`。真实设备、覆盖安装、实际音频及应用内更新验收仍待用户完成，升级前请备份资料。[完整验证与首次失败记录](docs/validation/2026-10-17-offline-stable-release.md)。构建脚本不会自动修改或虚增源码版本。
+**整改正式版 [1.0.8+25](https://github.com/jsdfhasuh/emosonic-releases/releases/tag/v1.0.8%2B25) 已于 2026-10-17 22:19:36 UTC 发布为 stable latest。** [运行 39073984985](https://github.com/jsdfhasuh/emosonic-build/actions/runs/39073984985) 六个 jobs 全部成功；两平台独立验包通过，六资产发布后重新下载核对大小、摘要和 manifest 全部一致。两平台同源 `fe045684e89a18e1fb51b39c9483be6d1f6ac324`，builder `596d77e3fe595f3000f3e2f09bd8c3401aebf1ea`。F02 即时 Android 真实开始 ACK 仍 PARTIAL/OPEN；真机、覆盖安装及音频验收待用户完成。若签名不匹配请停止，勿卸载原应用或清除数据。[完整验证报告](docs/validation/2026-10-17-offline-remediation-release.md)。构建脚本不会自动修改或虚增源码版本。
+
+历史正式版 1.0.7+24 的[验证与首次失败记录](docs/validation/2026-10-17-offline-stable-release.md)保留。
 
 ## 固定离线候选测试包
 
@@ -12,7 +14,7 @@
 
 ## 本次授权的固定正式发布
 
-本次整改发布请求为 `requests/stable-1.0.8-25.json`，固定源码 `fe045684e89a18e1fb51b39c9483be6d1f6ac324`、版本 `1.0.8+25`、上一 builder 提交及完整提交消息。仅更新这一次受限 main push，不扩大普通 push 签名或发布权限；手动模式不变。复用原双平台构建、独立验包、六资产及 stable latest 门禁。见[本次计划](docs/plans/2026-10-17-offline-remediation-release.md)。结果在验证终态后补录；上一版 1.0.7+24 的成功记录保留为历史。
+本次整改发布请求为 `requests/stable-1.0.8-25.json`，固定源码 `fe045684e89a18e1fb51b39c9483be6d1f6ac324`、版本 `1.0.8+25`、上一 builder 提交及完整提交消息。仅更新这一次受限 main push，不扩大普通 push 签名或发布权限；手动模式不变。复用原双平台构建、独立验包、六资产及 stable latest 门禁。见[本次计划](docs/plans/2026-10-17-offline-remediation-release.md)。本次已发布并核验，见[验证结果](docs/validation/2026-10-17-offline-remediation-release.md)；上一版 1.0.7+24 的成功记录保留为历史。
 
 本次包含 F01、F03–F14 整改，F02 完成补报已修复，但 Android 即时真实开始 ACK 仍 PARTIAL/OPEN。真实设备验证仍待用户完成。如 Android 提示签名不一致，请停止安装，勿卸载原应用或清除数据；历史 GitHub 包证书一致不能证明与手机现装 APK 兼容。
 
