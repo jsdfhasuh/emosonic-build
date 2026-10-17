@@ -329,6 +329,18 @@ class PublishTests(unittest.TestCase):
         self.assertEqual([n for n in names if n.endswith(".apk")], [p.apk_name(VERSION)])
         self.assertEqual([n for n in names if n.endswith((".exe", ".msi"))], [p.installer_name(VERSION)])
 
+    def test_remediation_notes_preserve_open_issues_and_data_warning(self):
+        # Select the authorized notes branch using synthetic package identities.
+        with patch.object(p, "STABLE_PUSH_REQUEST", {"source_sha": SHA, "version": VERSION}):
+            self.run_publish()
+        body = next(data["body"] for _, method, data, upload in self.calls
+                    if method == "POST" and not upload)
+        for text in ("F02", "PARTIAL / OPEN", "2,321/2,321", "9 PASS / 4 FAIL",
+                     "signature mismatch", "do not uninstall", "clear its data",
+                     "NOT_RUN / PENDING_USER_VALIDATION", "No backend bridge"):
+            self.assertIn(text, body)
+        self.assertNotIn("failed before runner/test execution", body)
+
     def test_conflict_causes_no_write(self):
         with patch.object(p, "history", return_value={"v1.0.6+24"}), patch.object(p, "api") as request, self.assertRaises(p.GateError):
             p.publish()
@@ -465,6 +477,15 @@ class WindowsTests(unittest.TestCase):
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_single_push_request_matches_pipeline_and_workflow(self):
+        request = json.loads((ROOT / p.STABLE_PUSH_PATH).read_text(encoding="utf-8"))
+        self.assertEqual(request, p.STABLE_PUSH_REQUEST)
+        workflow = (ROOT / ".github/workflows/android.yml").read_text(encoding="utf-8")
+        self.assertIn("paths: [" + p.STABLE_PUSH_PATH + "]", workflow)
+        self.assertIn("github.event.before == '" + p.STABLE_PUSH_PARENT + "'", workflow)
+        self.assertIn("github.event.head_commit.message == '" + p.STABLE_PUSH_MESSAGE + "'", workflow)
+        self.assertIn("github.event.forced == false", workflow)
+
     def test_no_manual_source_or_version_and_jobs_share_prepared_snapshot(self):
         workflow = (ROOT / ".github/workflows/android.yml").read_text(encoding="utf-8")
         dispatch = workflow.split("\npermissions:")[0]

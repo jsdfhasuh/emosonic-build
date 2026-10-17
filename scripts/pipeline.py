@@ -25,11 +25,11 @@ DEST = "jsdfhasuh/emosonic-releases"
 BUILDER = "jsdfhasuh/emosonic-build"
 VERSION_RE = re.compile(r"(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\+([1-9][0-9]{0,9})", re.ASCII)
 SHA_RE = re.compile(r"[0-9a-f]{40}", re.ASCII)
-STABLE_PUSH_PARENT = "a37b5931d4a96faf89d86ca85839a2d3dc7c230d"
-STABLE_PUSH_MESSAGE = "release: publish 1.0.7+24 with verified digest outputs"
-STABLE_PUSH_PATH = "requests/stable-1.0.7-24.json"
-STABLE_PUSH_REQUEST = {"source_sha": "ec2f9dedd04a11ccdbcf72b8eedf8e91502a5c9c",
-                       "version": "1.0.7+24", "mode": "publish-stable", "attempt": 3}
+STABLE_PUSH_PARENT = "deb59cc8a6de0cc17a9100b38b82d8a3ae2f43a3"
+STABLE_PUSH_MESSAGE = "release: publish fixed offline remediation 1.0.8+25"
+STABLE_PUSH_PATH = "requests/stable-1.0.8-25.json"
+STABLE_PUSH_REQUEST = {"source_sha": "fe045684e89a18e1fb51b39c9483be6d1f6ac324",
+                       "version": "1.0.8+25", "mode": "publish-stable", "attempt": 1}
 
 
 
@@ -645,8 +645,9 @@ def publish():
             "Both packages include matching .sha256 files. The stable tag and asset formats remain compatible with the existing in-app updater; end-to-end update acceptance is pending. No iOS build is included. GitHub source archives refer to the release repository, not the private app source.\n\n"
             "Validation limits: package build and independent binary inspection are automated checks only. Android/Windows installation and upgrade, real audio, offline cold start, OS media/process lifecycle, data compatibility and the M01-M15 device matrix remain NOT_RUN / PENDING_USER_VALIDATION. Back up application data before upgrading. Personal-lab acceptance is not production-readiness certification. No server deployment is included; strict-v2 server compatibility is not certified.\n")
     if sha == STABLE_PUSH_REQUEST["source_sha"] and candidate == STABLE_PUSH_REQUEST["version"]:
-        body += ("\nChanges: account-scoped offline library browsing, persisted synchronization tasks, local download playback with logical-queue occurrence preservation, and scoped storage/legacy-data controls from PR #4.\n"
-                 "Source automated validation: 2,213 tests passed on frozen application source 0342684c3653d838e4fe5e7d928cc486c339125a per its validation report. Later source changes are documentation and the release version bump. Private repository CI remains failed before runner/test execution and is not represented as passed by this public package build.\n")
+        body += ("\nChanges: offline review remediation F01 and F03-F14, including account identity protection, download retention, offline cache selection, synchronization and catalog consistency, artwork/details, bounded failure pages and request freshness/concurrency. F02 durable completion outbox and account-scoped retry are repaired; immediate Android real-start ACK remains PARTIAL / OPEN. No backend bridge or deployment is included.\n"
+                 "Source automated validation: original suite 2,213/2,213, new remediation suite 108/108 and independent full aggregate 2,321/2,321 passed on frozen source 8445e8af1467de7e97e5a0e51c57d1ff42efd260. Subsequent source changes are two documentation files and the version-only bump. Independent original audit probes remain 9 PASS / 4 FAIL, explained in docs/validation/2026-10-18-offline-review-remediation.md in the private source repository; F02 immediate now-playing is still open. Private source CI has no verified runner/test execution evidence and is not represented as passed by this public package build.\n"
+                 "Android installation warning: this APK preserves package ID com.example.emosonic and the historical GitHub-release signing certificate. Compatibility with an already installed APK is not established. If Android reports a signature mismatch, STOP: do not uninstall the existing app or clear its data to force installation. Preserve downloaded music and application data. Real-device validation remains pending the user.\n")
     release = api(f"/repos/{DEST}/releases", token, "POST", {"tag_name": tag, "target_commitish": target["sha"], "name": "EmoSonic " + candidate, "body": body, "draft": True, "prerelease": False, "make_latest": "false"})
     release_id = release["id"]
     require(isinstance(release_id, int), "Invalid draft release response.")

@@ -12,7 +12,9 @@
 
 ## 本次授权的固定正式发布
 
-`requests/stable-1.0.7-24.json` 仅触发一次受限 main push：固定上一 builder 提交、完整提交消息、请求内容、源码 SHA 与版本。复用同一个 `android.yml` 及全部双平台验证/发布 gates；普通 push 不会签名或发布。正式 SDK 工具路径已采用候选包验证过的绝对路径逻辑。它不新增 token、不改变 Environments 或分支保护。详见[本次发布计划](docs/plans/2026-10-17-offline-stable-release.md)。手动入口继续保持下面的 master 自动取版行为。
+本次整改发布请求为 `requests/stable-1.0.8-25.json`，固定源码 `fe045684e89a18e1fb51b39c9483be6d1f6ac324`、版本 `1.0.8+25`、上一 builder 提交及完整提交消息。仅更新这一次受限 main push，不扩大普通 push 签名或发布权限；手动模式不变。复用原双平台构建、独立验包、六资产及 stable latest 门禁。见[本次计划](docs/plans/2026-10-17-offline-remediation-release.md)。结果在验证终态后补录；上一版 1.0.7+24 的成功记录保留为历史。
+
+本次包含 F01、F03–F14 整改，F02 完成补报已修复，但 Android 即时真实开始 ACK 仍 PARTIAL/OPEN。真实设备验证仍待用户完成。如 Android 提示签名不一致，请停止安装，勿卸载原应用或清除数据；历史 GitHub 包证书一致不能证明与手机现装 APK 兼容。
 
 ## 每次只选择运行模式
 
