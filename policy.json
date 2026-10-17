@@ -2,7 +2,7 @@
   "builder_repository": "jsdfhasuh/emosonic-build",
   "source_repository": "jsdfhasuh/emosonic",
   "release_repository": "jsdfhasuh/emosonic-releases",
-  "trusted_source_shas": ["f5d1dec2c8d5b90def0fd23c1b4a1173a7e9e1d1"],
+  "trusted_source_shas": ["e36793bd0d7df943c36326667df4a5a16b606878"],
   "application_id": "com.example.emosonic",
   "certificate_sha256": "6db83974a60fe21ff18babf57a518fa34d05f63be49bdefc1fac7008a7f6942f",
   "baseline_apk_sha256": "ca940619ee600294213d740e8a0a9bcf3323d6f1dcf5648dd9cd59b08541b174",

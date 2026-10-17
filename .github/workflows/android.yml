@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: Reviewed source ref (resolved and pinned to an allowlisted SHA)
+        description: Source ref (master must still resolve to a reviewed, allowlisted SHA)
         required: true
-        default: f5d1dec2c8d5b90def0fd23c1b4a1173a7e9e1d1
+        default: master
         type: string
       version:
         description: Confirmed X.Y.Z+BUILD; build must exceed every existing release/tag

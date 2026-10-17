@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 import unittest
@@ -49,6 +50,31 @@ class ValidationTests(unittest.TestCase):
             for key, value in [("GITHUB_REPOSITORY", "someone/emosonic-build"), ("GITHUB_REF", "refs/heads/test"), ("GITHUB_EVENT_NAME", "pull_request_target"), ("GITHUB_RUN_ID", "123\ninjected=1")]:
                 with self.subTest(key=key), patch.dict(os.environ, {key: value}), self.assertRaises(p.GateError):
                     p.context()
+
+    def test_prepare_resolves_master_once_to_shared_exact_sha(self):
+        env = dict(ENV, SOURCE_REF="master", SOURCE_READ_TOKEN="synthetic-read-token")
+        with patch.dict(os.environ, env, clear=True), patch.object(p, "api", return_value={"sha": SHA}) as api, patch.object(p, "history", return_value=["v1.0.6+23"]), patch.object(p, "output") as output:
+            p.prepare()
+        api.assert_called_once_with(f"/repos/{p.SOURCE}/commits/master", "synthetic-read-token")
+        self.assertEqual(output.call_args_list[0].args, ("source_sha", SHA))
+        self.assertEqual(output.call_count, 4)
+        workflow = (ROOT / ".github/workflows/android.yml").read_text(encoding="utf-8")
+        self.assertIn("default: master", workflow)
+        for job in ("build", "build-windows"):
+            # Job bodies use four-space indentation; slice at the next two-space job.
+            section = re.split(r"\n  [a-z][a-z-]*:\n", workflow.split(f"\n  {job}:\n", 1)[1], maxsplit=1)[0]
+            self.assertIn("SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}", section)
+            self.assertNotIn("inputs.source_ref", section)
+
+    def test_prepare_rejects_master_movement_without_outputs_or_fallback(self):
+        env = dict(ENV, SOURCE_REF="master", SOURCE_READ_TOKEN="synthetic-read-token")
+        for unreviewed in ("b" * 40, "f5d1dec2c8d5b90def0fd23c1b4a1173a7e9e1d1"):
+            with self.subTest(sha=unreviewed), patch.dict(os.environ, env, clear=True), patch.object(p, "api", return_value={"sha": unreviewed}) as api, patch.object(p, "history") as history, patch.object(p, "output") as output:
+                with self.assertRaisesRegex(p.GateError, "not been reviewed"):
+                    p.prepare()
+                api.assert_called_once()
+                history.assert_not_called()
+                output.assert_not_called()
 
     def test_missing_secrets_fail_closed(self):
         with patch.dict(os.environ, {}, clear=True), self.assertRaises(p.GateError):

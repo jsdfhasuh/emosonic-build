@@ -43,15 +43,17 @@
 
 ## 手动运行
 
-1. **先确认具体发行版本及 Secrets。** 审查时源码版本 `1.0.6+22`，现有 latest `v1.0.6+23`。新发行不得用这两个 build number。`1.0.6+24` 仅为输入格式示例，并不是已确认版本；每次先重新检查全部 releases/tags。版本名不得降低、build number 必须严格递增；Windows 数字版本资源限制所有四段均不超过 65535。
+1. **先确认具体发行版本及 Secrets。** 审查时 master 源码版本 `1.0.6+23`，现有 latest `v1.0.6+23`。新发行的 build number 必须高于 23，并通过最新 releases/tags 检查。`1.0.6+24` 仅为输入格式示例，并不是已确认版本。版本名不得降低、build number 必须严格递增；Windows 数字版本资源限制所有四段均不超过 65535。
 2. 打开 [Actions 工作流](https://github.com/jsdfhasuh/emosonic-build/actions/workflows/android.yml)，选择 **Android + Windows stable (manual) → Run workflow → main**。为保留原链接，文件名仍为 `android.yml`。
-3. `source_ref` 默认固定 SHA `f5d1dec2c8d5b90def0fd23c1b4a1173a7e9e1d1`。流程解析 ref 后只接受 `policy.json` 的已审查 SHA；输入 `master` 若已经移动到未审查提交会失败。更新白名单前须审查产品构建脚本、依赖、签名、安装器和更新行为。Windows 原脚本/模板额外按 Git blob 固定。
+3. `source_ref` 默认 `master`。当前只放行已审查提交 `e36793bd0d7df943c36326667df4a5a16b606878`。`prepare` 只解析一次分支，将同一精确 SHA 传给 Android 和 Windows；后续不再解析分支。master 若移动到未审查提交，流程立即停止，不自动放行，也不回退到旧提交。更新白名单前须审查产品构建脚本、依赖、签名、安装器和更新行为。Windows 原脚本/模板额外按 Git blob 固定。详见[本次 master 兼容性审查](docs/plans/2026-10-17-master-source.md)。
 4. 首次选择 `build-only`：两个平台都会真实构建及验证，但不创建 Release。两个短期 artifacts 各包含对应安装包、校验和和脱敏 manifest，保留一天；它们属于公开仓库分发面。
 5. 下载两包，在已有正式 Android/Windows 安装上验证升级、原配置和数据保留、登录、播放及更新检查。确认发布后，使用 `publish-stable`。它会重建两平台包，所有检查成功后才创建正式 latest。
 
 Android 继续使用 `--build-name`/`--build-number`。Windows 原 `build_windows.bat` 只从 pubspec 读版本，因此仅在临时 runner 源码副本中替换该字段，调用原脚本后恢复；不修改远程产品源码、旧 workflow 或任何功能代码。原脚本的导航检查、build_runner、SMTC 构建修复和原 Inno 模板继续使用。
 
 不要同时让原仓库 workflow 发布相同版本。它仍可能覆盖上传。本仓库 concurrency 只能串行本仓库运行，不能锁住旧仓库；本流程重复检查版本、tag 和 latest 变化，但无法与另一个独立 publisher 实现原子互斥。请统一安排发行；若已存在同名 tag/Release，本流程停止，不接管、不覆盖、不复用旧资产。
+
+当前 master 的 Android/Windows 构建配置、签名及安装器身份、更新入口和资产选择规则均与前次审查一致；依赖 Dio 升为 `^5.11.0`，继续使用固定 Flutter 3.41.2。尚未实际编译或安装验证。两平台均须分别验收覆盖安装、配置保留、普通曲库播放及应用内更新；严格实时连接另需服务端符合 protocol 2.9 / r19 的认证 ACK，配套服务端合并/部署尚未验证。不能把实时协议不兼容直接判定为普通曲库播放失败，本仓库也不部署服务端或放宽协议门槛。
 
 ## 构建、验证与发布边界
 
