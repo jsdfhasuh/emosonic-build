@@ -2,11 +2,13 @@
 
 固定从私有 `jsdfhasuh/emosonic` 的 **`refs/heads/master`** 构建正式签名 Android APK 和 Windows x64 Inno Setup 安装包，统一发布到公开 [emosonic-releases](https://github.com/jsdfhasuh/emosonic-releases)。公开仓库只保存自编构建基础设施，不保存产品源码、keystore 或 token；不构建 iOS。
 
-**当前仅完成本地构建脚本测试、静态检查及只读版本门禁核对，尚未实际编译产品、运行 Actions 或发布新安装包。** 2026-10-17 核对时，master 的源码版本为 `1.0.6+23`，公开 latest 为 `v1.0.6+23`：直接运行将停止，开发者须先在产品仓库升版本。构建脚本不会自动修改或虚增源码版本。
+**正式 master 发布流程尚未实际编译或发布新安装包。独立离线候选 Android 测试包已于 2026-10-17 构建并独立验包通过，见下节；它没有创建 Release。** 2026-10-17 核对时，master 的源码版本为 `1.0.6+23`，公开 latest 为 `v1.0.6+23`：直接运行将停止，开发者须先在产品仓库升版本。构建脚本不会自动修改或虚增源码版本。
 
 ## 固定离线候选测试包
 
 单独的 `offline-candidate.yml` 仅为已授权的离线候选 `601d6b4` 构建 Android 测试包；它不会发布 Release，也不改下面的正式发布流程。入口限定 `main`、专用 request 文件、固定上一提交及完整提交消息，后续普通提交不会自动签名。测试版显示 `1.0.6-offline.601d6b4`、保留 versionCode 23；先对既有正式 APK 做真实验包。须手动安装并先备份数据，旧版回退不保证安全。完整边界见[候选测试计划](docs/plans/2026-10-17-offline-candidate.md)。
+
+已验证测试包：[Actions run 39025031880](https://github.com/jsdfhasuh/emosonic-build/actions/runs/39025031880)，builder `98936d5b981b16df231a08964b03af7a1007b667`，53项流水线测试通过。APK SHA-256：`106dfd07980f86c8756689995620bfd9387686c47d8c3a59f95fd1568f076f6a`。CI原始artifact于2026-10-18 10:37:50 UTC过期。实际安装、离线浏览/播放及数据兼容性未验收。
 
 ## 每次只选择运行模式
 

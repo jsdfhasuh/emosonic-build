@@ -41,3 +41,26 @@ transition from b19087a, with commit message
 It first uses already-installed pinned inspection tools, otherwise invokes
 sdkmanager by its official SDK path. Source, signing, version and no-publish
 restrictions are unchanged. Later unrelated pushes remain rejected.
+
+## Verified build outcome
+
+Run [39025031880](https://github.com/jsdfhasuh/emosonic-build/actions/runs/39025031880)
+completed successfully on 2026-10-17 at 10:38:14 UTC, builder
+`98936d5b981b16df231a08964b03af7a1007b667`. Preflight passed 53 tests
+and inspected the hash-pinned baseline APK at versionCode 23. The candidate
+compiled and passed original certificate/application identity, version, ABI and
+provenance checks in both the build job and a separate no-user-Secrets runner.
+
+APK size: 76,589,091 bytes. SHA-256:
+`106dfd07980f86c8756689995620bfd9387686c47d8c3a59f95fd1568f076f6a`.
+Artifact 12098780478 contains exactly the APK, matching checksum and sanitized
+manifest. Its ZIP digest is
+`f990036f6b82c3262f251b36a5f0005fab4cabb650f64a98a0deeb08624a4a1e`;
+the retrieved copy was independently checked against both digests and manifest.
+The CI artifact expires 2026-10-18 10:37:50 UTC.
+
+No source merge, stable Release, Windows build or physical-device installation
+was performed. Offline behavior, installation and existing-data compatibility
+remain pending user validation. The existing stable workflow was not modified;
+its bare sdkmanager invocation still needs the same PATH fix before its first
+authorized release build.
