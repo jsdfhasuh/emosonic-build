@@ -25,11 +25,11 @@ DEST = "jsdfhasuh/emosonic-releases"
 BUILDER = "jsdfhasuh/emosonic-build"
 VERSION_RE = re.compile(r"(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\+([1-9][0-9]{0,9})", re.ASCII)
 SHA_RE = re.compile(r"[0-9a-f]{40}", re.ASCII)
-STABLE_PUSH_PARENT = "43a89a085562c838245313748d7c88110cad74b1"
-STABLE_PUSH_MESSAGE = "release: publish offline 1.0.7+24 from merged master"
+STABLE_PUSH_PARENT = "7c360f6a77822b93251b7d00f376f6b22cc1b30c"
+STABLE_PUSH_MESSAGE = "release: retry 1.0.7+24 with pinned Windows Dart runtime"
 STABLE_PUSH_PATH = "requests/stable-1.0.7-24.json"
 STABLE_PUSH_REQUEST = {"source_sha": "ec2f9dedd04a11ccdbcf72b8eedf8e91502a5c9c",
-                       "version": "1.0.7+24", "mode": "publish-stable", "attempt": 1}
+                       "version": "1.0.7+24", "mode": "publish-stable", "attempt": 2}
 
 
 
@@ -229,7 +229,17 @@ def quiet(args, cwd=None, env=None):
         result = subprocess.run(args, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     except OSError:
         raise GateError("Required tool is unavailable.") from None
-    require(result.returncode == 0, "Tool failed; detailed output suppressed for source privacy.")
+    if result.returncode != 0:
+        # Emit only fixed classifications and an integer, never excerpts or paths.
+        raw = (result.stdout + result.stderr).decode("utf-8", errors="replace").lower()
+        categories = [("not recognized as an internal or external command", "command-resolution"),
+                      ("the system cannot find the path specified", "missing-launcher-path"),
+                      ("requires symlink support", "symlink-support"),
+                      ("version solving failed", "dependency-resolution"),
+                      ("navigation consistency check failed", "navigation-violation"),
+                      ("building native assets failed", "native-assets")]
+        category = next((label for needle, label in categories if needle in raw), "unclassified")
+        raise GateError("Tool failed (exit " + str(int(result.returncode)) + "; " + category + "); detailed output suppressed for source privacy.")
     return result.stdout.decode("utf-8", errors="replace")
 
 
@@ -364,9 +374,16 @@ def codegen(source, env):
         ("Code generation", ["dart", "run", "build_runner", "build", "--delete-conflicting-outputs"]),
     ]:
         print(label + " started (output suppressed).", flush=True)
-        # Windows Flutter/Dart launchers are batch files; use only resolved trusted paths.
         if os.name == "nt":
-            command[0] = shutil.which(command[0]) or command[0]
+            flutter = Path(shutil.which("flutter") or "missing").resolve()
+            if command[0] == "dart":
+                runtime = flutter.parent / "cache/dart-sdk/bin/dart.exe"
+                require(runtime.is_file() and not runtime.is_symlink(), "Bundled Windows Dart runtime is missing.")
+                selected = Path(shutil.which("dart") or "missing").resolve()
+                print("Windows PATH Dart matches bundled runtime: " + str(selected == runtime.resolve()), flush=True)
+                command[0] = str(runtime)
+            else:
+                command[0] = str(flutter)
         quiet(command, source, env)
 
 

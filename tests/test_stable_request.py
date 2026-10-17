@@ -57,7 +57,7 @@ class StableRequestTests(unittest.TestCase):
                 p.context()
 
     def test_request_source_version_mode_or_attempt_cannot_change(self):
-        for key, value in [('source_sha', 'b' * 40), ('version', '1.0.7+25'), ('mode', 'build-only'), ('attempt', 2)]:
+        for key, value in [('source_sha', 'b' * 40), ('version', '1.0.7+25'), ('mode', 'build-only'), ('attempt', 99)]:
             self.request.write_text(json.dumps(dict(p.STABLE_PUSH_REQUEST, **{key: value})))
             with self.assertRaises(p.GateError):
                 p.context()
@@ -89,6 +89,27 @@ class StableRequestTests(unittest.TestCase):
         with patch.object(p, 'api', return_value=branch), patch.object(p, 'remote_source_version', return_value=candidate), patch.object(p, 'history', return_value=['v1.0.6+23']), patch.object(p, 'output') as output:
             p.prepare()
         self.assertEqual(dict(call.args for call in output.call_args_list)['source_sha'], sha)
+
+    def test_windows_codegen_binds_dart_to_verified_flutter_installation(self):
+        flutter = self.root / 'flutter/bin/flutter.bat'
+        runtime = self.root / 'flutter/bin/cache/dart-sdk/bin/dart.exe'
+        runtime.parent.mkdir(parents=True)
+        flutter.write_text('synthetic')
+        runtime.write_text('synthetic')
+        # Patch only the platform branch; preserve this host's pathlib concrete class.
+        with patch.object(p, 'Path', type(self.root)), patch.object(p.os, 'name', 'nt'), patch.object(p.shutil, 'which', return_value=str(flutter)), patch.object(p, 'quiet') as quiet:
+            p.codegen(self.root, {})
+        self.assertEqual(quiet.call_args_list[0].args[0], [str(flutter), 'pub', 'get'])
+        self.assertEqual(quiet.call_args_list[1].args[0], [str(runtime), 'run', 'scripts/check_navigation_consistency.dart'])
+        self.assertEqual(quiet.call_args_list[2].args[0], [str(runtime), 'run', 'build_runner', 'build', '--delete-conflicting-outputs'])
+
+    def test_failure_diagnostics_never_emit_raw_private_output(self):
+        import subprocess
+        result = subprocess.CompletedProcess(['synthetic'], 255, b'private-source-secret', b'The system cannot find the path specified. private-secret')
+        with patch.object(p.subprocess, 'run', return_value=result), self.assertRaises(p.GateError) as error:
+            p.quiet(['synthetic'])
+        self.assertIn('exit 255; missing-launcher-path', str(error.exception))
+        self.assertNotIn('private', str(error.exception))
 
     def test_android_tools_reuses_installed_tools_without_path_dependency(self):
         sdk = self.root / 'sdk'
