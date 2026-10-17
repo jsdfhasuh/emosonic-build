@@ -1,5 +1,7 @@
 # Android 构建基础设施计划
 
+> 历史计划：已由 `2026-10-17-stable-android-windows.md` 取代。用户随后批准增加 Windows 并复用原正式 latest 更新机制。
+
 - 新建公开 `jsdfhasuh/emosonic-build`，仅存放新编写的脚本、配置和测试。
 - 固定私有来源 `jsdfhasuh/emosonic`，目标 `jsdfhasuh/emosonic-releases`。
 - 审查基线：`master` = `f5d1dec2c8d5b90def0fd23c1b4a1173a7e9e1d1`；源码版本 `1.0.6+22`，已发布 `v1.0.6+23`。

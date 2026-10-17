@@ -1,4 +1,4 @@
-name: Android APK (manual)
+name: Android + Windows stable (manual)
 
 on:
   workflow_dispatch:
@@ -13,19 +13,19 @@ on:
         required: true
         type: string
       mode:
-        description: Android-only releases never change stable latest
+        description: Build both platforms; publish-stable promotes a fully verified release to latest
         required: true
         default: build-only
         type: choice
         options:
           - build-only
-          - publish-prerelease
+          - publish-stable
 
 permissions:
   contents: read
 
 concurrency:
-  group: emosonic-android-release
+  group: emosonic-stable-release
   cancel-in-progress: false
 
 defaults:
@@ -42,6 +42,7 @@ jobs:
       source_sha: ${{ steps.prepare.outputs.source_sha }}
       version: ${{ steps.prepare.outputs.version }}
       apk_name: ${{ steps.prepare.outputs.apk_name }}
+      installer_name: ${{ steps.prepare.outputs.installer_name }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -112,7 +113,7 @@ jobs:
           path: |
             dist/${{ needs.prepare.outputs.apk_name }}
             dist/${{ needs.prepare.outputs.apk_name }}.sha256
-            dist/manifest.json
+            dist/android-manifest.json
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -149,9 +150,90 @@ jobs:
           BUILD_VERSION: ${{ needs.prepare.outputs.version }}
         run: python3 scripts/pipeline.py verify
 
+  build-windows:
+    needs: prepare
+    runs-on: windows-2022
+    timeout-minutes: 90
+    environment: windows-build
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+      BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require Windows build configuration
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+          DEFAULT_SERVER_URL: ${{ secrets.DEFAULT_SERVER_URL }}
+        run: python -c 'import os,sys; sys.exit(0 if all(os.environ.get(n) for n in ["SOURCE_READ_TOKEN","DEFAULT_SERVER_URL"]) else "Required Windows build Secret is missing.")'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.41.2'
+          channel: stable
+          cache: false
+      - name: Prepare pinned Inno compiler and unpacker without running their installers
+        env:
+          INSTALL_COMPILER: 'true'
+        run: python scripts/pipeline.py windows_tools
+      - name: Fetch the same private source SHA without persisted credentials
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        run: python scripts/pipeline.py fetch
+      - name: Build and inspect the original Windows installer
+        env:
+          DEFAULT_SERVER_URL: ${{ secrets.DEFAULT_SERVER_URL }}
+        run: python scripts/pipeline.py build_windows
+      - name: Upload only the three allowlisted Windows files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            dist/${{ needs.prepare.outputs.installer_name }}
+            dist/${{ needs.prepare.outputs.installer_name }}.sha256
+            dist/windows-manifest.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          include-hidden-files: false
+      - name: Remove private source
+        if: always()
+        run: python scripts/pipeline.py cleanup
+
+  verify-windows:
+    needs: [prepare, build-windows]
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      installer_sha256: ${{ steps.verify.outputs.installer_sha256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Prepare pinned unpacker without user Secrets
+        run: python scripts/pipeline.py windows_tools
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: windows-${{ github.run_id }}-${{ github.run_attempt }}
+          path: incoming
+      - name: Independently check installer and embedded app without executing either
+        id: verify
+        env:
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+        run: python scripts/pipeline.py verify_windows
+
   publish:
-    if: inputs.mode == 'publish-prerelease'
-    needs: [prepare, build, verify]
+    if: inputs.mode == 'publish-stable'
+    needs: [prepare, build, verify, build-windows, verify-windows]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: android-release
@@ -163,12 +245,17 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: android-${{ github.run_id }}-${{ github.run_attempt }}
-          path: incoming
-      - name: Recheck hashes and versions, publish a new prerelease without overwriting
+          path: incoming/android
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: windows-${{ github.run_id }}-${{ github.run_attempt }}
+          path: incoming/windows
+      - name: Require both verified packages and publish a new stable latest without overwriting
         env:
           SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
           BUILD_VERSION: ${{ needs.prepare.outputs.version }}
           RELEASE_MODE: ${{ inputs.mode }}
           VERIFIED_APK_SHA256: ${{ needs.verify.outputs.apk_sha256 }}
+          VERIFIED_INSTALLER_SHA256: ${{ needs.verify-windows.outputs.installer_sha256 }}
           RELEASE_WRITE_TOKEN: ${{ secrets.RELEASE_WRITE_TOKEN }}
         run: python3 scripts/pipeline.py publish

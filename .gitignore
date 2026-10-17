@@ -11,3 +11,6 @@ key.properties
 .env*
 private-logs/
 .test-*/
+.tools/
+.inspect-*/
+*.exe

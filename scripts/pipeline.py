@@ -1,7 +1,8 @@
-"""Restricted Android builder. Stdlib only; never print subprocess/API bodies."""
+"""Restricted Android + Windows builder. Never print subprocess/API bodies."""
 from __future__ import annotations
 
 import base64
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -9,7 +10,9 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import struct
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -36,7 +39,7 @@ def require(condition, message):
 def version(value):
     require(isinstance(value, str) and VERSION_RE.fullmatch(value), "Invalid version: expected X.Y.Z+BUILD.")
     parts = tuple(map(int, VERSION_RE.fullmatch(value).groups()))
-    require(parts[3] <= 2_100_000_000, "Android build number exceeds allowed limit.")
+    require(all(part <= 65535 for part in parts), "Version exceeds Windows 16-bit resource component limit.")
     return parts
 
 
@@ -142,7 +145,7 @@ def prepare():
     require_secrets(["SOURCE_READ_TOKEN"])
     candidate = os.environ["BUILD_VERSION"]
     version(candidate)
-    require(os.environ.get("RELEASE_MODE") in ("build-only", "publish-prerelease"), "Invalid release mode.")
+    require(os.environ.get("RELEASE_MODE") in ("build-only", "publish-stable"), "Invalid release mode.")
     ref = ref_input(os.environ["SOURCE_REF"])
     result = api(f"/repos/{SOURCE}/commits/{urllib.parse.quote(ref, safe='')}", os.environ["SOURCE_READ_TOKEN"])
     require(isinstance(result, dict), "Source ref could not be resolved.")
@@ -151,6 +154,7 @@ def prepare():
     output("source_sha", sha)
     output("version", candidate)
     output("apk_name", f"emosonic_android_v{candidate}.apk")
+    output("installer_name", installer_name(candidate))
     print("Source ref resolved to reviewed SHA; version gates passed.")
 
 
@@ -172,6 +176,7 @@ def fetch():
     require(not source.exists(), "Source directory already exists.")
     source.mkdir(mode=0o700)
     quiet(["git", "init", "--quiet", str(source)])
+    quiet(["git", "config", "core.autocrlf", "false"], source)
     # Configuration exists only in this subprocess environment, never .git/config.
     env = os.environ.copy()
     credential = base64.b64encode(("x-access-token:" + env.pop("SOURCE_READ_TOKEN")).encode()).decode()
@@ -199,21 +204,41 @@ def property_escape(value):
     return "".join(encoded)
 
 
-def metadata(candidate, sha, digest):
+def metadata(candidate, sha, digest, platform="android"):
     version(candidate)
     checked_sha(sha)
-    require(re.fullmatch(r"[0-9a-f]{64}", digest), "Invalid APK digest.")
-    return {"schema": 1, "source_repository": SOURCE, "source_sha": sha,
+    require(re.fullmatch(r"[0-9a-f]{64}", digest), "Invalid package digest.")
+    require(platform in ("android", "windows"), "Invalid platform.")
+    details = ({"application_id": POLICY["application_id"], "certificate_sha256": POLICY["certificate_sha256"], "abis": POLICY["abis"]}
+               if platform == "android" else {"app_id": POLICY["windows_app_id"], "install_dir": POLICY["windows_install_dir"],
+               "privileges": POLICY["windows_privileges"], "exe_name": POLICY["windows_exe"], "arch": POLICY["windows_arch"],
+               "build_script_blob": POLICY["windows_build_script_blob"], "installer_template_blob": POLICY["windows_installer_template_blob"],
+               "inno_setup_version": POLICY["inno_setup_version"], "authenticode": "NotSigned"})
+    return {"schema": 2, "source_repository": SOURCE, "source_sha": sha,
             "builder_repository": BUILDER, "builder_sha": os.environ["GITHUB_SHA"],
             "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
-            "version": candidate, "application_id": POLICY["application_id"],
-            "certificate_sha256": POLICY["certificate_sha256"], "abis": POLICY["abis"],
-            "apk_sha256": digest, "release_repository": DEST, "prerelease": True}
+            "version": candidate, "platform": platform, "identity": details,
+            "package_sha256": digest, "release_repository": DEST, "prerelease": False}
 
 
 def apk_name(candidate):
     version(candidate)
     return f"emosonic_android_v{candidate}.apk"
+
+
+def installer_name(candidate):
+    version(candidate)
+    return f"emosonic_windows_v{candidate}_setup.exe"
+
+
+def package_name(candidate, platform):
+    require(platform in ("android", "windows"), "Invalid platform.")
+    return apk_name(candidate) if platform == "android" else installer_name(candidate)
+
+
+def stable_tag(candidate):
+    version(candidate)
+    return "v" + candidate
 
 
 def file_digest(path):
@@ -245,9 +270,8 @@ def inspect_apk(path, candidate):
             require(not lower.endswith((".dart", ".jks", ".keystore", ".pem", ".key", ".pdb", ".symbols")) and ".git/" not in lower and ".dsym/" not in lower and lower.split("/")[-1] not in ("key.properties", ".env"), "Forbidden source, credential or debug artifact inside APK.")
 
 
-def build():
-    names = ["ANDROID_KEYSTORE_BASE64", "ANDROID_STORE_PASSWORD", "ANDROID_KEY_PASSWORD", "ANDROID_KEY_ALIAS", "DEFAULT_SERVER_URL"]
-    require_secrets(names)
+def source_context():
+    require_secrets(["DEFAULT_SERVER_URL"])
     candidate = os.environ["BUILD_VERSION"]
     selected = version(candidate)
     sha = checked_sha(os.environ["SOURCE_SHA"])
@@ -264,20 +288,48 @@ def build():
     parsed = urllib.parse.urlsplit(server)
     require(parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment, "DEFAULT_SERVER_URL must be HTTPS without credentials, query or fragment.")
     require(not any(ord(c) < 32 for c in server), "Invalid DEFAULT_SERVER_URL.")
+    return source, candidate, sha, server
+
+
+def build_env():
+    return {k: v for k, v in os.environ.items() if k != "DEFAULT_SERVER_URL" and not any(word in k.upper() for word in ("TOKEN", "PASSWORD", "SECRET", "KEYSTORE", "KEY_ALIAS"))}
+
+
+def codegen(source, env):
+    for label, command in [
+        ("Dependencies", ["flutter", "pub", "get"]),
+        ("Navigation check", ["dart", "run", "scripts/check_navigation_consistency.dart"]),
+        ("Code generation", ["dart", "run", "build_runner", "build", "--delete-conflicting-outputs"]),
+    ]:
+        print(label + " started (output suppressed).", flush=True)
+        # Windows Flutter/Dart launchers are batch files; use only resolved trusted paths.
+        if os.name == "nt":
+            command[0] = shutil.which(command[0]) or command[0]
+        quiet(command, source, env)
+
+
+def stage_package(path, candidate, sha, platform):
+    dist = ROOT / "dist"
+    dist.mkdir(mode=0o700)
+    destination = dist / package_name(candidate, platform)
+    shutil.copyfile(path, destination)
+    digest = file_digest(destination)
+    (dist / (destination.name + ".sha256")).write_text(digest + "  " + destination.name + "\n", encoding="ascii", newline="\n")
+    (dist / (platform + "-manifest.json")).write_text(json.dumps(metadata(candidate, sha, digest, platform), indent=2) + "\n", encoding="utf-8", newline="\n")
+    bundle(dist, candidate, sha, platform)
+
+
+def build():
+    require_secrets(["ANDROID_KEYSTORE_BASE64", "ANDROID_STORE_PASSWORD", "ANDROID_KEY_PASSWORD", "ANDROID_KEY_ALIAS"])
+    source, candidate, sha, server = source_context()
     keyfile = source / "android/key.properties"
     keystore = source / "android/keystore/emosonic-release.jks"
     defines = source / "build-defines.json"
     require(not keyfile.exists() and not keystore.exists() and not defines.exists(), "Unexpected signing or define file in source.")
     # Every source/tool subprocess gets no PAT or signing Secret environment.
-    clean_env = {k: v for k, v in os.environ.items() if k not in names and not any(word in k.upper() for word in ("TOKEN", "PASSWORD", "SECRET"))}
+    clean_env = build_env()
     try:
-        for label, command in [
-            ("Dependencies", ["flutter", "pub", "get"]),
-            ("Navigation check", ["dart", "run", "scripts/check_navigation_consistency.dart"]),
-            ("Code generation", ["dart", "run", "build_runner", "build", "--delete-conflicting-outputs"]),
-        ]:
-            print(label + " started (output suppressed).", flush=True)
-            quiet(command, source, clean_env)
+        codegen(source, clean_env)
         keystore.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         keystore.write_bytes(base64.b64decode(os.environ["ANDROID_KEYSTORE_BASE64"], validate=True))
         keystore.chmod(0o600)
@@ -290,31 +342,25 @@ def build():
         quiet(["flutter", "build", "apk", "--release", "--target-platform=android-arm,android-arm64,android-x64", "--build-name=" + name, "--build-number=" + number, "--dart-define-from-file=" + str(defines)], source, clean_env)
         apk = source / "build/app/outputs/flutter-apk/app-release.apk"
         inspect_apk(apk, candidate)
-        dist = ROOT / "dist"
-        dist.mkdir(mode=0o700)  # Fail if an existing output directory is present.
-        destination = dist / apk_name(candidate)
-        shutil.copyfile(apk, destination)
-        digest = file_digest(destination)
-        (dist / (destination.name + ".sha256")).write_text(digest + "  " + destination.name + "\n", encoding="ascii")
-        (dist / "manifest.json").write_text(json.dumps(metadata(candidate, sha, digest), indent=2) + "\n", encoding="utf-8")
-        bundle(dist, candidate, sha)
+        stage_package(apk, candidate, sha, "android")
     finally:
         for path in (keyfile, keystore, defines):
             path.unlink(missing_ok=True)
 
 
-def bundle(directory, candidate, sha):
-    name = apk_name(candidate)
+def bundle(directory, candidate, sha, platform="android"):
+    name = package_name(candidate, platform)
+    manifest = platform + "-manifest.json"
     require(directory.is_dir() and not directory.is_symlink(), "Artifact directory missing.")
-    expected = {name, name + ".sha256", "manifest.json"}
+    expected = {name, name + ".sha256", manifest}
     require({p.name for p in directory.iterdir()} == expected, "Unexpected or missing artifact files.")
     require(all(p.is_file() and not p.is_symlink() for p in directory.iterdir()), "Artifact links or directories rejected.")
     apk = directory / name
-    require(0 < apk.stat().st_size < 512 * 1024 * 1024, "APK size outside allowed range.")
-    require((directory / "manifest.json").stat().st_size < 8192 and (directory / (name + ".sha256")).stat().st_size < 256, "Oversized metadata rejected.")
+    require(0 < apk.stat().st_size < 512 * 1024 * 1024, "Package size outside allowed range.")
+    require((directory / manifest).stat().st_size < 8192 and (directory / (name + ".sha256")).stat().st_size < 256, "Oversized metadata rejected.")
     digest = file_digest(apk)
-    require((directory / (name + ".sha256")).read_text(encoding="ascii") == digest + "  " + name + "\n", "APK checksum mismatch.")
-    require(json.loads((directory / "manifest.json").read_text(encoding="utf-8")) == metadata(candidate, sha, digest), "Artifact provenance mismatch.")
+    require((directory / (name + ".sha256")).read_text(encoding="ascii") == digest + "  " + name + "\n", "Package checksum mismatch.")
+    require(json.loads((directory / manifest).read_text(encoding="utf-8")) == metadata(candidate, sha, digest, platform), "Artifact provenance mismatch.")
     return digest
 
 
@@ -327,16 +373,186 @@ def verify():
     print("Independent APK signature, package, version, ABI and provenance checks passed.")
 
 
+def windows_tool(name):
+    paths = {"innounp": ROOT / ".tools/innounp/innounp.exe", "iscc": ROOT / ".tools/inno/{app}/ISCC.exe"}
+    path = paths[name]
+    require(file_digest(path) == POLICY[name + "_exe_sha256"], "Windows tool executable digest mismatch.")
+    return path
+
+
+def download_tool(url, path, digest):
+    require(url.startswith("https://github.com/"), "Untrusted tool URL.")
+    # Public pinned tools only. No PAT/header is supplied or forwarded.
+    with urllib.request.urlopen(url, timeout=180) as response, path.open("wb") as target:
+        shutil.copyfileobj(response, target)
+    require(file_digest(path) == digest, "Downloaded Windows tool digest mismatch.")
+
+
+def windows_tools():
+    require(os.name == "nt", "Windows tools require a Windows runner.")
+    target = ROOT / ".tools"
+    target.mkdir(exist_ok=True)
+    archive = target / "innounp.zip"
+    download_tool(POLICY["innounp_url"], archive, POLICY["innounp_sha256"])
+    with zipfile.ZipFile(archive) as zipped:
+        for entry in zipped.namelist():
+            require((target / "innounp" / entry).resolve().is_relative_to((target / "innounp").resolve()), "Unsafe tool archive path.")
+        zipped.extractall(target / "innounp")
+    unpacker = windows_tool("innounp")
+    if os.environ.get("INSTALL_COMPILER") == "true":
+        installer = target / "innosetup.exe"
+        download_tool(POLICY["inno_setup_url"], installer, POLICY["inno_setup_sha256"])
+        require(not (target / "inno").exists(), "Compiler directory already exists.")
+        quiet([str(unpacker), "-x", "-b", "-q", "-o", "-d" + str(target / "inno"), str(installer)])
+        windows_tool("iscc")
+    print("Pinned Windows inspection/build tools are ready.")
+
+
+def git_blob(path):
+    data = path.read_bytes()
+    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+
+
+def check_windows_source(source):
+    require(git_blob(source / "build_windows.bat") == POLICY["windows_build_script_blob"], "Windows build script changed; review required.")
+    require(git_blob(source / "windows/installer/emosonic.iss") == POLICY["windows_installer_template_blob"], "Windows installer template changed; review required.")
+
+
+@contextmanager
+def temporary_version(source, candidate):
+    version(candidate)
+    path = source / "pubspec.yaml"
+    original = path.read_bytes()
+    updated, count = re.subn(rb"(?m)^version:[^\r\n]*", ("version: " + candidate).encode("ascii"), original)
+    require(count == 1, "Source version is ambiguous.")
+    try:
+        path.write_bytes(updated)
+        yield
+    finally:
+        path.write_bytes(original)
+
+
+def windows_server(server):
+    # The original batch entry point uses CALL (a second expansion pass).
+    # Reject cmd metacharacters/percent escapes rather than interpolating them.
+    require(re.fullmatch(r"https://[A-Za-z0-9._~:/-]+", server, re.ASCII), "Windows server URL contains unsupported batch characters.")
+    return server
+
+
+def build_windows():
+    require(os.name == "nt", "Windows builds require a Windows runner.")
+    source, candidate, sha, server = source_context()
+    check_windows_source(source)
+    compiler = windows_tool("iscc")
+    # No source token, release token or Android signing Secrets enter the batch job.
+    env = build_env()
+    env.update({"DEFAULT_SERVER_URL": windows_server(server), "APP_UPDATE_SOURCE": "github", "GITHUB_RELEASE_REPOSITORY": DEST, "INNO_SETUP_COMPILER": str(compiler)})
+    require(not (source / "build/windows").exists(), "Pre-existing Windows build output rejected.")
+    with temporary_version(source, candidate):
+        codegen(source, env)
+        print("Windows release build and original Inno packaging started (output suppressed).", flush=True)
+        quiet(["cmd.exe", "/d", "/c", "build_windows.bat"], source, env)
+    check_windows_source(source)
+    package = source / "build/windows/installer" / installer_name(candidate)
+    inspect_windows(package, candidate)
+    stage_package(package, candidate, sha, "windows")
+
+
+def setup_identity(script, candidate):
+    # Recovered metadata is read as data, never executed or made public.
+    fields = {}
+    in_setup = False
+    for line in script.splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            in_setup = line.lower() == "[setup]"
+        elif in_setup and "=" in line and not line.startswith(";"):
+            key, value = line.split("=", 1)
+            key = key.lower()
+            require(key not in fields, "Duplicate installer identity field.")
+            fields[key] = value
+    expected = {"appname": "EmoSonic", "appid": POLICY["windows_app_id"], "appversion": candidate.split("+")[0],
+                "defaultdirname": POLICY["windows_install_dir"], "privilegesrequired": POLICY["windows_privileges"],
+                "outputbasefilename": installer_name(candidate)[:-4]}
+    require(all(fields.get(k) == v for k, v in expected.items()), "Windows installer upgrade identity or version mismatch.")
+
+
+def pe_x64(path):
+    with path.open("rb") as handle:
+        header = handle.read(64)
+        require(len(header) == 64 and header[:2] == b"MZ", "Invalid Windows executable header.")
+        offset = struct.unpack_from("<I", header, 60)[0]
+        require(64 <= offset <= 1024 * 1024, "Invalid PE offset.")
+        handle.seek(offset)
+        pe = handle.read(6)
+    require(pe == b"PE\0\0\x64\x86", "Windows app must be x64 PE.")
+
+
+def windows_version_info(path, installer):
+    env = build_env()
+    env.update({"INSPECT_EXE_PATH": str(path), "INSPECT_SETUP_PATH": str(installer)})
+    # FileVersionInfo and signature parsing do not load/execute the app or installer.
+    script = "$ErrorActionPreference='Stop'; $v=[System.Diagnostics.FileVersionInfo]::GetVersionInfo($env:INSPECT_EXE_PATH); @{file=$v.FileVersion; product=$v.ProductVersion; numeric=@($v.FileMajorPart,$v.FileMinorPart,$v.FileBuildPart,$v.FilePrivatePart); name=$v.ProductName; original=$v.OriginalFilename; debug=$v.IsDebug; signature=(Get-AuthenticodeSignature -LiteralPath $env:INSPECT_SETUP_PATH).Status.ToString()} | ConvertTo-Json -Compress"
+    return json.loads(quiet(["pwsh", "-NoProfile", "-NonInteractive", "-Command", script], env=env))
+
+
+def validate_windows_version(info, candidate):
+    require(info == {"file": candidate, "product": candidate, "numeric": list(version(candidate)), "name": "EmoSonic", "original": POLICY["windows_exe"], "debug": False, "signature": "NotSigned"}, "Windows embedded executable version, identity or signing policy mismatch.")
+
+
+def inspect_windows(path, candidate):
+    version(candidate)
+    require(os.name == "nt", "Windows inspection requires a Windows runner.")
+    unpacker = windows_tool("innounp")
+    require(path.is_file() and not path.is_symlink(), "Windows installer missing.")
+    # Private extracted content is never uploaded. No setup switches /SILENT are used.
+    with tempfile.TemporaryDirectory(prefix=".inspect-", dir=ROOT) as directory:
+        extracted = Path(directory).resolve()
+        require(extracted.is_relative_to(ROOT.resolve()), "Unsafe extraction directory.")
+        quiet([str(unpacker), "-x", "-b", "-q", "-o", "-d" + str(extracted), str(path.resolve())])
+        setup_identity((extracted / "install_script.iss").read_text(encoding="utf-8-sig"), candidate)
+        require({p.name for p in extracted.iterdir()} == {"{app}", "install_script.iss"}, "Unexpected installer destinations.")
+        app = extracted / "{app}"
+        require(not app.is_symlink(), "Installer symlink rejected.")
+        for file in app.rglob("*"):
+            require(not file.is_symlink() and file.resolve().is_relative_to(app), "Unsafe extracted installer path.")
+            lower = file.name.lower()
+            require(not lower.endswith((".dart", ".jks", ".keystore", ".pem", ".key", ".pdb", ".symbols")) and lower not in (".git", ".env", "key.properties"), "Source, credential or debug file in Windows installer.")
+        exe = app / POLICY["windows_exe"]
+        require(exe.is_file(), "Windows application executable missing.")
+        pe_x64(exe)
+        for required in ("flutter_windows.dll", "data/app.so", "data/icudtl.dat", "data/flutter_assets/AssetManifest.bin"):
+            require((app / required).is_file(), "Windows runtime payload is incomplete.")
+        validate_windows_version(windows_version_info(exe, path), candidate)
+
+
+def verify_windows():
+    candidate, sha = os.environ["BUILD_VERSION"], checked_sha(os.environ["SOURCE_SHA"])
+    directory = ROOT / "incoming"
+    digest = bundle(directory, candidate, sha, "windows")
+    inspect_windows(directory / installer_name(candidate), candidate)
+    output("installer_sha256", digest)
+    print("Independent Windows installer identity, embedded version, x64 and provenance checks passed.")
+
+
+def release_files(directory, candidate, sha):
+    require(directory.is_dir() and not directory.is_symlink() and {p.name for p in directory.iterdir()} == {"android", "windows"}, "Both platform bundles are required for stable publication.")
+    digests = {platform: bundle(directory / platform, candidate, sha, platform) for platform in ("android", "windows")}
+    require(digests["android"] == os.environ.get("VERIFIED_APK_SHA256") and digests["windows"] == os.environ.get("VERIFIED_INSTALLER_SHA256"), "Independent verifier digest mismatch.")
+    paths = sorted(path for platform in ("android", "windows") for path in (directory / platform).iterdir())
+    require(len(paths) == 6 and len({p.name for p in paths}) == 6, "Stable release asset set mismatch.")
+    return paths, digests
+
+
 def publish():
     require_secrets(["RELEASE_WRITE_TOKEN"])
-    require(os.environ.get("RELEASE_MODE") == "publish-prerelease", "Publishing was not requested.")
+    require(os.environ.get("RELEASE_MODE") == "publish-stable", "Stable publication was not requested.")
     token = os.environ["RELEASE_WRITE_TOKEN"]
     candidate, sha = os.environ["BUILD_VERSION"], checked_sha(os.environ["SOURCE_SHA"])
     directory = ROOT / "incoming"
-    digest = bundle(directory, candidate, sha)
-    require(digest == os.environ.get("VERIFIED_APK_SHA256"), "Verified job digest mismatch.")
+    paths, digests = release_files(directory, candidate, sha)
     monotonic(candidate, history(token))
-    tag = "android-v" + candidate
+    tag = stable_tag(candidate)
     quoted_tag = urllib.parse.quote(tag, safe="")
     require(api(f"/repos/{DEST}/releases/tags/{quoted_tag}", token) is None, "Release already exists; overwrite prohibited.")
     require(api(f"/repos/{DEST}/git/ref/tags/{quoted_tag}", token) is None, "Tag already exists; overwrite prohibited.")
@@ -347,28 +563,30 @@ def publish():
     target = api(f"/repos/{DEST}/commits/{urllib.parse.quote(repo['default_branch'], safe='')}", token)
     require(target and SHA_RE.fullmatch(target["sha"]), "Destination target commit unavailable.")
     run_url = f"https://github.com/{BUILDER}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
-    body = (f"Android-only prerelease {candidate}. Manual installation only; stable latest is unchanged.\n\n"
+    body = (f"EmoSonic {candidate}: Android APK and Windows x64 installer, built from the same reviewed source.\n\n"
             f"Source: {SOURCE}@{sha}\nBuilder: {BUILDER}@{os.environ['GITHUB_SHA']}\nRun: {run_url}\n\n"
-            f"Package: {POLICY['application_id']}\nAPK SHA-256: {digest}\n"
-            "No Windows or iOS build is included. Source archives generated by GitHub refer to the release repository, not the private app source.\n")
-    release = api(f"/repos/{DEST}/releases", token, "POST", {"tag_name": tag, "target_commitish": target["sha"], "name": "EmoSonic Android " + candidate, "body": body, "draft": True, "prerelease": True, "make_latest": "false"})
+            f"Android package: {POLICY['application_id']}\nAPK SHA-256: {digests['android']}\nWindows SHA-256: {digests['windows']}\n"
+            "Both packages include matching .sha256 files. Existing clients can use the stable in-app updater. No iOS build is included. GitHub source archives refer to the release repository, not the private app source.\n")
+    release = api(f"/repos/{DEST}/releases", token, "POST", {"tag_name": tag, "target_commitish": target["sha"], "name": "EmoSonic " + candidate, "body": body, "draft": True, "prerelease": False, "make_latest": "false"})
     release_id = release["id"]
     require(isinstance(release_id, int), "Invalid draft release response.")
     # Failure leaves a draft for owner inspection; never delete or overwrite assets.
-    for path in sorted(directory.iterdir()):
+    for path in paths:
         response = api(f"/repos/{DEST}/releases/{release_id}/assets?name={urllib.parse.quote(path.name, safe='')}", token, "POST", path.read_bytes(), upload=True)
         require(response.get("name") == path.name and response.get("size") == path.stat().st_size and response.get("digest") == "sha256:" + file_digest(path), "Uploaded asset digest mismatch; draft retained.")
     remote = api(f"/repos/{DEST}/releases/{release_id}", token)
-    require(remote and remote["draft"] and remote["prerelease"] and remote["tag_name"] == tag, "Draft state changed unexpectedly.")
-    require({a["name"] for a in remote["assets"]} == {p.name for p in directory.iterdir()}, "Unexpected remote assets; draft retained.")
+    require(remote and remote["draft"] and not remote["prerelease"] and remote["tag_name"] == tag, "Draft state changed unexpectedly.")
+    expected_assets = {p.name: (p.stat().st_size, "sha256:" + file_digest(p)) for p in paths}
+    actual_assets = {a["name"]: (a["size"], a["digest"]) for a in remote["assets"]}
+    require(len(remote["assets"]) == 6 and actual_assets == expected_assets, "Remote asset set or digest mismatch; draft retained.")
     current_tag = api(f"/repos/{DEST}/git/ref/tags/{quoted_tag}", token)
     require(current_tag is None or (current_tag["object"]["type"] == "commit" and current_tag["object"]["sha"] == target["sha"]), "Release tag changed concurrently; draft retained.")
     monotonic(candidate, history(token, exclude_id=release_id, exclude_tag=tag))
     require(api(f"/repos/{DEST}/releases/latest", token)["id"] == latest["id"], "Stable release changed concurrently; draft retained.")
-    final = api(f"/repos/{DEST}/releases/{release_id}", token, "PATCH", {"draft": False, "prerelease": True, "make_latest": "false"})
-    require(not final["draft"] and final["prerelease"], "Release publication could not be verified.")
-    require(api(f"/repos/{DEST}/releases/latest", token)["id"] == latest["id"], "Stable latest changed; owner inspection required.")
-    print("Android prerelease published; stable latest preserved.")
+    final = api(f"/repos/{DEST}/releases/{release_id}", token, "PATCH", {"draft": False, "prerelease": False, "make_latest": "true"})
+    require(not final["draft"] and not final["prerelease"], "Stable release publication could not be verified.")
+    require(api(f"/repos/{DEST}/releases/latest", token)["id"] == release_id, "Stable latest promotion not verified; owner inspection required.")
+    print("Verified Android and Windows packages published as stable latest.")
 
 
 def cleanup():
@@ -377,13 +595,18 @@ def cleanup():
     if source.is_symlink():
         source.unlink()
     elif source.exists():
-        shutil.rmtree(source)
+        require(source.resolve().is_relative_to(ROOT.resolve()), "Unsafe source cleanup path.")
+        def remove_readonly(function, path, exc):
+            require(Path(path).resolve().is_relative_to(source.resolve()), "Unsafe cleanup retry path.")
+            os.chmod(path, 0o700)
+            function(path)
+        shutil.rmtree(source, onerror=remove_readonly)
 
 
 def main():
     try:
         context()
-        require(len(sys.argv) == 2 and sys.argv[1] in ("prepare", "fetch", "build", "verify", "publish", "cleanup"), "Invalid pipeline stage.")
+        require(len(sys.argv) == 2 and sys.argv[1] in ("prepare", "fetch", "build", "verify", "windows_tools", "build_windows", "verify_windows", "publish", "cleanup"), "Invalid pipeline stage.")
         globals()[sys.argv[1]]()
     except GateError as error:
         print("ERROR: " + str(error), file=sys.stderr)

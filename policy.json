@@ -10,5 +10,20 @@
   "flutter_version": "3.41.2",
   "flutter_sha": "90673a4eef275d1a6692c26ac80d6d746d41a73a",
   "android_build_tools": "36.0.0",
-  "abis": ["arm64-v8a", "armeabi-v7a", "x86_64"]
+  "abis": ["arm64-v8a", "armeabi-v7a", "x86_64"],
+  "windows_app_id": "{{779F17F8-DA99-4D5B-A404-E7E2D17C1E65}",
+  "windows_install_dir": "{localappdata}\\Programs\\EmoSonic",
+  "windows_privileges": "lowest",
+  "windows_exe": "emosonic.exe",
+  "windows_arch": "x64",
+  "windows_build_script_blob": "14e955b3d9684a0872976fd980bd2783accfa34b",
+  "windows_installer_template_blob": "86085b752dd0fd216771ae0be04851b1be7db583",
+  "inno_setup_version": "6.7.3",
+  "inno_setup_url": "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe",
+  "inno_setup_sha256": "9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732",
+  "innounp_version": "2.71.2",
+  "innounp_url": "https://github.com/jrathlev/InnoUnpacker-Windows-GUI/releases/download/ui_2_2_13/innounp-2.zip",
+  "innounp_sha256": "10fce27b6344b7674d5625cc34afca1c88c12183d957c6d93e401097fa2556cd",
+  "innounp_exe_sha256": "aecc0d7b1a2669711cd86d50061bb68911faa832ca3c69d4b1d2deb735cb1fcd",
+  "iscc_exe_sha256": "0a8757031b33777e4c9cbffee40f11a5062b36d25cbe144c1db73b6102b80ad7"
 }
