@@ -1,0 +1,14 @@
+{
+  "builder_repository": "jsdfhasuh/emosonic-build",
+  "source_repository": "jsdfhasuh/emosonic",
+  "release_repository": "jsdfhasuh/emosonic-releases",
+  "trusted_source_shas": ["f5d1dec2c8d5b90def0fd23c1b4a1173a7e9e1d1"],
+  "application_id": "com.example.emosonic",
+  "certificate_sha256": "6db83974a60fe21ff18babf57a518fa34d05f63be49bdefc1fac7008a7f6942f",
+  "baseline_apk_sha256": "ca940619ee600294213d740e8a0a9bcf3323d6f1dcf5648dd9cd59b08541b174",
+  "baseline_release": "v1.0.6+23",
+  "flutter_version": "3.41.2",
+  "flutter_sha": "90673a4eef275d1a6692c26ac80d6d746d41a73a",
+  "android_build_tools": "36.0.0",
+  "abis": ["arm64-v8a", "armeabi-v7a", "x86_64"]
+}

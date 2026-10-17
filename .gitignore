@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+source/
+dist/
+incoming/
+*.apk
+*.jks
+*.keystore
+key.properties
+.env*
+private-logs/
+.test-*/
