@@ -2,7 +2,7 @@
 
 固定从私有 `jsdfhasuh/emosonic` 的 **`refs/heads/master`** 构建正式签名 Android APK 和 Windows x64 Inno Setup 安装包，统一发布到公开 [emosonic-releases](https://github.com/jsdfhasuh/emosonic-releases)。公开仓库只保存自编构建基础设施，不保存产品源码、keystore 或 token；不构建 iOS。
 
-**正式 Android + Windows `1.0.7+24` 发布已获用户授权，正在构建与验证；此处不提前宣称发布成功。** PR #4 已合并，发布源码为 `ec2f9dedd04a11ccdbcf72b8eedf8e91502a5c9c`。独立离线候选 Android 测试包已于 2026-10-17 构建并验包通过，见下节；它没有创建 Release。构建脚本不会自动修改或虚增源码版本。真实设备验收仍待用户完成。
+**正式 Android + Windows [1.0.7+24](https://github.com/jsdfhasuh/emosonic-releases/releases/tag/v1.0.7%2B24) 已于 2026-10-17 11:24:12 UTC 发布为 stable latest。** [最终运行 39027937897](https://github.com/jsdfhasuh/emosonic-build/actions/runs/39027937897) 的六个 jobs 全部成功；六个资产齐备并核对摘要。两平台同源 `ec2f9dedd04a11ccdbcf72b8eedf8e91502a5c9c`，builder `949660021c8fb9e165dcef96e8675ae3a395660a`。真实设备、覆盖安装、实际音频及应用内更新验收仍待用户完成，升级前请备份资料。[完整验证与首次失败记录](docs/validation/2026-10-17-offline-stable-release.md)。构建脚本不会自动修改或虚增源码版本。
 
 ## 固定离线候选测试包
 
