@@ -90,6 +90,16 @@ class StableRequestTests(unittest.TestCase):
             p.prepare()
         self.assertEqual(dict(call.args for call in output.call_args_list)['source_sha'], sha)
 
+    def test_workflow_digest_outputs_accept_digits_but_reject_injection(self):
+        output = self.root / 'outputs'
+        with patch.dict(os.environ, {'GITHUB_OUTPUT': str(output)}):
+            p.output('apk_sha256', 'a' * 64)
+            p.output('installer_sha256', 'b' * 64)
+            for name, value in [('unexpected', 'x'), ('apk_sha256\nother', 'x'), ('apk_sha256', 'x\nother=y')]:
+                with self.assertRaises(p.GateError):
+                    p.output(name, value)
+        self.assertEqual(output.read_text(), 'apk_sha256=' + 'a' * 64 + '\ninstaller_sha256=' + 'b' * 64 + '\n')
+
     def test_windows_codegen_binds_dart_to_verified_flutter_installation(self):
         flutter = self.root / 'flutter/bin/flutter.bat'
         runtime = self.root / 'flutter/bin/cache/dart-sdk/bin/dart.exe'

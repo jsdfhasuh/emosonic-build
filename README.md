@@ -114,3 +114,5 @@ actionlint .github/workflows/android.yml
 ### 正式首轮失败记录
 
 [39026597285](https://github.com/jsdfhasuh/emosonic-build/actions/runs/39026597285) 的 Windows 工具和源码获取成功，依赖解析成功，但导航检查命令立即非零退出，未进入 Windows 应用编译。原始私有输出仍被抑制，确切启动失败原因尚未确认。第二次固定请求绑定已验证 Flutter SDK 内的 Dart.exe，并增加仅数字退出码和固定分类的安全诊断；不关闭导航检查、不降低验包门槛、不声称首轮通过。发布仍须两平台齐备。
+
+第二轮 [39027117454](https://github.com/jsdfhasuh/emosonic-build/actions/runs/39027117454) 两平台编译、打包和包身份检查成功，Windows 导航/codegen 通过；PATH 诊断已指向 SDK 内 Dart，因此首轮启动失败原因仍未证实。两个独立 verifier 均在包检查后被输出名 `apk_sha256` / `installer_sha256` 的旧字母正则阻挡。已改为精确六个输出名 allowlist，并保留注入检查；66项测试与静态检查通过。第三次固定请求重新构建并验证同源双平台后才可发布，前两次均未发布。

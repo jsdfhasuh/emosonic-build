@@ -31,8 +31,8 @@ jobs:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.event.before == '7c360f6a77822b93251b7d00f376f6b22cc1b30c' &&
-      github.event.head_commit.message == 'release: retry 1.0.7+24 with pinned Windows Dart runtime' && github.event.forced == false))
+      (github.event_name == 'push' && github.event.before == 'a37b5931d4a96faf89d86ca85839a2d3dc7c230d' &&
+      github.event.head_commit.message == 'release: publish 1.0.7+24 with verified digest outputs' && github.event.forced == false))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build

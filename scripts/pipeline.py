@@ -25,11 +25,11 @@ DEST = "jsdfhasuh/emosonic-releases"
 BUILDER = "jsdfhasuh/emosonic-build"
 VERSION_RE = re.compile(r"(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\+([1-9][0-9]{0,9})", re.ASCII)
 SHA_RE = re.compile(r"[0-9a-f]{40}", re.ASCII)
-STABLE_PUSH_PARENT = "7c360f6a77822b93251b7d00f376f6b22cc1b30c"
-STABLE_PUSH_MESSAGE = "release: retry 1.0.7+24 with pinned Windows Dart runtime"
+STABLE_PUSH_PARENT = "a37b5931d4a96faf89d86ca85839a2d3dc7c230d"
+STABLE_PUSH_MESSAGE = "release: publish 1.0.7+24 with verified digest outputs"
 STABLE_PUSH_PATH = "requests/stable-1.0.7-24.json"
 STABLE_PUSH_REQUEST = {"source_sha": "ec2f9dedd04a11ccdbcf72b8eedf8e91502a5c9c",
-                       "version": "1.0.7+24", "mode": "publish-stable", "attempt": 2}
+                       "version": "1.0.7+24", "mode": "publish-stable", "attempt": 3}
 
 
 
@@ -124,7 +124,7 @@ def history(token=None, exclude_id=None, exclude_tag=None):
 
 
 def output(name, value):
-    require(re.fullmatch(r"[a-z_]+", name) and "\n" not in value and "\r" not in value, "Unsafe workflow output.")
+    require(name in {"source_sha", "version", "apk_name", "installer_name", "apk_sha256", "installer_sha256"} and "\n" not in value and "\r" not in value, "Unsafe workflow output.")
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
         handle.write(f"{name}={value}\n")
 
