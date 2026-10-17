@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import base64
-from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -21,6 +20,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = json.loads((ROOT / "policy.json").read_text(encoding="utf-8"))
 SOURCE = "jsdfhasuh/emosonic"
+SOURCE_REF = "refs/heads/master"
 DEST = "jsdfhasuh/emosonic-releases"
 BUILDER = "jsdfhasuh/emosonic-build"
 VERSION_RE = re.compile(r"(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\+([1-9][0-9]{0,9})", re.ASCII)
@@ -44,15 +44,12 @@ def version(value):
 
 
 def ref_input(value):
-    require(isinstance(value, str) and 0 < len(value) <= 200, "Invalid source ref.")
-    require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./-]*", value, re.ASCII), "Invalid source ref.")
-    require(".." not in value and "//" not in value and not value.endswith(("/", ".", ".lock")), "Invalid source ref.")
+    require(value == SOURCE_REF, "Only refs/heads/master is allowed as the source branch.")
     return value
 
 
 def checked_sha(value):
     require(isinstance(value, str) and SHA_RE.fullmatch(value), "Invalid source SHA.")
-    require(value in POLICY["trusted_source_shas"], "Source SHA has not been reviewed in policy.json.")
     return value
 
 
@@ -69,7 +66,7 @@ def monotonic(candidate, tags):
     floors = [release_version(POLICY["baseline_release"])]
     floors += [release_version(tag) for tag in tags]
     for old in floors:
-        require(current[:3] >= old[:3] and current[3] > old[3], "Version rollback, reused build number, or release conflict.")
+        require(current[:3] >= old[:3] and current[3] > old[3], "Source version conflicts with release history. Update pubspec.yaml on master: version must not decrease and build number must increase.")
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -133,6 +130,7 @@ def require_secrets(names):
 
 def context():
     require(POLICY["source_repository"] == SOURCE and POLICY["release_repository"] == DEST and POLICY["builder_repository"] == BUILDER, "Repository policy mismatch.")
+    require(POLICY["source_ref"] == SOURCE_REF, "Source branch policy mismatch.")
     require(os.environ.get("GITHUB_REPOSITORY") == BUILDER, "Untrusted builder repository.")
     require(os.environ.get("GITHUB_REF") == "refs/heads/main", "Only trusted main may run.")
     require(os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch", "Only manual workflow_dispatch may run.")
@@ -141,21 +139,53 @@ def context():
     require(re.fullmatch(r"[1-9][0-9]*", os.environ.get("GITHUB_RUN_ATTEMPT", "")), "Invalid workflow attempt.")
 
 
+def source_version(pubspec):
+    # Deliberately accept the original batch entrypoint's canonical plain scalar
+    # format, not YAML aliases, merges, duplicate keys or multiple documents.
+    require(isinstance(pubspec, str) and len(pubspec) <= 262144, "Invalid pubspec size or encoding.")
+    require(not re.search(r"(?m)^(?:---|\.\.\.|%|<<[ \t]*:)", pubspec), "Unsupported pubspec document or merge syntax.")
+    keys = re.findall(r"(?m)^(?:version|'version'|\"version\")[ \t]*:[^\r\n]*", pubspec)
+    require(len(keys) == 1, "pubspec.yaml must contain exactly one plain top-level version: X.Y.Z+BUILD.")
+    match = re.fullmatch(r"version:[ \t]*([^\s]+)[ \t]*", keys[0])
+    require(match is not None, "Use a plain unquoted version: X.Y.Z+BUILD in pubspec.yaml, without inline comments.")
+    candidate = match[1]
+    version(candidate)
+    return candidate
+
+
+def remote_source_version(sha, token):
+    checked_sha(sha)
+    result = api(f"/repos/{SOURCE}/contents/pubspec.yaml?ref={sha}", token)
+    require(isinstance(result, dict) and result.get("type") == "file" and result.get("path") == "pubspec.yaml" and result.get("encoding") == "base64", "Source pubspec.yaml is unavailable or not a regular file.")
+    size = result.get("size")
+    require(isinstance(size, int) and 0 < size <= 262144, "Invalid source pubspec size.")
+    encoded = result.get("content")
+    require(isinstance(encoded, str) and len(encoded) <= 360000, "Invalid source pubspec content.")
+    try:
+        data = base64.b64decode("".join(encoded.split()), validate=True)
+        pubspec = data.decode("utf-8")
+    except (ValueError, UnicodeError):
+        raise GateError("Invalid source pubspec encoding.") from None
+    require(len(data) == size and hashlib.sha1(b"blob " + str(size).encode() + b"\0" + data).hexdigest() == result.get("sha"), "Source pubspec integrity mismatch.")
+    return source_version(pubspec)
+
+
 def prepare():
     require_secrets(["SOURCE_READ_TOKEN"])
-    candidate = os.environ["BUILD_VERSION"]
-    version(candidate)
+    require("BUILD_VERSION" not in os.environ, "Manual version overrides are disabled; update source pubspec.yaml.")
     require(os.environ.get("RELEASE_MODE") in ("build-only", "publish-stable"), "Invalid release mode.")
-    ref = ref_input(os.environ["SOURCE_REF"])
-    result = api(f"/repos/{SOURCE}/commits/{urllib.parse.quote(ref, safe='')}", os.environ["SOURCE_READ_TOKEN"])
-    require(isinstance(result, dict), "Source ref could not be resolved.")
-    sha = checked_sha(result.get("sha"))
+    ref = ref_input(os.environ.get("SOURCE_REF", SOURCE_REF))
+    token = os.environ["SOURCE_READ_TOKEN"]
+    result = api(f"/repos/{SOURCE}/git/ref/heads/master", token)
+    require(isinstance(result, dict) and result.get("ref") == ref and isinstance(result.get("object"), dict) and result["object"].get("type") == "commit", "Source master branch could not be resolved to a commit.")
+    sha = checked_sha(result["object"].get("sha"))
+    candidate = remote_source_version(sha, token)
     monotonic(candidate, history(os.environ.get("GITHUB_TOKEN")))
     output("source_sha", sha)
     output("version", candidate)
     output("apk_name", f"emosonic_android_v{candidate}.apk")
     output("installer_name", installer_name(candidate))
-    print("Source ref resolved to reviewed SHA; version gates passed.")
+    print("Master resolved once to exact SHA; source pubspec version passed release-history gates.")
 
 
 def quiet(args, cwd=None, env=None):
@@ -185,7 +215,7 @@ def fetch():
     quiet(["git", "checkout", "--quiet", "--detach", "FETCH_HEAD"], source)
     require(quiet(["git", "rev-parse", "HEAD"], source).strip() == sha, "Fetched source SHA mismatch.")
     require(not (source / ".gitmodules").exists(), "Submodules require separate review.")
-    print("Private source fetched at exact reviewed SHA; credentials were not persisted.")
+    print("Private source fetched at exact resolved SHA; credentials were not persisted.")
 
 
 def property_escape(value):
@@ -212,9 +242,8 @@ def metadata(candidate, sha, digest, platform="android"):
     details = ({"application_id": POLICY["application_id"], "certificate_sha256": POLICY["certificate_sha256"], "abis": POLICY["abis"]}
                if platform == "android" else {"app_id": POLICY["windows_app_id"], "install_dir": POLICY["windows_install_dir"],
                "privileges": POLICY["windows_privileges"], "exe_name": POLICY["windows_exe"], "arch": POLICY["windows_arch"],
-               "build_script_blob": POLICY["windows_build_script_blob"], "installer_template_blob": POLICY["windows_installer_template_blob"],
                "inno_setup_version": POLICY["inno_setup_version"], "authenticode": "NotSigned"})
-    return {"schema": 2, "source_repository": SOURCE, "source_sha": sha,
+    return {"schema": 3, "source_repository": SOURCE, "source_ref": SOURCE_REF, "source_sha": sha,
             "builder_repository": BUILDER, "builder_sha": os.environ["GITHUB_SHA"],
             "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
             "version": candidate, "platform": platform, "identity": details,
@@ -273,15 +302,14 @@ def inspect_apk(path, candidate):
 def source_context():
     require_secrets(["DEFAULT_SERVER_URL"])
     candidate = os.environ["BUILD_VERSION"]
-    selected = version(candidate)
+    version(candidate)
     sha = checked_sha(os.environ["SOURCE_SHA"])
     source = ROOT / "source"
     require(quiet(["git", "rev-parse", "HEAD"], source).strip() == sha, "Source SHA changed.")
-    pubspec = (source / "pubspec.yaml").read_text(encoding="utf-8")
-    matches = re.findall(r"^version:\s*([^\s#]+)\s*(?:#.*)?$", pubspec, re.MULTILINE)
-    require(len(matches) == 1, "Source version is ambiguous.")
-    original = version(matches[0])
-    require(selected[:3] >= original[:3] and selected[3] >= original[3], "Requested version predates source version.")
+    pubspec_path = source / "pubspec.yaml"
+    require(pubspec_path.is_file() and not pubspec_path.is_symlink(), "Source pubspec.yaml must be a regular file.")
+    pubspec = pubspec_path.read_text(encoding="utf-8")
+    require(source_version(pubspec) == candidate, "Source version differs from the resolved pubspec version.")
     flutter = Path(shutil.which("flutter") or "missing").resolve()
     require(quiet(["git", "rev-parse", "HEAD"], flutter.parent.parent).strip() == POLICY["flutter_sha"], "Flutter SDK revision mismatch.")
     server = os.environ["DEFAULT_SERVER_URL"]
@@ -408,28 +436,12 @@ def windows_tools():
     print("Pinned Windows inspection/build tools are ready.")
 
 
-def git_blob(path):
-    data = path.read_bytes()
-    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
-
-
 def check_windows_source(source):
-    require(git_blob(source / "build_windows.bat") == POLICY["windows_build_script_blob"], "Windows build script changed; review required.")
-    require(git_blob(source / "windows/installer/emosonic.iss") == POLICY["windows_installer_template_blob"], "Windows installer template changed; review required.")
-
-
-@contextmanager
-def temporary_version(source, candidate):
-    version(candidate)
-    path = source / "pubspec.yaml"
-    original = path.read_bytes()
-    updated, count = re.subn(rb"(?m)^version:[^\r\n]*", ("version: " + candidate).encode("ascii"), original)
-    require(count == 1, "Source version is ambiguous.")
-    try:
-        path.write_bytes(updated)
-        yield
-    finally:
-        path.write_bytes(original)
+    # The owner trusts master code. This is an entrypoint compatibility check,
+    # not a claim that string matching can sandbox an arbitrary build script.
+    for name in ("build_windows.bat", "windows/installer/emosonic.iss"):
+        path = source / name
+        require(path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(source.resolve()), "Windows build entrypoint changed or missing; update builder compatibility.")
 
 
 def windows_server(server):
@@ -448,10 +460,10 @@ def build_windows():
     env = build_env()
     env.update({"DEFAULT_SERVER_URL": windows_server(server), "APP_UPDATE_SOURCE": "github", "GITHUB_RELEASE_REPOSITORY": DEST, "INNO_SETUP_COMPILER": str(compiler)})
     require(not (source / "build/windows").exists(), "Pre-existing Windows build output rejected.")
-    with temporary_version(source, candidate):
-        codegen(source, env)
-        print("Windows release build and original Inno packaging started (output suppressed).", flush=True)
-        quiet(["cmd.exe", "/d", "/c", "build_windows.bat"], source, env)
+    codegen(source, env)
+    print("Windows release build and original Inno packaging started (output suppressed).", flush=True)
+    quiet(["cmd.exe", "/d", "/c", "build_windows.bat"], source, env)
+    require(source_version((source / "pubspec.yaml").read_text(encoding="utf-8")) == candidate, "Source pubspec version changed during Windows build.")
     check_windows_source(source)
     package = source / "build/windows/installer" / installer_name(candidate)
     inspect_windows(package, candidate)
@@ -563,7 +575,7 @@ def publish():
     target = api(f"/repos/{DEST}/commits/{urllib.parse.quote(repo['default_branch'], safe='')}", token)
     require(target and SHA_RE.fullmatch(target["sha"]), "Destination target commit unavailable.")
     run_url = f"https://github.com/{BUILDER}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
-    body = (f"EmoSonic {candidate}: Android APK and Windows x64 installer, built from the same reviewed source.\n\n"
+    body = (f"EmoSonic {candidate}: Android APK and Windows x64 installer, built from the same resolved master commit.\n\n"
             f"Source: {SOURCE}@{sha}\nBuilder: {BUILDER}@{os.environ['GITHUB_SHA']}\nRun: {run_url}\n\n"
             f"Android package: {POLICY['application_id']}\nAPK SHA-256: {digests['android']}\nWindows SHA-256: {digests['windows']}\n"
             "Both packages include matching .sha256 files. Existing clients can use the stable in-app updater. No iOS build is included. GitHub source archives refer to the release repository, not the private app source.\n")

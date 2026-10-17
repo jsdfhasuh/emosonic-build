@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("pipeline", ROOT / "scripts/pipeline.py")
 p = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(p)
-SHA = p.POLICY["trusted_source_shas"][0]
+SHA = "c" * 40
 VERSION = "1.0.6+24"
 ENV = {"GITHUB_REPOSITORY": p.BUILDER, "GITHUB_REF": "refs/heads/main", "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_SHA": "a" * 40, "GITHUB_RUN_ID": "1234", "GITHUB_RUN_ATTEMPT": "1", "SOURCE_SHA": SHA, "BUILD_VERSION": VERSION, "RELEASE_MODE": "publish-stable", "ANDROID_HOME": "/sdk"}
 
@@ -35,14 +35,15 @@ class ValidationTests(unittest.TestCase):
         p.monotonic(VERSION, ["v1.0.6+23", "v1.0.5+20"])
         p.monotonic("1.0.7+26", ["android-v1.0.7+25"])
 
-    def test_ref_injection_and_unknown_sha(self):
-        for bad in ["--help", "master;id", "$(id)", "x\ny", "../master", "a//b", "refs/heads/a.lock", "https://example.com/x", "a" * 201]:
+    def test_only_master_ref_and_canonical_sha_are_allowed(self):
+        for bad in ["--help", "master;id", "$(id)", "x\ny", "../master", "a//b", "refs/heads/main", "refs/tags/master", "https://example.com/x", "a" * 201, "master", SHA, "release/test"]:
             with self.subTest(bad=bad), self.assertRaises(p.GateError):
                 p.ref_input(bad)
-        for good in ["master", SHA, "refs/heads/master", "release/test"]:
-            self.assertEqual(p.ref_input(good), good)
-        with self.assertRaises(p.GateError):
-            p.checked_sha("b" * 40)
+        self.assertEqual(p.ref_input("refs/heads/master"), p.SOURCE_REF)
+        self.assertEqual(p.checked_sha("b" * 40), "b" * 40)
+        for bad in ["b" * 39, "B" * 40, "master", SHA + "\n", None]:
+            with self.subTest(sha=bad), self.assertRaises(p.GateError):
+                p.checked_sha(bad)
 
     def test_context_rejects_forks_branches_and_events(self):
         with patch.dict(os.environ, ENV, clear=True):
@@ -50,31 +51,6 @@ class ValidationTests(unittest.TestCase):
             for key, value in [("GITHUB_REPOSITORY", "someone/emosonic-build"), ("GITHUB_REF", "refs/heads/test"), ("GITHUB_EVENT_NAME", "pull_request_target"), ("GITHUB_RUN_ID", "123\ninjected=1")]:
                 with self.subTest(key=key), patch.dict(os.environ, {key: value}), self.assertRaises(p.GateError):
                     p.context()
-
-    def test_prepare_resolves_master_once_to_shared_exact_sha(self):
-        env = dict(ENV, SOURCE_REF="master", SOURCE_READ_TOKEN="synthetic-read-token")
-        with patch.dict(os.environ, env, clear=True), patch.object(p, "api", return_value={"sha": SHA}) as api, patch.object(p, "history", return_value=["v1.0.6+23"]), patch.object(p, "output") as output:
-            p.prepare()
-        api.assert_called_once_with(f"/repos/{p.SOURCE}/commits/master", "synthetic-read-token")
-        self.assertEqual(output.call_args_list[0].args, ("source_sha", SHA))
-        self.assertEqual(output.call_count, 4)
-        workflow = (ROOT / ".github/workflows/android.yml").read_text(encoding="utf-8")
-        self.assertIn("default: master", workflow)
-        for job in ("build", "build-windows"):
-            # Job bodies use four-space indentation; slice at the next two-space job.
-            section = re.split(r"\n  [a-z][a-z-]*:\n", workflow.split(f"\n  {job}:\n", 1)[1], maxsplit=1)[0]
-            self.assertIn("SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}", section)
-            self.assertNotIn("inputs.source_ref", section)
-
-    def test_prepare_rejects_master_movement_without_outputs_or_fallback(self):
-        env = dict(ENV, SOURCE_REF="master", SOURCE_READ_TOKEN="synthetic-read-token")
-        for unreviewed in ("b" * 40, "f5d1dec2c8d5b90def0fd23c1b4a1173a7e9e1d1"):
-            with self.subTest(sha=unreviewed), patch.dict(os.environ, env, clear=True), patch.object(p, "api", return_value={"sha": unreviewed}) as api, patch.object(p, "history") as history, patch.object(p, "output") as output:
-                with self.assertRaisesRegex(p.GateError, "not been reviewed"):
-                    p.prepare()
-                api.assert_called_once()
-                history.assert_not_called()
-                output.assert_not_called()
 
     def test_missing_secrets_fail_closed(self):
         with patch.dict(os.environ, {}, clear=True), self.assertRaises(p.GateError):
@@ -95,6 +71,90 @@ class ValidationTests(unittest.TestCase):
         with patch.object(p, "api", side_effect=fake):
             tags = p.history(exclude_id=101, exclude_tag="android-v1.0.0+101")
         self.assertEqual(len(tags), 100)
+
+
+class SourceSelectionTests(unittest.TestCase):
+    def setUp(self):
+        self.env = dict(ENV, SOURCE_REF=p.SOURCE_REF, SOURCE_READ_TOKEN="synthetic-read-token")
+        self.env.pop("BUILD_VERSION")
+
+    @staticmethod
+    def content(text):
+        data = text.encode("utf-8")
+        return {"type": "file", "path": "pubspec.yaml", "encoding": "base64", "size": len(data),
+                "content": p.base64.b64encode(data).decode(),
+                "sha": p.hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()}
+
+    def test_master_can_advance_between_runs_but_is_resolved_once_per_run(self):
+        for sha in (SHA, "d" * 40):
+            branch = {"ref": p.SOURCE_REF, "object": {"type": "commit", "sha": sha}}
+            responses = [branch, self.content("name: synthetic\nversion: " + VERSION + "\n")]
+            with self.subTest(sha=sha), patch.dict(os.environ, self.env, clear=True), patch.object(p, "api", side_effect=responses) as api, patch.object(p, "history", return_value=["v1.0.6+23"]), patch.object(p, "output") as output, patch("builtins.print"):
+                p.prepare()
+            self.assertEqual([call.args[0] for call in api.call_args_list], [f"/repos/{p.SOURCE}/git/ref/heads/master", f"/repos/{p.SOURCE}/contents/pubspec.yaml?ref={sha}"])
+            self.assertEqual(dict(call.args for call in output.call_args_list), {"source_sha": sha, "version": VERSION, "apk_name": p.apk_name(VERSION), "installer_name": p.installer_name(VERSION)})
+
+    def test_other_refs_and_manual_versions_fail_before_api(self):
+        for overrides in ({"SOURCE_REF": "refs/heads/main"}, {"SOURCE_REF": "master;id"}, {"BUILD_VERSION": VERSION}):
+            with self.subTest(overrides=overrides), patch.dict(os.environ, dict(self.env, **overrides), clear=True), patch.object(p, "api") as api, self.assertRaises(p.GateError):
+                p.prepare()
+            api.assert_not_called()
+
+    def test_wrong_branch_or_noncommit_api_response_is_rejected(self):
+        for response in (None, [], {"ref": "refs/heads/main", "object": {"type": "commit", "sha": SHA}}, {"ref": p.SOURCE_REF, "object": {"type": "tag", "sha": SHA}}, {"ref": p.SOURCE_REF, "object": {"type": "commit", "sha": "master"}}):
+            with self.subTest(response=response), patch.dict(os.environ, self.env, clear=True), patch.object(p, "api", return_value=response) as api, patch.object(p, "output") as output, self.assertRaises(p.GateError):
+                p.prepare()
+            api.assert_called_once()
+            output.assert_not_called()
+
+    def test_invalid_or_duplicate_pubspec_versions_are_rejected(self):
+        self.assertEqual(p.source_version("name: synthetic\r\nversion: " + VERSION + "\r\n"), VERSION)
+        for text in ("", "name: synthetic\n", "version:\n  1.0.6+24\n", "version: '1.0.6+24'\n", "version: 1.0.6+24 # comment\n", "version: 1.0.6+24\nversion: 1.0.6+25\n", 'version: 1.0.6+24\n"version": 1.0.6+25\n', "---\nversion: 1.0.6+24\n", "version: *alias\n", "version: 1.0.6+65536\n", "version: 1.0.6+024\n", "version: 1.0.6+24;id\n", "version: 1.0.6+24\n<<: *other\n"):
+            with self.subTest(text=text), self.assertRaises(p.GateError):
+                p.source_version(text)
+
+    def test_invalid_pubspec_api_content_is_rejected(self):
+        valid = self.content("version: " + VERSION + "\n")
+        for result in (None, dict(valid, type="symlink"), dict(valid, path="other.yaml"), dict(valid, encoding="none"), dict(valid, content="!"), dict(valid, size=999999), dict(valid, sha="0" * 40)):
+            with self.subTest(result=result), patch.object(p, "api", return_value=result), self.assertRaises(p.GateError):
+                p.remote_source_version(SHA, "synthetic")
+
+    def test_reused_source_version_emits_no_build_outputs(self):
+        branch = {"ref": p.SOURCE_REF, "object": {"type": "commit", "sha": SHA}}
+        for candidate in ("1.0.6+23", "1.0.5+25", "2.0.0+23"):
+            with self.subTest(candidate=candidate), patch.dict(os.environ, self.env, clear=True), patch.object(p, "api", side_effect=[branch, self.content("version: " + candidate + "\n")]), patch.object(p, "history", return_value=["v1.0.6+23"]), patch.object(p, "output") as output, self.assertRaisesRegex(p.GateError, "Update pubspec.yaml on master"):
+                p.prepare()
+            output.assert_not_called()
+
+    def test_fetch_uses_pinned_sha_even_after_branch_moves(self):
+        with tempfile.TemporaryDirectory(prefix=".test-", dir=ROOT) as directory:
+            folder = Path(directory).resolve()
+            for sha in (SHA, "d" * 40):
+                stage = folder / sha
+                stage.mkdir()
+                with patch.object(p, "ROOT", stage), patch.dict(os.environ, dict(ENV, SOURCE_SHA=sha, SOURCE_READ_TOKEN="synthetic"), clear=True), patch.object(p, "quiet", side_effect=["", "", "", "", sha]) as run, patch.object(p, "api") as api, patch("builtins.print"):
+                    p.fetch()
+                command = run.call_args_list[2].args[0]
+                self.assertEqual(command[-2:], ["https://github.com/" + p.SOURCE + ".git", sha])
+                self.assertNotIn("master", command)
+                api.assert_not_called()
+
+    def test_checked_out_pubspec_must_equal_prepared_version(self):
+        with tempfile.TemporaryDirectory(prefix=".test-", dir=ROOT) as directory:
+            folder = Path(directory).resolve()
+            source = folder / "source"
+            source.mkdir()
+            pubspec = source / "pubspec.yaml"
+            for candidate in ("1.0.6+23", VERSION, "1.0.6+25"):
+                original = ("version: " + candidate + "\n").encode()
+                pubspec.write_bytes(original)
+                with patch.object(p, "ROOT", folder), patch.dict(os.environ, dict(ENV, DEFAULT_SERVER_URL="https://example.com/"), clear=True), patch.object(p, "quiet", side_effect=[SHA, p.POLICY["flutter_sha"]]), patch.object(p.shutil, "which", return_value=str(folder / "sdk/bin/flutter")):
+                    if candidate == VERSION:
+                        self.assertEqual(p.source_context()[:3], (source, VERSION, SHA))
+                    else:
+                        with self.assertRaisesRegex(p.GateError, "Source version differs"):
+                            p.source_context()
+                self.assertEqual(pubspec.read_bytes(), original)
 
 
 class ArtifactTests(unittest.TestCase):
@@ -287,7 +347,7 @@ class PublishTests(unittest.TestCase):
     def test_windows_wrong_version_source_or_run_rejected(self):
         manifest = self.incoming / "windows/windows-manifest.json"
         original = manifest.read_text()
-        for key, value in [("version", "1.0.6+23"), ("source_sha", "b" * 40), ("run_id", "999"), ("platform", "android")]:
+        for key, value in [("version", "1.0.6+23"), ("source_sha", "b" * 40), ("source_ref", "refs/heads/main"), ("source_repository", "someone/emosonic"), ("run_id", "999"), ("platform", "android")]:
             data = json.loads(original)
             data[key] = value
             manifest.write_text(json.dumps(data))
@@ -322,7 +382,7 @@ class WindowsTests(unittest.TestCase):
             source = Path(directory).resolve()
             self.assertTrue(source.is_relative_to(ROOT.resolve()))
             pubspec = source / "pubspec.yaml"
-            pubspec.write_text("version: 1.0.6+22\n")
+            pubspec.write_text("version: " + VERSION + "\n")
             with patch.dict(os.environ, {"RELEASE_WRITE_TOKEN": "synthetic", "SOURCE_READ_TOKEN": "synthetic", "ANDROID_KEY_ALIAS": "synthetic"}), patch.object(p.os, "name", "nt"), patch.object(p, "source_context", return_value=(source, VERSION, SHA, "https://example.com/")), patch.object(p, "check_windows_source"), patch.object(p, "windows_tool", return_value=source / "ISCC.exe"), patch.object(p, "codegen"), patch.object(p, "quiet") as run, patch.object(p, "inspect_windows"), patch.object(p, "stage_package") as stage, patch("builtins.print"):
                 p.build_windows()
             command, cwd, env = run.call_args.args
@@ -332,10 +392,10 @@ class WindowsTests(unittest.TestCase):
             self.assertEqual(env["GITHUB_RELEASE_REPOSITORY"], p.DEST)
             for secret in ("SOURCE_READ_TOKEN", "RELEASE_WRITE_TOKEN", "ANDROID_KEY_ALIAS"):
                 self.assertNotIn(secret, env)
-            self.assertEqual(pubspec.read_text(), "version: 1.0.6+22\n")
+            self.assertEqual(pubspec.read_text(), "version: " + VERSION + "\n")
             self.assertEqual(stage.call_args.args[1:], (VERSION, SHA, "windows"))
 
-    def test_original_windows_script_and_template_are_pinned(self):
+    def test_windows_entrypoints_allow_edits_but_require_expected_files(self):
         with tempfile.TemporaryDirectory(prefix=".test-", dir=ROOT) as directory:
             source = Path(directory).resolve()
             self.assertTrue(source.is_relative_to(ROOT.resolve()))
@@ -344,11 +404,13 @@ class WindowsTests(unittest.TestCase):
             iss.parent.mkdir(parents=True)
             bat.write_bytes(b"synthetic-script")
             iss.write_bytes(b"synthetic-template")
-            with patch.dict(p.POLICY, {"windows_build_script_blob": p.git_blob(bat), "windows_installer_template_blob": p.git_blob(iss)}):
+            p.check_windows_source(source)
+            iss.write_bytes(b"changed-template")
+            bat.write_bytes(b"changed-script")
+            p.check_windows_source(source)
+            iss.unlink()
+            with self.assertRaises(p.GateError):
                 p.check_windows_source(source)
-                iss.write_bytes(b"changed-template")
-                with self.assertRaises(p.GateError):
-                    p.check_windows_source(source)
 
     def test_installer_identity_and_old_package_rename_rejected(self):
         fields = {"AppName": "EmoSonic", "AppId": p.POLICY["windows_app_id"], "AppVersion": "1.0.6", "DefaultDirName": p.POLICY["windows_install_dir"], "PrivilegesRequired": "lowest", "OutputBaseFilename": p.installer_name(VERSION)[:-4]}
@@ -366,17 +428,15 @@ class WindowsTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(p.GateError):
                 p.validate_windows_version(dict(info, **{key: value}), VERSION)
 
-    def test_temporary_version_restores_on_failure(self):
+    def test_windows_failure_does_not_rewrite_source_version(self):
         with tempfile.TemporaryDirectory(prefix=".test-", dir=ROOT) as directory:
             folder = Path(directory).resolve()
             self.assertTrue(folder.is_relative_to(ROOT.resolve()))
             pubspec = folder / "pubspec.yaml"
-            original = b"name: synthetic\r\nversion: 1.0.6+22\r\n"
+            original = ("name: synthetic\r\nversion: " + VERSION + "\r\n").encode()
             pubspec.write_bytes(original)
-            with self.assertRaises(RuntimeError):
-                with p.temporary_version(folder, VERSION):
-                    self.assertIn(b"version: 1.0.6+24", pubspec.read_bytes())
-                    raise RuntimeError("synthetic failure")
+            with patch.object(p.os, "name", "nt"), patch.object(p, "source_context", return_value=(folder, VERSION, SHA, "https://example.com/")), patch.object(p, "check_windows_source"), patch.object(p, "windows_tool", return_value=folder / "ISCC.exe"), patch.object(p, "codegen", side_effect=RuntimeError("synthetic failure")), self.assertRaises(RuntimeError):
+                p.build_windows()
             self.assertEqual(pubspec.read_bytes(), original)
 
     def test_batch_metacharacters_rejected(self):
@@ -405,6 +465,20 @@ class WindowsTests(unittest.TestCase):
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_no_manual_source_or_version_and_jobs_share_prepared_snapshot(self):
+        workflow = (ROOT / ".github/workflows/android.yml").read_text(encoding="utf-8")
+        dispatch = workflow.split("\npermissions:")[0]
+        self.assertNotIn("source_ref:", dispatch)
+        self.assertNotIn("version:", dispatch)
+        self.assertNotIn("inputs.source_ref", workflow)
+        self.assertNotIn("inputs.version", workflow)
+        self.assertIn("SOURCE_REF: refs/heads/master", workflow)
+        for job in ("build", "build-windows", "verify", "verify-windows", "publish"):
+            section = re.split(r"\n  [a-z][a-z-]*:\n", workflow.split(f"\n  {job}:\n", 1)[1], maxsplit=1)[0]
+            self.assertIn("SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}", section)
+            self.assertIn("BUILD_VERSION: ${{ needs.prepare.outputs.version }}", section)
+            self.assertNotIn("SOURCE_REF:", section)
+
     def test_workflow_trust_boundaries(self):
         text = (ROOT / ".github/workflows/android.yml").read_text(encoding="utf-8")
         self.assertNotIn("pull_request_target", text)

@@ -3,15 +3,6 @@ name: Android + Windows stable (manual)
 on:
   workflow_dispatch:
     inputs:
-      source_ref:
-        description: Source ref (master must still resolve to a reviewed, allowlisted SHA)
-        required: true
-        default: master
-        type: string
-      version:
-        description: Confirmed X.Y.Z+BUILD; build must exceed every existing release/tag
-        required: true
-        type: string
       mode:
         description: Build both platforms; publish-stable promotes a fully verified release to latest
         required: true
@@ -55,8 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: ${{ inputs.source_ref }}
-          BUILD_VERSION: ${{ inputs.version }}
+          SOURCE_REF: refs/heads/master
           RELEASE_MODE: ${{ inputs.mode }}
         run: python3 scripts/pipeline.py prepare
 
