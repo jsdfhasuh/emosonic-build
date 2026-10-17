@@ -2,7 +2,7 @@
 
 固定从私有 `jsdfhasuh/emosonic` 的 **`refs/heads/master`** 构建正式签名 Android APK 和 Windows x64 Inno Setup 安装包，统一发布到公开 [emosonic-releases](https://github.com/jsdfhasuh/emosonic-releases)。公开仓库只保存自编构建基础设施，不保存产品源码、keystore 或 token；不构建 iOS。
 
-**正式 master 发布流程尚未实际编译或发布新安装包。独立离线候选 Android 测试包已于 2026-10-17 构建并独立验包通过，见下节；它没有创建 Release。** 2026-10-17 核对时，master 的源码版本为 `1.0.6+23`，公开 latest 为 `v1.0.6+23`：直接运行将停止，开发者须先在产品仓库升版本。构建脚本不会自动修改或虚增源码版本。
+**正式 Android + Windows `1.0.7+24` 发布已获用户授权，正在构建与验证；此处不提前宣称发布成功。** PR #4 已合并，发布源码为 `ec2f9dedd04a11ccdbcf72b8eedf8e91502a5c9c`。独立离线候选 Android 测试包已于 2026-10-17 构建并验包通过，见下节；它没有创建 Release。构建脚本不会自动修改或虚增源码版本。真实设备验收仍待用户完成。
 
 ## 固定离线候选测试包
 
@@ -10,11 +10,15 @@
 
 已验证测试包：[Actions run 39025031880](https://github.com/jsdfhasuh/emosonic-build/actions/runs/39025031880)，builder `98936d5b981b16df231a08964b03af7a1007b667`，53项流水线测试通过。APK SHA-256：`106dfd07980f86c8756689995620bfd9387686c47d8c3a59f95fd1568f076f6a`。CI原始artifact于2026-10-18 10:37:50 UTC过期。实际安装、离线浏览/播放及数据兼容性未验收。
 
+## 本次授权的固定正式发布
+
+`requests/stable-1.0.7-24.json` 仅触发一次受限 main push：固定上一 builder 提交、完整提交消息、请求内容、源码 SHA 与版本。复用同一个 `android.yml` 及全部双平台验证/发布 gates；普通 push 不会签名或发布。正式 SDK 工具路径已采用候选包验证过的绝对路径逻辑。它不新增 token、不改变 Environments 或分支保护。详见[本次发布计划](docs/plans/2026-10-17-offline-stable-release.md)。手动入口继续保持下面的 master 自动取版行为。
+
 ## 每次只选择运行模式
 
 1. 开发时，在产品仓库 `pubspec.yaml` 更新唯一版本行并提交到 master，例如 `version: 1.0.6+24`（仅格式示例，不代表已选定发行版本）。使用未加引号、无行尾注释的单行 `X.Y.Z+BUILD`。不接受重复 version 键、别名、合并或多文档 YAML。版本名不得降低，build number 必须严格高于所有已存在 releases/tags 和基线 23；四段数字均不能超过 Windows 版本资源上限 65535。
 2. 在下述 Environments 配置好 Secrets。
-3. 打开 [Actions 工作流](https://github.com/jsdfhasuh/emosonic-build/actions/workflows/android.yml)，选择 **Android + Windows stable (manual) → Run workflow → main**。页面只需选择 `mode`，无需填写源码 ref、SHA 或版本。工作流文件仍为 `android.yml`，保留原有链接。
+3. 打开 [Actions 工作流](https://github.com/jsdfhasuh/emosonic-build/actions/workflows/android.yml)，选择 **Android + Windows stable → Run workflow → main**。页面只需选择 `mode`，无需填写源码 ref、SHA 或版本。工作流文件仍为 `android.yml`，保留原有链接。
 4. 首次选择 `build-only`：构建并独立验证两个平台，只上传一天有效的分发 artifacts，不创建 Release。每个平台只有安装包、同名 `.sha256` 和脱敏 manifest。
 5. 下载两个平台安装包，分别验证覆盖安装、配置保留、普通曲库播放和应用内更新。验证后，再选择 `publish-stable`：重新读取当时 master 的提交和版本，重建两个平台、验证并发布。若希望发布与试构建相同的源码，请在两次运行间保持 master 不变并核对 manifest 的 source SHA；这不是对先前 artifact 的直接推广。
 
@@ -69,7 +73,7 @@ Android 和 Windows 继续查询 `jsdfhasuh/emosonic-releases/releases/latest`�
 | `verify` / `verify-windows` | 独立新 runner；无用户 Secrets；只解析产物，不安装或运行应用 |
 | `publish` | 独立 Linux runner；发布 PAT 仅最后一步注入；不执行私有源码或安装包 |
 
-checkout 固定 builder 本次 SHA，`persist-credentials: false`。源码 PAT 只用于静默 fetch，不写入 git 配置；构建子进程环境剔除 PAT 与签名 Secret 环境变量。Actions 固定完整提交 SHA。正式发布工作流无 push、pull_request_target、公众评论等自动触发；独立候选工作流只接受上述一次性固定 push。
+checkout 固定 builder 本次 SHA，`persist-credentials: false`。源码 PAT 只用于静默 fetch，不写入 git 配置；构建子进程环境剔除 PAT 与签名 Secret 环境变量。Actions 固定完整提交 SHA。正式发布工作流只接受手动入口及上述一次性固定授权 push，不接受 pull_request_target、公众评论或普通 push；独立候选工作流只接受其一次性固定 push。
 
 Android 固定包名 `com.example.emosonic` 和原证书 SHA-256 `6db83974a60fe21ff18babf57a518fa34d05f63be49bdefc1fac7008a7f6942f`，独立检查签名、版本、非 debug 和三个 ABI。Windows 独立检查 AppId `{779F17F8-DA99-4D5B-A404-E7E2D17C1E65}`、安装目录 `{localappdata}\Programs\EmoSonic`、权限 `lowest`、`emosonic.exe`、x64 PE、内嵌版本及完整运行载荷；改文件名或 manifest 不能把旧二进制变成新版本。
 

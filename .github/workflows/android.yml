@@ -1,6 +1,9 @@
-name: Android + Windows stable (manual)
+name: Android + Windows stable
 
 on:
+  push:
+    branches: [main]
+    paths: [requests/stable-1.0.7-24.json]
   workflow_dispatch:
     inputs:
       mode:
@@ -25,7 +28,11 @@ defaults:
 
 jobs:
   prepare:
-    if: github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    if: >-
+      github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.event.before == '43a89a085562c838245313748d7c88110cad74b1' &&
+      github.event.head_commit.message == 'release: publish offline 1.0.7+24 from merged master' && github.event.forced == false))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -47,7 +54,7 @@ jobs:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
           SOURCE_REF: refs/heads/master
-          RELEASE_MODE: ${{ inputs.mode }}
+          RELEASE_MODE: ${{ github.event_name == 'push' && 'publish-stable' || inputs.mode }}
         run: python3 scripts/pipeline.py prepare
 
   build:
@@ -82,7 +89,7 @@ jobs:
           channel: stable
           cache: false
       - name: Ensure Android inspection tools
-        run: sdkmanager 'build-tools;36.0.0' > /dev/null 2>&1
+        run: python3 scripts/pipeline.py android_tools
       - name: Fetch private source without logging content or retaining credentials
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
@@ -128,7 +135,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Ensure Android inspection tools
-        run: sdkmanager 'build-tools;36.0.0' > /dev/null 2>&1
+        run: python3 scripts/pipeline.py android_tools
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: android-${{ github.run_id }}-${{ github.run_attempt }}
@@ -222,7 +229,7 @@ jobs:
         run: python scripts/pipeline.py verify_windows
 
   publish:
-    if: inputs.mode == 'publish-stable'
+    if: github.event_name == 'push' || inputs.mode == 'publish-stable'
     needs: [prepare, build, verify, build-windows, verify-windows]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -244,7 +251,7 @@ jobs:
         env:
           SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
           BUILD_VERSION: ${{ needs.prepare.outputs.version }}
-          RELEASE_MODE: ${{ inputs.mode }}
+          RELEASE_MODE: ${{ github.event_name == 'push' && 'publish-stable' || inputs.mode }}
           VERIFIED_APK_SHA256: ${{ needs.verify.outputs.apk_sha256 }}
           VERIFIED_INSTALLER_SHA256: ${{ needs.verify-windows.outputs.installer_sha256 }}
           RELEASE_WRITE_TOKEN: ${{ secrets.RELEASE_WRITE_TOKEN }}

@@ -25,6 +25,12 @@ DEST = "jsdfhasuh/emosonic-releases"
 BUILDER = "jsdfhasuh/emosonic-build"
 VERSION_RE = re.compile(r"(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\+([1-9][0-9]{0,9})", re.ASCII)
 SHA_RE = re.compile(r"[0-9a-f]{40}", re.ASCII)
+STABLE_PUSH_PARENT = "43a89a085562c838245313748d7c88110cad74b1"
+STABLE_PUSH_MESSAGE = "release: publish offline 1.0.7+24 from merged master"
+STABLE_PUSH_PATH = "requests/stable-1.0.7-24.json"
+STABLE_PUSH_REQUEST = {"source_sha": "ec2f9dedd04a11ccdbcf72b8eedf8e91502a5c9c",
+                       "version": "1.0.7+24", "mode": "publish-stable", "attempt": 1}
+
 
 
 class GateError(Exception):
@@ -133,10 +139,35 @@ def context():
     require(POLICY["source_ref"] == SOURCE_REF, "Source branch policy mismatch.")
     require(os.environ.get("GITHUB_REPOSITORY") == BUILDER, "Untrusted builder repository.")
     require(os.environ.get("GITHUB_REF") == "refs/heads/main", "Only trusted main may run.")
-    require(os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch", "Only manual workflow_dispatch may run.")
+    if os.environ.get("GITHUB_EVENT_NAME") == "push":
+        stable_push_context()
+    else:
+        require(os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch", "Only manual or the fixed stable request may run.")
     require(SHA_RE.fullmatch(os.environ.get("GITHUB_SHA", "")), "Invalid builder SHA.")
     require(re.fullmatch(r"[1-9][0-9]*", os.environ.get("GITHUB_RUN_ID", "")), "Invalid workflow run ID.")
     require(re.fullmatch(r"[1-9][0-9]*", os.environ.get("GITHUB_RUN_ATTEMPT", "")), "Invalid workflow attempt.")
+
+
+def stable_push_context():
+    require(os.environ.get("GITHUB_WORKFLOW_REF") == BUILDER + "/.github/workflows/android.yml@refs/heads/main", "Unexpected stable request workflow.")
+    builder_sha = checked_sha(os.environ.get("GITHUB_SHA"))
+    event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+    require(event.get("before") == STABLE_PUSH_PARENT and event.get("after") == builder_sha
+            and event.get("ref") == "refs/heads/main" and event.get("forced") is False
+            and event.get("deleted") is False and event.get("created") is False,
+            "Push is not the authorized stable transition.")
+    head = event.get("head_commit") or {}
+    require(head.get("id") == builder_sha and head.get("message") == STABLE_PUSH_MESSAGE,
+            "Stable request push marker mismatch.")
+    request = ROOT / STABLE_PUSH_PATH
+    require(request.is_file() and not request.is_symlink()
+            and json.loads(request.read_text(encoding="utf-8")) == STABLE_PUSH_REQUEST,
+            "Stable request is not the fixed reviewed request.")
+    for name, expected in (("SOURCE_SHA", STABLE_PUSH_REQUEST["source_sha"]),
+                           ("BUILD_VERSION", STABLE_PUSH_REQUEST["version"]),
+                           ("RELEASE_MODE", STABLE_PUSH_REQUEST["mode"])):
+        require(name not in os.environ or os.environ[name] == expected,
+                "Stable request source, version or mode override rejected.")
 
 
 def source_version(pubspec):
@@ -180,6 +211,9 @@ def prepare():
     require(isinstance(result, dict) and result.get("ref") == ref and isinstance(result.get("object"), dict) and result["object"].get("type") == "commit", "Source master branch could not be resolved to a commit.")
     sha = checked_sha(result["object"].get("sha"))
     candidate = remote_source_version(sha, token)
+    if os.environ.get("GITHUB_EVENT_NAME") == "push":
+        require(sha == STABLE_PUSH_REQUEST["source_sha"] and candidate == STABLE_PUSH_REQUEST["version"],
+                "Master differs from the authorized stable source snapshot.")
     monotonic(candidate, history(os.environ.get("GITHUB_TOKEN")))
     output("source_sha", sha)
     output("version", candidate)
@@ -401,6 +435,19 @@ def verify():
     print("Independent APK signature, package, version, ABI and provenance checks passed.")
 
 
+def android_tools():
+    """Use installed inspection tools; sdkmanager is not necessarily on PATH."""
+    sdk = Path(os.environ["ANDROID_HOME"])
+    build_tools = sdk / "build-tools" / POLICY["android_build_tools"]
+    if not all((build_tools / name).is_file() for name in ("aapt", "apksigner")):
+        manager = sdk / "cmdline-tools/latest/bin/sdkmanager"
+        require(manager.is_file(), "Android SDK command-line tools are missing from the runner.")
+        quiet([str(manager), "build-tools;" + POLICY["android_build_tools"]])
+    require(all((build_tools / name).is_file() for name in ("aapt", "apksigner")),
+              "Pinned Android inspection tools are missing after setup.")
+    print("Pinned Android inspection tools are available.")
+
+
 def windows_tool(name):
     paths = {"innounp": ROOT / ".tools/innounp/innounp.exe", "iscc": ROOT / ".tools/inno/{app}/ISCC.exe"}
     path = paths[name]
@@ -578,7 +625,11 @@ def publish():
     body = (f"EmoSonic {candidate}: Android APK and Windows x64 installer, built from the same resolved master commit.\n\n"
             f"Source: {SOURCE}@{sha}\nBuilder: {BUILDER}@{os.environ['GITHUB_SHA']}\nRun: {run_url}\n\n"
             f"Android package: {POLICY['application_id']}\nAPK SHA-256: {digests['android']}\nWindows SHA-256: {digests['windows']}\n"
-            "Both packages include matching .sha256 files. Existing clients can use the stable in-app updater. No iOS build is included. GitHub source archives refer to the release repository, not the private app source.\n")
+            "Both packages include matching .sha256 files. The stable tag and asset formats remain compatible with the existing in-app updater; end-to-end update acceptance is pending. No iOS build is included. GitHub source archives refer to the release repository, not the private app source.\n\n"
+            "Validation limits: package build and independent binary inspection are automated checks only. Android/Windows installation and upgrade, real audio, offline cold start, OS media/process lifecycle, data compatibility and the M01-M15 device matrix remain NOT_RUN / PENDING_USER_VALIDATION. Back up application data before upgrading. Personal-lab acceptance is not production-readiness certification. No server deployment is included; strict-v2 server compatibility is not certified.\n")
+    if sha == STABLE_PUSH_REQUEST["source_sha"] and candidate == STABLE_PUSH_REQUEST["version"]:
+        body += ("\nChanges: account-scoped offline library browsing, persisted synchronization tasks, local download playback with logical-queue occurrence preservation, and scoped storage/legacy-data controls from PR #4.\n"
+                 "Source automated validation: 2,213 tests passed on frozen application source 0342684c3653d838e4fe5e7d928cc486c339125a per its validation report. Later source changes are documentation and the release version bump. Private repository CI remains failed before runner/test execution and is not represented as passed by this public package build.\n")
     release = api(f"/repos/{DEST}/releases", token, "POST", {"tag_name": tag, "target_commitish": target["sha"], "name": "EmoSonic " + candidate, "body": body, "draft": True, "prerelease": False, "make_latest": "false"})
     release_id = release["id"]
     require(isinstance(release_id, int), "Invalid draft release response.")
@@ -618,7 +669,7 @@ def cleanup():
 def main():
     try:
         context()
-        require(len(sys.argv) == 2 and sys.argv[1] in ("prepare", "fetch", "build", "verify", "windows_tools", "build_windows", "verify_windows", "publish", "cleanup"), "Invalid pipeline stage.")
+        require(len(sys.argv) == 2 and sys.argv[1] in ("prepare", "fetch", "build", "verify", "android_tools", "windows_tools", "build_windows", "verify_windows", "publish", "cleanup"), "Invalid pipeline stage.")
         globals()[sys.argv[1]]()
     except GateError as error:
         print("ERROR: " + str(error), file=sys.stderr)
