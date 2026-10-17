@@ -1,0 +1,128 @@
+name: Offline Android candidate 601d6b4 (build only)
+
+on:
+  push:
+    branches: [main]
+    paths: [requests/offline-601d6b4.json]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emosonic-offline-test-601d6b4
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  SOURCE_SHA: 601d6b4d811da18f8b437febe6f677df5cfa4da2
+  BUILD_VERSION: 1.0.6+23
+
+jobs:
+  preflight:
+    if: >-
+      github.repository == 'jsdfhasuh/emosonic-build' &&
+      github.ref == 'refs/heads/main' && github.event_name == 'push' &&
+      github.event.before == 'f12dc154d0d8131fda516e7c4a1b5bde836ef3b0' &&
+      github.event.head_commit.message == 'build: run fixed offline Android candidate 601d6b4' &&
+      github.event.forced == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Test both pipeline entrypoints with synthetic fixtures
+        run: python3 -m unittest discover -s tests -v
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Ensure Android inspection tools
+        run: sdkmanager 'build-tools;36.0.0' > /dev/null 2>&1
+      - name: Verify the existing release APK and same-code replacement baseline
+        run: python3 scripts/offline_candidate.py baseline
+
+  build:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: android-build
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require existing build and signing configuration
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          DEFAULT_SERVER_URL: ${{ secrets.DEFAULT_SERVER_URL }}
+        run: |
+          python3 -c 'import os,sys; names=["SOURCE_READ_TOKEN","ANDROID_KEYSTORE_BASE64","ANDROID_STORE_PASSWORD","ANDROID_KEY_PASSWORD","ANDROID_KEY_ALIAS","DEFAULT_SERVER_URL"]; sys.exit(0 if all(os.environ.get(n) for n in names) else "Required existing build/signing Secret is missing.")'
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.41.2'
+          channel: stable
+          cache: false
+      - name: Ensure Android inspection tools
+        run: sdkmanager 'build-tools;36.0.0' > /dev/null 2>&1
+      - name: Fetch only the fixed private candidate without persisted credentials
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        run: python3 scripts/offline_candidate.py fetch
+      - name: Build visibly labeled offline test APK with original signing identity
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          DEFAULT_SERVER_URL: ${{ secrets.DEFAULT_SERVER_URL }}
+        run: python3 scripts/offline_candidate.py build
+      - name: Upload only the three verified distribution files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: offline-android-601d6b4-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            dist/emosonic_android_offline_601d6b4_v1.0.6-offline.601d6b4+23.apk
+            dist/emosonic_android_offline_601d6b4_v1.0.6-offline.601d6b4+23.apk.sha256
+            dist/android-test-manifest.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          include-hidden-files: false
+      - name: Remove private source and temporary signing inputs
+        if: always()
+        run: python3 scripts/offline_candidate.py cleanup
+
+  verify:
+    needs: [preflight, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Ensure Android inspection tools
+        run: sdkmanager 'build-tools;36.0.0' > /dev/null 2>&1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: offline-android-601d6b4-${{ github.run_id }}-${{ github.run_attempt }}
+          path: incoming
+      - name: Independently verify APK and test provenance without user Secrets
+        run: python3 scripts/offline_candidate.py verify

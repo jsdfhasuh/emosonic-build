@@ -4,6 +4,10 @@
 
 **当前仅完成本地构建脚本测试、静态检查及只读版本门禁核对，尚未实际编译产品、运行 Actions 或发布新安装包。** 2026-10-17 核对时，master 的源码版本为 `1.0.6+23`，公开 latest 为 `v1.0.6+23`：直接运行将停止，开发者须先在产品仓库升版本。构建脚本不会自动修改或虚增源码版本。
 
+## 固定离线候选测试包
+
+单独的 `offline-candidate.yml` 仅为已授权的离线候选 `601d6b4` 构建 Android 测试包；它不会发布 Release，也不改下面的正式发布流程。入口限定 `main`、专用 request 文件、固定上一提交及完整提交消息，后续普通提交不会自动签名。测试版显示 `1.0.6-offline.601d6b4`、保留 versionCode 23；先对既有正式 APK 做真实验包。须手动安装并先备份数据，旧版回退不保证安全。完整边界见[候选测试计划](docs/plans/2026-10-17-offline-candidate.md)。
+
 ## 每次只选择运行模式
 
 1. 开发时，在产品仓库 `pubspec.yaml` 更新唯一版本行并提交到 master，例如 `version: 1.0.6+24`（仅格式示例，不代表已选定发行版本）。使用未加引号、无行尾注释的单行 `X.Y.Z+BUILD`。不接受重复 version 键、别名、合并或多文档 YAML。版本名不得降低，build number 必须严格高于所有已存在 releases/tags 和基线 23；四段数字均不能超过 Windows 版本资源上限 65535。
@@ -63,7 +67,7 @@ Android 和 Windows 继续查询 `jsdfhasuh/emosonic-releases/releases/latest`�
 | `verify` / `verify-windows` | 独立新 runner；无用户 Secrets；只解析产物，不安装或运行应用 |
 | `publish` | 独立 Linux runner；发布 PAT 仅最后一步注入；不执行私有源码或安装包 |
 
-checkout 固定 builder 本次 SHA，`persist-credentials: false`。源码 PAT 只用于静默 fetch，不写入 git 配置；构建子进程环境剔除 PAT 与签名 Secret 环境变量。Actions 固定完整提交 SHA，无 push、pull_request_target、公众评论等自动触发。
+checkout 固定 builder 本次 SHA，`persist-credentials: false`。源码 PAT 只用于静默 fetch，不写入 git 配置；构建子进程环境剔除 PAT 与签名 Secret 环境变量。Actions 固定完整提交 SHA。正式发布工作流无 push、pull_request_target、公众评论等自动触发；独立候选工作流只接受上述一次性固定 push。
 
 Android 固定包名 `com.example.emosonic` 和原证书 SHA-256 `6db83974a60fe21ff18babf57a518fa34d05f63be49bdefc1fac7008a7f6942f`，独立检查签名、版本、非 debug 和三个 ABI。Windows 独立检查 AppId `{779F17F8-DA99-4D5B-A404-E7E2D17C1E65}`、安装目录 `{localappdata}\Programs\EmoSonic`、权限 `lowest`、`emosonic.exe`、x64 PE、内嵌版本及完整运行载荷；改文件名或 manifest 不能把旧二进制变成新版本。
 
@@ -99,3 +103,4 @@ actionlint .github/workflows/android.yml
 测试涵盖 master 前进及单次解析、固定 SHA 检出、其他 ref/版本覆盖拒绝、pubspec 非法/重复版本、版本倒退、双平台来源或版本错配、签名/安装身份/架构检查、禁止覆盖和上传失败不推广 latest。脚本测试与静态检查不等于产品编译、安装兼容性或线上发布验证。
 
 当前设计与验证记录见 [master/源码版本简化计划](docs/plans/2026-10-17-master-version-automation.md)。更早计划仅为历史记录，已由本说明和当前代码取代。
+
