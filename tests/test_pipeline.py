@@ -329,18 +329,20 @@ class PublishTests(unittest.TestCase):
         self.assertEqual([n for n in names if n.endswith(".apk")], [p.apk_name(VERSION)])
         self.assertEqual([n for n in names if n.endswith((".exe", ".msi"))], [p.installer_name(VERSION)])
 
-    def test_native_ack_notes_preserve_validation_limits_and_data_warning(self):
+    def test_timeout_notes_preserve_validation_limits_and_data_warning(self):
         # Select the authorized notes branch using synthetic package identities.
         with patch.object(p, "STABLE_PUSH_REQUEST", {"source_sha": SHA, "version": VERSION}):
             self.run_publish()
         body = next(data["body"] for _, method, data, upload in self.calls
                     if method == "POST" and not upload)
-        for text in ("Player.isPlaying", "104 checks", "full Android debug build", "2,442/2,442",
-                     "diagnostic-log sharing", "deterministic JVM contracts",
+        for text in ("8/10/12 seconds", "45-second overall request budget", "30 seconds", "31 seconds",
+                     "104 checks", "full Android debug build", "complete Flutter test suite",
+                     "committed source bytes", "No test failure or skip", "deterministic JVM contracts",
                      "signature mismatch", "do not uninstall", "clear its data",
                      "NOT_RUN / PENDING_USER_VALIDATION", "No server deployment"):
             self.assertIn(text, body)
         self.assertNotIn("must be recorded before", body)
+        self.assertNotIn("2,442/2,442", body)
         self.assertNotIn("2,321/2,321", body)
         self.assertNotIn("9 PASS / 4 FAIL", body)
         self.assertNotIn("failed before runner/test execution", body)
@@ -515,7 +517,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn("RELEASE_WRITE_TOKEN", prefix)
         self.assertNotIn("SOURCE_READ_TOKEN", publish)
         self.assertNotIn("ANDROID_KEY", publish)
-        self.assertIn("needs: [prepare, build, verify, build-windows, verify-windows]", publish)
+        self.assertIn("needs: [prepare, validate-source, build, verify, build-windows, verify-windows]", publish)
         self.assertNotIn("always()", publish)
         self.assertNotIn("publish-prerelease", text)
         windows = text.split("\n  build-windows:\n")[1].split("\n  verify-windows:\n")[0]
@@ -532,3 +534,4 @@ class WorkflowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

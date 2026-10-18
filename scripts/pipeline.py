@@ -26,11 +26,11 @@ BUILDER = "jsdfhasuh/emosonic-build"
 VERSION_RE = re.compile(r"(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\+([1-9][0-9]{0,9})", re.ASCII)
 SHA_RE = re.compile(r"[0-9a-f]{40}", re.ASCII)
 NATIVE_CONTRACT_TEST_COUNT = 104
-STABLE_PUSH_PARENT = "8b015c2cf4c86397acbe2491569fcb4b999f103b"
-STABLE_PUSH_MESSAGE = "release: publish fixed native ACK and log sharing 1.0.9+26"
-STABLE_PUSH_PATH = "requests/stable-1.0.9-26.json"
-STABLE_PUSH_REQUEST = {"source_sha": "ecd827ec605577c31f3abcc3390fd53baf22df4c",
-                       "version": "1.0.9+26", "mode": "publish-stable", "attempt": 1}
+STABLE_PUSH_PARENT = "90520c83812e7a432a40942b81cb554997733611"
+STABLE_PUSH_MESSAGE = "release: publish slow connection timeout update 1.0.10+27"
+STABLE_PUSH_PATH = "requests/stable-1.0.10-27.json"
+STABLE_PUSH_REQUEST = {"source_sha": "3d31c15c14e3bb5613455c2cdb409f389d1a225a",
+                       "version": "1.0.10+27", "mode": "publish-stable", "attempt": 1}
 
 
 
@@ -344,8 +344,9 @@ def inspect_apk(path, candidate):
             require(not lower.endswith((".dart", ".jks", ".keystore", ".pem", ".key", ".pdb", ".symbols")) and ".git/" not in lower and ".dsym/" not in lower and lower.split("/")[-1] not in ("key.properties", ".env"), "Forbidden source, credential or debug artifact inside APK.")
 
 
-def source_context():
-    require_secrets(["DEFAULT_SERVER_URL"])
+def source_context(require_server=True):
+    if require_server:
+        require_secrets(["DEFAULT_SERVER_URL"])
     candidate = os.environ["BUILD_VERSION"]
     version(candidate)
     sha = checked_sha(os.environ["SOURCE_SHA"])
@@ -357,6 +358,8 @@ def source_context():
     require(source_version(pubspec) == candidate, "Source version differs from the resolved pubspec version.")
     flutter = Path(shutil.which("flutter") or "missing").resolve()
     require(quiet(["git", "rev-parse", "HEAD"], flutter.parent.parent).strip() == POLICY["flutter_sha"], "Flutter SDK revision mismatch.")
+    if not require_server:
+        return source, candidate, sha, None
     server = os.environ["DEFAULT_SERVER_URL"]
     parsed = urllib.parse.urlsplit(server)
     require(parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment, "DEFAULT_SERVER_URL must be HTTPS without credentials, query or fragment.")
@@ -386,6 +389,204 @@ def codegen(source, env):
             else:
                 command[0] = str(flutter)
         quiet(command, source, env)
+
+
+def source_fingerprint(source, sha, env):
+    """Check every tracked byte against the frozen commit, never the git index.
+
+    Only untracked outputs ignored by the committed source rules are excluded.
+    Tracked generated files still have to match the commit. No private paths,
+    content, or digest inventory is printed or saved as a public artifact.
+    """
+    checked_sha(sha)
+    require(source.is_dir() and not source.is_symlink(), "Invalid source directory.")
+    require(quiet(["git", "rev-parse", "HEAD"], source, env).strip() == sha,
+            "Source SHA changed during validation.")
+    tree = quiet(["git", "ls-tree", "-rz", "--full-tree", sha], source, env)
+    require(tree.endswith("\0") and "\ufffd" not in tree, "Invalid frozen source tree.")
+    digest = hashlib.sha256()
+    paths = set()
+    for record in tree[:-1].split("\0"):
+        match = re.fullmatch(r"(100644|100755) blob ([0-9a-f]{40})\t(.+)", record, re.DOTALL)
+        require(match is not None, "Unsupported frozen source entry.")
+        mode, blob, name = match.groups()
+        relative = Path(name)
+        require(not relative.is_absolute() and all(part not in (".", "..", ".git") for part in relative.parts)
+                and name not in paths, "Invalid frozen source path.")
+        paths.add(name)
+        path = source / relative
+        require(path.is_file() and not path.is_symlink()
+                and path.resolve().is_relative_to(source.resolve())
+                and not any((source / Path(*relative.parts[:i])).is_symlink()
+                            for i in range(1, len(relative.parts))),
+                "Frozen source file is missing or invalid.")
+        data = path.read_bytes()
+        actual = hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest()
+        require(actual == blob, "Frozen source bytes changed during validation.")
+        if os.name != "nt":
+            require(bool(path.stat().st_mode & 0o100) == (mode == "100755"),
+                    "Frozen source file mode changed during validation.")
+        digest.update(record.encode("utf-8") + b"\0" + hashlib.sha256(data).digest())
+    # Ignore only the byte-verified committed .gitignore files. Global excludes
+    # and .git/info/exclude are mutable runner state, and a new .gitignore can
+    # otherwise hide itself as well as unexpected source. Walk ignored output
+    # directories too, without following links or inspecting Git internals.
+    for directory, directories, filenames in os.walk(source, followlinks=False):
+        if Path(directory) == source:
+            directories[:] = [name for name in directories if name != ".git"]
+        if ".gitignore" in filenames or ".gitignore" in directories:
+            name = (Path(directory) / ".gitignore").relative_to(source).as_posix()
+            require(name in paths, "Unexpected source ignore rules during validation.")
+    inventory = quiet(["git", "ls-files", "--cached", "--others", "--exclude-per-directory=.gitignore", "-z"], source, env)
+    require(inventory.endswith("\0") and "\ufffd" not in inventory
+            and set(inventory[:-1].split("\0")) == paths,
+            "Unexpected source inventory during validation.")
+    return digest.hexdigest(), paths
+
+
+def flutter_test_summary(raw, source, expected_paths):
+    """Parse the complete Dart JSON reporter stream, failing closed.
+
+    Hidden loader/setup/teardown events must pass but are not counted as tests.
+    Root-group counts and exact suite paths guard against a partial selection.
+    The only returned fields are numeric; names/messages never leave this parser.
+    Protocol: https://github.com/dart-lang/test/blob/master/pkgs/test/doc/json_reporter.md
+    """
+    message = "Invalid or incomplete Flutter test report; private details suppressed."
+
+    def check(condition):
+        require(condition, message)
+
+    def integer(value):
+        return type(value) is int and value >= 0
+
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            check(key not in result)
+            result[key] = value
+        return result
+
+    check(isinstance(raw, str) and bool(raw.strip()) and "\ufffd" not in raw)
+    started = finished = False
+    declared = None
+    identifiers, groups, suites, tests, results = set(), {}, {}, {}, {}
+    root_counts = {}
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        check(not finished)
+        try:
+            event = json.loads(line, object_pairs_hook=unique_object,
+                               parse_constant=lambda value: (_ for _ in ()).throw(ValueError()))
+        except (ValueError, TypeError, RecursionError):
+            raise GateError(message) from None
+        check(isinstance(event, dict) and isinstance(event.get("type"), str)
+              and integer(event.get("time")))
+        kind = event["type"]
+        if kind == "start":
+            check(not started and event.get("protocolVersion") == "0.1.1")
+            started = True
+            continue
+        check(started)
+        if kind == "allSuites":
+            check(declared is None and integer(event.get("count")) and event["count"] > 0)
+            declared = event["count"]
+        elif kind in ("suite", "group", "testStart"):
+            item = event.get("test" if kind == "testStart" else kind)
+            check(isinstance(item, dict))
+            identifier = item.get("id")
+            check(integer(identifier) and identifier not in identifiers)
+            identifiers.add(identifier)
+            if kind == "suite":
+                name = item.get("path")
+                check(isinstance(name, str) and bool(name))
+                path = Path(name)
+                path = path if path.is_absolute() else source / path
+                check(path.resolve().is_relative_to(source.resolve()))
+                relative = path.resolve().relative_to(source.resolve()).as_posix()
+                check(relative in expected_paths and relative not in suites.values())
+                suites[identifier] = relative
+            else:
+                suite = item.get("suiteID")
+                check(integer(suite) and suite in suites)
+                if kind == "group":
+                    parent = item.get("parentID")
+                    check(integer(item.get("testCount")))
+                    check(parent is None or (integer(parent) and groups.get(parent) == suite))
+                    groups[identifier] = suite
+                    if parent is None:
+                        check(suite not in root_counts)
+                        root_counts[suite] = item["testCount"]
+                else:
+                    group_ids = item.get("groupIDs")
+                    check(isinstance(group_ids, list) and all(integer(g) and groups.get(g) == suite for g in group_ids))
+                    tests[identifier] = suite
+        elif kind == "testDone":
+            identifier = event.get("testID")
+            check(integer(identifier) and identifier in tests and identifier not in results)
+            check(type(event.get("hidden")) is bool and type(event.get("skipped")) is bool)
+            require(event.get("result") == "success" and not event["skipped"],
+                    "Flutter tests failed or skipped; private details suppressed.")
+            results[identifier] = event["hidden"]
+        elif kind == "print":
+            check(integer(event.get("testID")) and event["testID"] in tests)
+            check(isinstance(event.get("message"), str) and isinstance(event.get("messageType"), str))
+        elif kind == "error":
+            # Late errors after a successful testDone also fail the run.
+            raise GateError("Flutter tests reported an error; private details suppressed.")
+        elif kind == "done":
+            require(event.get("success") is True, "Flutter test run did not succeed; private details suppressed.")
+            finished = True
+        else:
+            raise GateError(message)
+    check(started and finished and declared == len(suites) and set(suites.values()) == expected_paths
+          and tests.keys() == results.keys())
+    counts = {suite: 0 for suite in suites}
+    for identifier, hidden in results.items():
+        if not hidden:
+            counts[tests[identifier]] += 1
+    # An empty discovered suite can emit only its hidden loading test, without
+    # a root group. It contributes zero; an entirely empty run still fails.
+    check(all(root_counts.get(suite, 0) == count for suite, count in counts.items())
+          and sum(counts.values()) > 0)
+    return {"passed": sum(counts.values()), "suites": len(suites),
+            "hidden": sum(results.values()), "skipped": 0, "failed": 0}
+
+
+def validate_source():
+    """Validate the prepared snapshot without server or signing credentials."""
+    source, _, sha, _ = source_context(require_server=False)
+    env = build_env()
+    # Do not give source tools alternate public log/output channels.
+    for key in ("GITHUB_ENV", "GITHUB_OUTPUT", "GITHUB_PATH", "GITHUB_STEP_SUMMARY"):
+        env.pop(key, None)
+    fingerprint, paths = source_fingerprint(source, sha, env)
+    expected_tests = {name for name in paths if name.startswith("test/") and name.endswith("_test.dart")}
+    vendor_test = "test/services/native_start_dependency_contract_test.dart"
+    vendor_check = "tool/native_start/verify_vendored_source.py"
+    require(vendor_test in expected_tests and vendor_check in paths,
+            "Required vendor provenance validation is missing.")
+    try:
+        codegen(source, env)
+        print("Vendor provenance validation started (output suppressed).", flush=True)
+        quiet([sys.executable, vendor_check], source, env)
+        print("Vendor provenance validation passed.", flush=True)
+        print("Full Flutter analysis started (output suppressed).", flush=True)
+        quiet(["flutter", "analyze", "--no-pub", "--fatal-infos", "--fatal-warnings"], source, env)
+        print("Full Flutter analysis passed.", flush=True)
+        print("Full Flutter tests started (output suppressed).", flush=True)
+        # --machine also adds Flutter EventPrinter arrays. Select the plain
+        # Dart JSON reporter so the strict parser receives one protocol only.
+        report = quiet(["flutter", "test", "--no-pub", "--reporter=json"], source, env)
+        summary = flutter_test_summary(report, source, expected_tests)
+    finally:
+        require(source_fingerprint(source, sha, env) == (fingerprint, paths),
+                "Frozen source fingerprint changed during validation.")
+    print("Full Flutter tests passed: " + str(summary["passed"]) + " tests; "
+          + str(summary["suites"]) + " suites; " + str(summary["hidden"])
+          + " hidden lifecycle events; 0 skipped; 0 failed.", flush=True)
+    print("Frozen source byte integrity passed.", flush=True)
 
 
 def native_android_contract(source, env):
@@ -691,9 +892,9 @@ def publish():
             "Both packages include matching .sha256 files. The stable tag and asset formats remain compatible with the existing in-app updater; end-to-end update acceptance is pending. No iOS build is included. GitHub source archives refer to the release repository, not the private app source.\n\n"
             "Validation limits: package build and independent binary inspection are automated checks only. Android/Windows installation and upgrade, real audio, offline cold start, OS media/process lifecycle, data compatibility and the M01-M15 device matrix remain NOT_RUN / PENDING_USER_VALIDATION. Back up application data before upgrading. Personal-lab acceptance is not production-readiness certification. No server deployment is included; strict-v2 server compatibility is not certified.\n")
     if sha == STABLE_PUSH_REQUEST["source_sha"] and candidate == STABLE_PUSH_REQUEST["version"]:
-        body += ("\nChanges: adds source- and execution-scoped Android native playback-start acknowledgment using the actual Media3 Player.isPlaying observation, including fully buffered starts, inherited playback, stale/cancelled events, seeks and repeated-play handling. Durable completion/outbox isolation is preserved. Also merges the diagnostic-log sharing feature with bounded redaction of current/previous log snapshots and cancellation/concurrency coverage.\n"
-                 "Native validation before release signing: production NativeStartGate.java and its committed standalone Java test harness compiled with Temurin 17 javac --release 8; 104 checks executed and passed with the exact success marker. A full Android debug build compiled the complete vendored just_audio plugin before signed release compilation. These are deterministic JVM contracts and actual Android compilation, not JUnit or real-device audio acceptance.\n"
-                 "Source validation: complete Flutter suite 2,442/2,442 passed on the frozen snapshot verified byte-for-byte against this source commit. Full-project analysis, dependency resolution, code generation, navigation consistency, formatting, vendor provenance and whitespace checks passed without source changes. The four original regression probes passed 4/4; independent service/protocol probes passed 13/13 and independent native ordering checks passed. Independent source/protocol review found and verified fixes for inherited-playing reload, repeated-play pending-arm replacement and stale early-event starvation.\n"
+        body += ("\nChanges: increases staged API connection timeouts to 8/10/12 seconds within a single 45-second overall request budget. Android queue hydration allows 30 seconds and dependent preparation/restore waits allow 31 seconds. Dedicated short reachability probes, account cancellation, bounded retries, stale-source cleanup, native playback-start acknowledgment and strict-v2 personal-lab restrictions are preserved. Longer deadlines do not repair unavailable network routes or guarantee network-switch recovery.\n"
+                 "Source validation: the exact frozen source passed dependency resolution, navigation consistency, code generation, vendor provenance checks, full Flutter analysis and the complete Flutter test suite before either platform build. The validation job reports the actual test/suite counts while suppressing private source output, and verifies committed source bytes and inventory remain unchanged. No test failure or skip is accepted.\n"
+                 "Native validation before release signing: production NativeStartGate.java and its committed standalone Java test harness compiled with Temurin 17 javac --release 8; 104 checks executed and passed with the exact success marker. A full Android debug build compiled the complete vendored just_audio plugin before signed release compilation. These are deterministic JVM contracts and actual Android compilation, not real-device audio acceptance.\n"
                  "Android installation warning: this APK preserves package ID com.example.emosonic and the historical GitHub-release signing certificate. Compatibility with an already installed APK is not established. If Android reports a signature mismatch, STOP: do not uninstall the existing app or clear its data to force installation. Preserve downloaded music and application data. Real-device validation remains pending the user.\n")
     release = api(f"/repos/{DEST}/releases", token, "POST", {"tag_name": tag, "target_commitish": target["sha"], "name": "EmoSonic " + candidate, "body": body, "draft": True, "prerelease": False, "make_latest": "false"})
     release_id = release["id"]
@@ -734,7 +935,7 @@ def cleanup():
 def main():
     try:
         context()
-        require(len(sys.argv) == 2 and sys.argv[1] in ("prepare", "fetch", "build", "verify", "android_tools", "windows_tools", "build_windows", "verify_windows", "publish", "cleanup"), "Invalid pipeline stage.")
+        require(len(sys.argv) == 2 and sys.argv[1] in ("prepare", "fetch", "validate_source", "build", "verify", "android_tools", "windows_tools", "build_windows", "verify_windows", "publish", "cleanup"), "Invalid pipeline stage.")
         globals()[sys.argv[1]]()
     except GateError as error:
         print("ERROR: " + str(error), file=sys.stderr)
@@ -747,3 +948,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

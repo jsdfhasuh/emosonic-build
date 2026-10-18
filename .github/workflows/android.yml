@@ -3,7 +3,7 @@ name: Android + Windows stable
 on:
   push:
     branches: [main]
-    paths: [requests/stable-1.0.9-26.json]
+    paths: [requests/stable-1.0.10-27.json]
   workflow_dispatch:
     inputs:
       mode:
@@ -31,8 +31,8 @@ jobs:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.event.before == '8b015c2cf4c86397acbe2491569fcb4b999f103b' &&
-      github.event.head_commit.message == 'release: publish fixed native ACK and log sharing 1.0.9+26' && github.event.forced == false))
+      (github.event_name == 'push' && github.event.before == '90520c83812e7a432a40942b81cb554997733611' &&
+      github.event.head_commit.message == 'release: publish slow connection timeout update 1.0.10+27' && github.event.forced == false))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -57,8 +57,36 @@ jobs:
           RELEASE_MODE: ${{ github.event_name == 'push' && 'publish-stable' || inputs.mode }}
         run: python3 scripts/pipeline.py prepare
 
-  build:
+  validate-source:
     needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: android-build
+    env:
+      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+      BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.41.2'
+          channel: stable
+          cache: false
+      - name: Fetch the exact frozen source without retaining credentials
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        run: python3 scripts/pipeline.py fetch
+      - name: Validate complete source analysis, tests, provenance and byte integrity without user Secrets
+        run: python3 scripts/pipeline.py validate_source
+      - name: Remove private source and generated validation outputs
+        if: always()
+        run: python3 scripts/pipeline.py cleanup
+
+  build:
+    needs: [prepare, validate-source]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: android-build
@@ -148,7 +176,7 @@ jobs:
         run: python3 scripts/pipeline.py verify
 
   build-windows:
-    needs: prepare
+    needs: [prepare, validate-source]
     runs-on: windows-2022
     timeout-minutes: 90
     environment: windows-build
@@ -230,7 +258,7 @@ jobs:
 
   publish:
     if: github.event_name == 'push' || inputs.mode == 'publish-stable'
-    needs: [prepare, build, verify, build-windows, verify-windows]
+    needs: [prepare, validate-source, build, verify, build-windows, verify-windows]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: android-release
@@ -256,3 +284,4 @@ jobs:
           VERIFIED_INSTALLER_SHA256: ${{ needs.verify-windows.outputs.installer_sha256 }}
           RELEASE_WRITE_TOKEN: ${{ secrets.RELEASE_WRITE_TOKEN }}
         run: python3 scripts/pipeline.py publish
+
