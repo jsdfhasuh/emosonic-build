@@ -3,7 +3,7 @@ name: Android + Windows stable
 on:
   push:
     branches: [main]
-    paths: [requests/stable-1.0.8-25.json]
+    paths: [requests/stable-1.0.9-26.json]
   workflow_dispatch:
     inputs:
       mode:
@@ -31,8 +31,8 @@ jobs:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.event.before == 'deb59cc8a6de0cc17a9100b38b82d8a3ae2f43a3' &&
-      github.event.head_commit.message == 'release: publish fixed offline remediation 1.0.8+25' && github.event.forced == false))
+      (github.event_name == 'push' && github.event.before == '8b015c2cf4c86397acbe2491569fcb4b999f103b' &&
+      github.event.head_commit.message == 'release: publish fixed native ACK and log sharing 1.0.9+26' && github.event.forced == false))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -94,7 +94,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
         run: python3 scripts/pipeline.py fetch
-      - name: Build and validate signed release APK
+      - name: Execute native contracts, compile Android and validate signed release APK
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}

@@ -14,9 +14,11 @@
 
 ## 本次授权的固定正式发布
 
-本次整改发布请求为 `requests/stable-1.0.8-25.json`，固定源码 `fe045684e89a18e1fb51b39c9483be6d1f6ac324`、版本 `1.0.8+25`、上一 builder 提交及完整提交消息。仅更新这一次受限 main push，不扩大普通 push 签名或发布权限；手动模式不变。复用原双平台构建、独立验包、六资产及 stable latest 门禁。见[本次计划](docs/plans/2026-10-17-offline-remediation-release.md)。本次已发布并核验，见[验证结果](docs/validation/2026-10-17-offline-remediation-release.md)；上一版 1.0.7+24 的成功记录保留为历史。
+本次原生 ACK 与日志分享发布请求为 `requests/stable-1.0.9-26.json`，固定源码 `ecd827ec605577c31f3abcc3390fd53baf22df4c`、版本 `1.0.9+26`，绑定 builder 上一提交 `8b015c2cf4c86397acbe2491569fcb4b999f103b` 与完整提交消息。只授权这一次受限 main push，普通 push 不会签名或发布，手动模式保持不变。[本次计划](docs/plans/2026-10-17-native-ack-log-share-release.md)。完整 Flutter 测试 2442/2442、全项目分析、代码生成、导航检查、原四反例及来源校验已通过，源文件零变动；独立13项边界复核与104项Java契约通过。实际打包和发布结果未核验前，不把此请求视为已发布。
 
-本次包含 F01、F03–F14 整改，F02 完成补报已修复，但 Android 即时真实开始 ACK 仍 PARTIAL/OPEN。真实设备验证仍待用户完成。如 Android 提示签名不一致，请停止安装，勿卸载原应用或清除数据；历史 GitHub 包证书一致不能证明与手机现装 APK 兼容。
+Android 签名文件写入前，先由 Temurin 17 `javac --release 8` 编译实际生产 NativeStartGate 与已提交的 Java main 测试，`java -ea` 运行并强制匹配 104 检查成功标记；缺源码、缺 class、执行失败或数量不符均停止。随后完整 debug APK 编译确认实际 vendored just_audio Android 代码可构建，再正式签名 release 编译。两平台同源与独立验包、六资产及 stable latest 门禁不变。此处不是 JUnit 测试，也不代表设备音频通过。
+
+本次完成 Android 实际 Media3 播放状态的即时开始事实通道，并整合当前/上次诊断日志的有界脱敏分享。真机、覆盖安装、后台媒体控制与真实出声仍待用户验收。如 Android 提示签名不一致，请停止，勿卸载原应用或清除数据；历史 GitHub 证书一致不能证明与手机现装 APK 兼容。上一版 1.0.8+25 的 F02 限制与结果留在历史[验证报告](docs/validation/2026-10-17-offline-remediation-release.md)。
 
 ## 每次只选择运行模式
 

@@ -329,16 +329,20 @@ class PublishTests(unittest.TestCase):
         self.assertEqual([n for n in names if n.endswith(".apk")], [p.apk_name(VERSION)])
         self.assertEqual([n for n in names if n.endswith((".exe", ".msi"))], [p.installer_name(VERSION)])
 
-    def test_remediation_notes_preserve_open_issues_and_data_warning(self):
+    def test_native_ack_notes_preserve_validation_limits_and_data_warning(self):
         # Select the authorized notes branch using synthetic package identities.
         with patch.object(p, "STABLE_PUSH_REQUEST", {"source_sha": SHA, "version": VERSION}):
             self.run_publish()
         body = next(data["body"] for _, method, data, upload in self.calls
                     if method == "POST" and not upload)
-        for text in ("F02", "PARTIAL / OPEN", "2,321/2,321", "9 PASS / 4 FAIL",
+        for text in ("Player.isPlaying", "104 checks", "full Android debug build", "2,442/2,442",
+                     "diagnostic-log sharing", "deterministic JVM contracts",
                      "signature mismatch", "do not uninstall", "clear its data",
-                     "NOT_RUN / PENDING_USER_VALIDATION", "No backend bridge"):
+                     "NOT_RUN / PENDING_USER_VALIDATION", "No server deployment"):
             self.assertIn(text, body)
+        self.assertNotIn("must be recorded before", body)
+        self.assertNotIn("2,321/2,321", body)
+        self.assertNotIn("9 PASS / 4 FAIL", body)
         self.assertNotIn("failed before runner/test execution", body)
 
     def test_conflict_causes_no_write(self):

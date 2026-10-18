@@ -25,11 +25,12 @@ DEST = "jsdfhasuh/emosonic-releases"
 BUILDER = "jsdfhasuh/emosonic-build"
 VERSION_RE = re.compile(r"(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\+([1-9][0-9]{0,9})", re.ASCII)
 SHA_RE = re.compile(r"[0-9a-f]{40}", re.ASCII)
-STABLE_PUSH_PARENT = "deb59cc8a6de0cc17a9100b38b82d8a3ae2f43a3"
-STABLE_PUSH_MESSAGE = "release: publish fixed offline remediation 1.0.8+25"
-STABLE_PUSH_PATH = "requests/stable-1.0.8-25.json"
-STABLE_PUSH_REQUEST = {"source_sha": "fe045684e89a18e1fb51b39c9483be6d1f6ac324",
-                       "version": "1.0.8+25", "mode": "publish-stable", "attempt": 1}
+NATIVE_CONTRACT_TEST_COUNT = 104
+STABLE_PUSH_PARENT = "8b015c2cf4c86397acbe2491569fcb4b999f103b"
+STABLE_PUSH_MESSAGE = "release: publish fixed native ACK and log sharing 1.0.9+26"
+STABLE_PUSH_PATH = "requests/stable-1.0.9-26.json"
+STABLE_PUSH_REQUEST = {"source_sha": "ecd827ec605577c31f3abcc3390fd53baf22df4c",
+                       "version": "1.0.9+26", "mode": "publish-stable", "attempt": 1}
 
 
 
@@ -387,6 +388,50 @@ def codegen(source, env):
         quiet(command, source, env)
 
 
+def native_android_contract(source, env):
+    """Run production Java contracts and full Android compile before signing."""
+    plugin = source / "third_party/just_audio"
+    production = plugin / "android/src/main/java/com/ryanheise/just_audio/NativeStartGate.java"
+    test = plugin / "android/src/test/java/com/ryanheise/just_audio/NativeStartGateTest.java"
+    for path in (production, test):
+        require(path.is_file() and not path.is_symlink()
+                and path.resolve().is_relative_to(plugin.resolve()),
+                "Reviewed native contract source is missing or invalid.")
+    registration = source / ".flutter-plugins-dependencies"
+    require(registration.is_file() and not registration.is_symlink(),
+            "Flutter native plugin registration is missing.")
+    plugins = json.loads(registration.read_text(encoding="utf-8"))["plugins"]["android"]
+    selected = [entry for entry in plugins if entry.get("name") == "just_audio"]
+    require(len(selected) == 1 and selected[0].get("native_build") is True
+            and Path(selected[0].get("path", "")).resolve() == plugin.resolve(),
+            "Android must compile the committed vendored just_audio plugin.")
+    java_home = Path(env.get("JAVA_HOME", "missing"))
+    javac, java = java_home / "bin/javac", java_home / "bin/java"
+    require(javac.is_file() and java.is_file(), "Java compiler and runtime are required for native contracts.")
+    require(NATIVE_CONTRACT_TEST_COUNT > 0, "Reviewed native test count has not been fixed.")
+    print("Native Java contract compilation started (output suppressed).", flush=True)
+    with tempfile.TemporaryDirectory(prefix=".native-contract-", dir=ROOT) as directory:
+        classes = Path(directory)
+        quiet([str(javac), "--release", "8", "-encoding", "UTF-8", "-d", str(classes),
+               str(production), str(test)], source, env)
+        for name in ("NativeStartGate", "NativeStartGateTest"):
+            path = classes / ("com/ryanheise/just_audio/" + name + ".class")
+            require(path.is_file() and not path.is_symlink() and path.stat().st_size > 0,
+                    "Native contract compilation did not produce the required classes.")
+        result = quiet([str(java), "-ea", "-cp", str(classes),
+                        "com.ryanheise.just_audio.NativeStartGateTest"], source, env)
+        expected = "PASS NativeStartGateTest: " + str(NATIVE_CONTRACT_TEST_COUNT) + " checks (deterministic JVM, no device claim)"
+        require(result.strip() == expected, "Native contract success marker or test count mismatch.")
+    print("Native Java contract tests passed: " + str(NATIVE_CONTRACT_TEST_COUNT) + " checks.", flush=True)
+    print("Full Android debug compilation started (output suppressed).", flush=True)
+    debug_apk = source / "build/app/outputs/flutter-apk/app-debug.apk"
+    require(not debug_apk.exists(), "Pre-existing Android debug output rejected.")
+    quiet(["flutter", "build", "apk", "--debug", "--target-platform=android-arm64"], source, env)
+    require(debug_apk.is_file() and not debug_apk.is_symlink() and debug_apk.stat().st_size > 0,
+            "Full Android debug compilation did not produce its APK.")
+    print("Full Android debug compilation passed for the vendored native plugin.", flush=True)
+
+
 def stage_package(path, candidate, sha, platform):
     dist = ROOT / "dist"
     dist.mkdir(mode=0o700)
@@ -409,6 +454,7 @@ def build():
     clean_env = build_env()
     try:
         codegen(source, clean_env)
+        native_android_contract(source, clean_env)
         keystore.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         keystore.write_bytes(base64.b64decode(os.environ["ANDROID_KEYSTORE_BASE64"], validate=True))
         keystore.chmod(0o600)
@@ -645,8 +691,9 @@ def publish():
             "Both packages include matching .sha256 files. The stable tag and asset formats remain compatible with the existing in-app updater; end-to-end update acceptance is pending. No iOS build is included. GitHub source archives refer to the release repository, not the private app source.\n\n"
             "Validation limits: package build and independent binary inspection are automated checks only. Android/Windows installation and upgrade, real audio, offline cold start, OS media/process lifecycle, data compatibility and the M01-M15 device matrix remain NOT_RUN / PENDING_USER_VALIDATION. Back up application data before upgrading. Personal-lab acceptance is not production-readiness certification. No server deployment is included; strict-v2 server compatibility is not certified.\n")
     if sha == STABLE_PUSH_REQUEST["source_sha"] and candidate == STABLE_PUSH_REQUEST["version"]:
-        body += ("\nChanges: offline review remediation F01 and F03-F14, including account identity protection, download retention, offline cache selection, synchronization and catalog consistency, artwork/details, bounded failure pages and request freshness/concurrency. F02 durable completion outbox and account-scoped retry are repaired; immediate Android real-start ACK remains PARTIAL / OPEN. No backend bridge or deployment is included.\n"
-                 "Source automated validation: original suite 2,213/2,213, new remediation suite 108/108 and independent full aggregate 2,321/2,321 passed on frozen source 8445e8af1467de7e97e5a0e51c57d1ff42efd260. Subsequent source changes are two documentation files and the version-only bump. Independent original audit probes remain 9 PASS / 4 FAIL, explained in docs/validation/2026-10-18-offline-review-remediation.md in the private source repository; F02 immediate now-playing is still open. Private source CI has no verified runner/test execution evidence and is not represented as passed by this public package build.\n"
+        body += ("\nChanges: adds source- and execution-scoped Android native playback-start acknowledgment using the actual Media3 Player.isPlaying observation, including fully buffered starts, inherited playback, stale/cancelled events, seeks and repeated-play handling. Durable completion/outbox isolation is preserved. Also merges the diagnostic-log sharing feature with bounded redaction of current/previous log snapshots and cancellation/concurrency coverage.\n"
+                 "Native validation before release signing: production NativeStartGate.java and its committed standalone Java test harness compiled with Temurin 17 javac --release 8; 104 checks executed and passed with the exact success marker. A full Android debug build compiled the complete vendored just_audio plugin before signed release compilation. These are deterministic JVM contracts and actual Android compilation, not JUnit or real-device audio acceptance.\n"
+                 "Source validation: complete Flutter suite 2,442/2,442 passed on the frozen snapshot verified byte-for-byte against this source commit. Full-project analysis, dependency resolution, code generation, navigation consistency, formatting, vendor provenance and whitespace checks passed without source changes. The four original regression probes passed 4/4; independent service/protocol probes passed 13/13 and independent native ordering checks passed. Independent source/protocol review found and verified fixes for inherited-playing reload, repeated-play pending-arm replacement and stale early-event starvation.\n"
                  "Android installation warning: this APK preserves package ID com.example.emosonic and the historical GitHub-release signing certificate. Compatibility with an already installed APK is not established. If Android reports a signature mismatch, STOP: do not uninstall the existing app or clear its data to force installation. Preserve downloaded music and application data. Real-device validation remains pending the user.\n")
     release = api(f"/repos/{DEST}/releases", token, "POST", {"tag_name": tag, "target_commitish": target["sha"], "name": "EmoSonic " + candidate, "body": body, "draft": True, "prerelease": False, "make_latest": "false"})
     release_id = release["id"]
