@@ -2,9 +2,9 @@
 
 固定从私有 `jsdfhasuh/emosonic` 的 **`refs/heads/master`** 构建正式签名 Android APK 和 Windows x64 Inno Setup 安装包，统一发布到公开 [emosonic-releases](https://github.com/jsdfhasuh/emosonic-releases)。公开仓库只保存自编构建基础设施，不保存产品源码、keystore 或 token；不构建 iOS。
 
-**整改正式版 [1.0.8+25](https://github.com/jsdfhasuh/emosonic-releases/releases/tag/v1.0.8%2B25) 已于 2026-10-17 22:19:36 UTC 发布为 stable latest。** [运行 39073984985](https://github.com/jsdfhasuh/emosonic-build/actions/runs/39073984985) 六个 jobs 全部成功；两平台独立验包通过，六资产发布后重新下载核对大小、摘要和 manifest 全部一致。两平台同源 `fe045684e89a18e1fb51b39c9483be6d1f6ac324`，builder `596d77e3fe595f3000f3e2f09bd8c3401aebf1ea`。F02 即时 Android 真实开始 ACK 仍 PARTIAL/OPEN；真机、覆盖安装及音频验收待用户完成。若签名不匹配请停止，勿卸载原应用或清除数据。[完整验证报告](docs/validation/2026-10-17-offline-remediation-release.md)。构建脚本不会自动修改或虚增源码版本。
+**[1.0.9+26](https://github.com/jsdfhasuh/emosonic-releases/releases/tag/v1.0.9%2B26) 已于 2026-10-18 01:20:22 UTC 发布为 stable latest。** [运行 39085337807](https://github.com/jsdfhasuh/emosonic-build/actions/runs/39085337807) 六个 jobs 全部成功；104 项真实 Java 契约、完整 Android debug 编译、正式签名 release、双平台独立验包均通过。六个公开资产已重新下载，大小、摘要与双 manifest 全部吻合。固定 source `ecd827ec605577c31f3abcc3390fd53baf22df4c`、builder `f82d257f53fff083d6ebdfaa4b5a9965f51961f9`。[完整验证报告](docs/validation/2026-10-18-native-ack-log-sharing-release.md)。真机与覆盖安装验收仍待用户完成；手机签名冲突未解决，勿卸载或清除数据来强制安装。
 
-历史正式版 1.0.7+24 的[验证与首次失败记录](docs/validation/2026-10-17-offline-stable-release.md)保留。
+历史正式版 [1.0.8+25 验证报告](docs/validation/2026-10-17-offline-remediation-release.md) 与 [1.0.7+24 验证/首次失败记录](docs/validation/2026-10-17-offline-stable-release.md)保留，历史 F02 PARTIAL/OPEN 结论不改写。构建脚本不会自动修改或虚增源码版本。
 
 ## 固定离线候选测试包
 
@@ -14,7 +14,7 @@
 
 ## 本次授权的固定正式发布
 
-本次原生 ACK 与日志分享发布请求为 `requests/stable-1.0.9-26.json`，固定源码 `ecd827ec605577c31f3abcc3390fd53baf22df4c`、版本 `1.0.9+26`，绑定 builder 上一提交 `8b015c2cf4c86397acbe2491569fcb4b999f103b` 与完整提交消息。只授权这一次受限 main push，普通 push 不会签名或发布，手动模式保持不变。[本次计划](docs/plans/2026-10-17-native-ack-log-share-release.md)。完整 Flutter 测试 2442/2442、全项目分析、代码生成、导航检查、原四反例及来源校验已通过，源文件零变动；独立13项边界复核与104项Java契约通过。实际打包和发布结果未核验前，不把此请求视为已发布。
+本次原生 ACK 与日志分享发布请求为 `requests/stable-1.0.9-26.json`，固定源码 `ecd827ec605577c31f3abcc3390fd53baf22df4c`、版本 `1.0.9+26`，绑定 builder 上一提交 `8b015c2cf4c86397acbe2491569fcb4b999f103b` 与完整提交消息。只授权这一次受限 main push，普通 push 不会签名或发布，手动模式保持不变。[本次计划](docs/plans/2026-10-17-native-ack-log-share-release.md)。完整 Flutter 测试 2442/2442、全项目分析、代码生成、导航检查、原四反例及来源校验已通过，源文件零变动；独立13项边界复核与104项Java契约通过。现已完成正式打包、独立验包、六资产下载复核和 latest 确认，见上方验证报告。
 
 Android 签名文件写入前，先由 Temurin 17 `javac --release 8` 编译实际生产 NativeStartGate 与已提交的 Java main 测试，`java -ea` 运行并强制匹配 104 检查成功标记；缺源码、缺 class、执行失败或数量不符均停止。随后完整 debug APK 编译确认实际 vendored just_audio Android 代码可构建，再正式签名 release 编译。两平台同源与独立验包、六资产及 stable latest 门禁不变。此处不是 JUnit 测试，也不代表设备音频通过。
 
@@ -73,7 +73,7 @@ Android 和 Windows 继续查询 `jsdfhasuh/emosonic-releases/releases/latest`�
 
 | Job | 权限与职责 |
 | --- | --- |
-| `prepare` | 仅 builder main 手动触发；只读解析 master、读取同一 SHA 的版本、检查发布历史 |
+| `prepare` | 仅 builder main 手动或本次严格固定 push；只读解析 master、读取同一 SHA 的版本、检查发布历史 |
 | `build` | Linux Android 构建；只读源码 PAT 仅在 fetch 步骤注入；正式签名 Secrets |
 | `build-windows` | Windows 2022；只读源码 PAT 仅在 fetch 步骤注入；服务地址及固定编译器配置 |
 | `verify` / `verify-windows` | 独立新 runner；无用户 Secrets；只解析产物，不安装或运行应用 |
@@ -98,7 +98,7 @@ Windows 继续调用受信任 master 的原构建入口且不传 `--upload`，pu
 
 **公开 Actions 无法提供绝对源码保密保证。** 工具和编译器 stdout/stderr 被抑制，私有源码、原始日志、调试符号和凭据不上传；只上传校验后的分发文件。源码、工具或依赖仍拥有 build runner 上的执行能力，可能泄露或嵌入其他私有文件；扩展名扫描和 PAT masking 无法替代信任。需要强保密时应使用私有或隔离构建环境。失败时在受控私有环境诊断，不启用公开 runner debug 或上传源码/环境转储。
 
-固定 Flutter 3.41.2 及其 SDK SHA、Java 17 和 Android build-tools 36.0.0。当前源码未跟踪 pubspec.lock，依赖解析不保证完全可重复；本仓库不擅自修改产品仓库或公开依赖源码缓存。
+固定 Flutter 3.41.2 及其 SDK SHA、Java 17 和 Android build-tools 36.0.0。本次固定源码包含 pubspec.lock；依赖锁并不保证 SDK、原生工具链和所有远程依赖绝对可重复。本仓库不公开私有产品源码或依赖缓存。
 
 两平台的覆盖安装、配置保留、普通曲库播放及应用内更新仍需真实验收。严格实时连接另需服务端符合 protocol 2.9 / r19 的认证 ACK；配套服务端合并/部署未验证，不能将实时协议不兼容直接判定为普通曲库播放失败。本仓库不部署服务端或放宽协议门槛。
 
