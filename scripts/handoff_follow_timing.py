@@ -7,15 +7,15 @@ import handoff_follow_readiness as base
 import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 
-PARENT = '6274f95c3fc3223dd0ba18fafe20b4f09c68884c'
-MESSAGE = 'test: observe Follow correction stop and clock estimates 20261022'
+PARENT = '7164ba9eca1e30448a6e2298e64630d0857128f3'
+MESSAGE = 'test: measure repaired clock and soft-seek native matrix 20261022'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
-SOURCE_SHA = 'e6f7ea84d8ce9a1a29e56f5a083173a9810e4316'
-SOURCE_REF = 'refs/heads/test/follow-lifecycle-dispatch-capability-20261022'
+SOURCE_SHA = 'a6799a73909cf06d8ba9b830e00d6a628e331205'
+SOURCE_REF = 'refs/heads/fix/follow-clock-and-dispatch-20261022'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=40, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39795770390)
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=46, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39816643590)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
 
@@ -85,10 +85,10 @@ def require_recovery_validation():
                       'Recovery tests, full validation, BOOL proof and cleanup must succeed.')
 
 
-INGRESS_RUN = 39795770390
-INGRESS_HEAD = '392e468e47f1c0b390c29468b0e0d1f94dce3fe0'
+INGRESS_RUN = 39816643590
+INGRESS_HEAD = '7164ba9eca1e30448a6e2298e64630d0857128f3'
 INGRESS_STEPS = {'validate-source': (
-    'Validate 3 storage widget cases then all 101 ingress recovery and lifecycle cases',
+    'Validate every original focused case and both fixed timing components',
     'Validate complete source analysis, tests, provenance and byte integrity without user Secrets',
     'Remove private source and generated validation outputs',
 )}
@@ -100,7 +100,7 @@ def require_ingress_validation():
     run=p.api(endpoint)
     p.require(type(run) is dict and type(run.get('id')) is int and run['id']==INGRESS_RUN
               and run.get('head_sha')==INGRESS_HEAD
-              and run.get('path')=='.github/workflows/follow-ingress-green.yml'
+              and run.get('path')=='.github/workflows/follow-timing-green.yml'
               and run.get('event')=='push' and run.get('head_branch')=='main'
               and type(run.get('run_attempt')) is int and run['run_attempt']==1
               and run.get('status')=='completed' and run.get('conclusion')=='success',
