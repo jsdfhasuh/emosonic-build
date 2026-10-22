@@ -1,0 +1,10 @@
+{
+  "source_repository": "jsdfhasuh/emosonic",
+  "source_ref": "refs/heads/fix/handoff-play-initiation-20261022",
+  "source_sha": "19639161be7945884d998ecd268d9bc30afcf02d",
+  "server_sha": "8e9a319002c0ffa6054cd98e06dd271070ed729b",
+  "version": "1.0.10+27",
+  "mode": "handoff-repair-validation",
+  "attempt": 3,
+  "baseline_sha": "cb84d946ed4212c07e2f91afa1a914a0faed446d"
+}
