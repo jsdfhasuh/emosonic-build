@@ -59,6 +59,24 @@ class FollowSeekProofTests(unittest.TestCase):
             report['message']='FOLLOW_SEEK_LATENCY_SAMPLES '+json.dumps(samples)
             with self.subTest(key=key),self.assertRaises(c.request.p.GateError):self.parse(events)
 
+    def test_failure_stages_are_precise(self):
+        cases=[]
+        e=self.report();e[4]['error']='other';cases.append((e,'exact-error'))
+        e=self.report();e[7]['result']='failure';cases.append((e,'all-control-results'))
+        e=self.report();e[-2]['message']='missing';cases.append((e,'finite-synthetic-samples'))
+        e=self.report();e[3]['test']['name']='wrong';cases.append((e,'target-and-terminal'))
+        for events,stage in cases:
+            with self.subTest(stage=stage), self.assertRaises(c.request.p.GateError):self.parse(events)
+            self.assertEqual(c.PROOF_STAGE,stage)
+
+    def test_finite_failure_report_never_exports_private_messages(self):
+        events=self.report(); events[-3]['error']='private secret TimeoutException'; events[-3]['stackTrace']='private-path/emo_follow_sync_controller_test.dart:123:4 private'
+        raw='private raw stderr line\n'+'\n'.join(json.dumps(e) for e in events)
+        report=c.finite_report(raw,'private compiler text test/services/emo_follow_sync_controller_test.dart:90:12: Error: private',1)
+        self.assertEqual(report['nonJsonLines'],1)
+        self.assertEqual(report['compileLocations'],[(90,12)])
+        self.assertNotIn('private',json.dumps(report)); self.assertNotIn('secret',json.dumps(report))
+
     def test_no_package_native_or_full_validation_stage(self):
         for category,stage in [('source','build'),('source','publish'),('source','validate_source'),('native','build')]:
             with patch.object(sys,'argv',['wrapper',category,stage]), patch.object(c.request,'main') as run:

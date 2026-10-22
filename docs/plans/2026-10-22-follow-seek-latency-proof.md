@@ -9,3 +9,6 @@ This lean proof runs the actual controller/service/vendored Dart player with a c
 Only two Ubuntu jobs execute: public gate tests plus exact source admission, then pinned Flutter setup, private source fetch, code generation, 13-test expected-red proof with all twelve noncausal controls passing and unconditional owned source cleanup. No full native compilation, final package, release, deployment, new credentials, sandbox permission changes or artifact upload. Private test output is parsed locally and only finite proof status/counts are printed; source fingerprints are verified before and after execution.
 
 After an actual causal result, choose a bounded repair and preserve its regression unchanged for fixed green. Do not relax the original 50ms/five-second acceptance requirement or substitute a speculative delay for a repair. The independent read-only timing diagnostic draft is not part of this workflow.
+
+
+The first hosted proof run39742069868 failed without a causal conclusion. Attempt16 retains the identical source and adds finite stage, event/result counts, known exception categories, fixture numeric line locations, and bounded synthetic samples. Private raw output remains suppressed and removed; no assertions or success criteria are relaxed.

@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == 'c759ec74bf2b6a64b7b9f74cd23d818584345f2f' &&
-      github.event.head_commit.message == 'test: prove follow seek latency feedback 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '842a6a809ee431eb6d0a83eed31061d96a674d11' &&
+      github.event.head_commit.message == 'test: diagnose held seek causal proof 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
