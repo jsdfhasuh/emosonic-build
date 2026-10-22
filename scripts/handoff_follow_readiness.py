@@ -11,6 +11,7 @@ PARENT = '0a765ad777010d2097248e7bf97f39b692c9a550'
 MESSAGE = 'test: verify complete follow fixtures and native matrix 20261022'
 WORKFLOW = 'handoff-follow-readiness.yml'
 REQUEST_PATH = 'requests/handoff-follow-readiness-20261022.json'
+ATTRIBUTION_EXTRA_ARGS = ()
 OBSERVED_HARNESS_SHA256 = '136b931b361814a7698d4174a0103d624e57ee610fe760111a7611ecaf47dc16'
 SOURCE_REF = 'refs/heads/fix/handoff-play-initiation-20261022'
 SOURCE_SHA = '01967c853a4e6020097e9a2da61f9785b470ff7d'
@@ -50,8 +51,8 @@ def main():
                     request.p.source_context(require_server=False)
                     request.p.codegen(source, native.native_env())
                     helper = Path(__file__).resolve().parent / 'native_attribution/lab_stream_attribution.py'
-                    native.execute([sys.executable, str(helper), 'proof', '--repo', str(source)], 'scoped-attribution-proof', True)
-                    native.execute([sys.executable, str(helper), 'native', '--repo', str(source), '--expected-lab-before-sha256', OBSERVED_HARNESS_SHA256], 'scoped-attribution-native-handoff', True)
+                    native.execute([sys.executable, str(helper), 'proof', *ATTRIBUTION_EXTRA_ARGS, '--repo', str(source)], 'scoped-attribution-proof', True)
+                    native.execute([sys.executable, str(helper), 'native', *ATTRIBUTION_EXTRA_ARGS, '--repo', str(source), '--expected-lab-before-sha256', OBSERVED_HARNESS_SHA256], 'scoped-attribution-native-handoff', True)
                     return 0
             if category == 'native' and stage == 'unit':
                 checked_native_context()
@@ -62,7 +63,7 @@ def main():
                 if stage in ('handoff', 'follow'):
                     readiness.verify_compiled(request.p.ROOT / 'source')
                 helper = Path(__file__).resolve().parent / 'native_attribution/lab_stream_attribution.py'
-                native.execute([sys.executable, str(helper), 'verify', '--repo', str(request.p.ROOT / 'source'), '--expected-lab-before-sha256', OBSERVED_HARNESS_SHA256], 'scoped-attribution-integrity', True)
+                native.execute([sys.executable, str(helper), 'verify', *ATTRIBUTION_EXTRA_ARGS, '--repo', str(request.p.ROOT / 'source'), '--expected-lab-before-sha256', OBSERVED_HARNESS_SHA256], 'scoped-attribution-integrity', True)
             with patch.object(sys, 'argv', [sys.argv[0], stage]):
                 result = request.main() if category == 'source' else native.main()
                 if result == 0 and category == 'native' and stage == 'prepare':

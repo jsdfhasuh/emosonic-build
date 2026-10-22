@@ -7,6 +7,7 @@ Caller owns source checkout admission, complete source validation and cleanup.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import inspect
 import json
@@ -29,6 +30,8 @@ BASELINE_HASHES = {
     'lib/data/services/subsonic/subsonic_api_client.dart': 'ec5d75affa2a7f16c59d3dd94e757d04a480aee3fe34b4e0fadbf0a80b32f44f',
     'tool/native_playback_mac/main.dart': '7e4b804a9eaeeec929768ddd9ce9a5479639f73f443a8f3e6693916e59565833',
 }
+LAB_MAIN = 'tool/native_playback_mac/main.dart'
+LAB_DEBUG_MAIN_SHA256 = 'f8781ae5077924daebc0908500f79e57ee9a80af8e9d25d474468651563d2af0'
 IMPORT = "import 'native_lab_scoped_api_client.dart';\n"
 ORIGINAL = '''SubsonicApiClient createAccountApiClient(Ref ref, AccountSession session) {
   session.requestContext.ensureCurrent();
@@ -70,6 +73,30 @@ def checked_new_path(repo, relative):
             or any(item.exists() and not item.is_dir() for item in path.parents)):
         raise ValueError('Attribution output must be a fresh contained regular path')
     return path
+
+
+@contextmanager
+def lab_debug_observation(repo, enabled=False):
+    """Explicit opt-in admits exactly one reviewed disposable lab log setting.
+
+    Default source admission is unchanged. Always prove the debug bytes reverse
+    to the original pinned lab main; all other baseline hashes stay identical.
+    """
+    if type(enabled) is not bool:
+        raise ValueError('Lab debug observation mode refused')
+    original_hash = BASELINE_HASHES[LAB_MAIN]
+    if enabled:
+        data = checked_file(repo, LAB_MAIN).read_bytes()
+        old = b'  await Logger.setLogLevel(LogLevel.warning);\n'
+        new = b'  await Logger.setLogLevel(LogLevel.debug);\n'
+        if (digest(data) != LAB_DEBUG_MAIN_SHA256 or data.count(new) != 1
+                or digest(data.replace(new, old, 1)) != '7e4b804a9eaeeec929768ddd9ce9a5479639f73f443a8f3e6693916e59565833'):
+            raise ValueError('Lab debug observation main roundtrip refused')
+        BASELINE_HASHES[LAB_MAIN] = LAB_DEBUG_MAIN_SHA256
+    try:
+        yield
+    finally:
+        BASELINE_HASHES[LAB_MAIN] = original_hash
 
 
 def verify_baseline(repo):
@@ -425,16 +452,18 @@ def main():
     parser.add_argument('stage', choices=('proof', 'native', 'verify'))
     parser.add_argument('--repo', required=True, type=Path)
     parser.add_argument('--expected-lab-before-sha256')
+    parser.add_argument('--lab-debug-observation', action='store_true')
     args = parser.parse_args()
     if args.stage != 'proof' and (args.expected_lab_before_sha256 is None or
             re.fullmatch(r'[0-9a-f]{64}', args.expected_lab_before_sha256) is None):
         parser.error('native and verify require an independent expected lab before hash')
-    if args.stage == 'proof':
-        prove_and_patch(args.repo)
-    elif args.stage == 'native':
-        apply_native_handoff(args.repo, expected_lab_before_sha256=args.expected_lab_before_sha256)
-    else:
-        verify_applied(args.repo, expected_lab_before_sha256=args.expected_lab_before_sha256)
+    with lab_debug_observation(args.repo, enabled=args.lab_debug_observation):
+        if args.stage == 'proof':
+            prove_and_patch(args.repo)
+        elif args.stage == 'native':
+            apply_native_handoff(args.repo, expected_lab_before_sha256=args.expected_lab_before_sha256)
+        else:
+            verify_applied(args.repo, expected_lab_before_sha256=args.expected_lab_before_sha256)
 
 
 if __name__ == '__main__':

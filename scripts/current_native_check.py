@@ -12,6 +12,7 @@ import sys
 
 import current_source_check as request
 import pipeline as p
+from native_follow_lifecycle_schema import FOLLOW_LIFECYCLE_SCHEMA, STAGES as LIFECYCLE_STAGES
 
 OLD_SERVER = 'bcbb99e935fb4eb0799ab40fff893303cf2966df'
 STAGES = ('prepare', 'dependencies', 'unit', 'preflight', 'build', 'handoff', 'follow', 'cleanup')
@@ -46,6 +47,8 @@ PUBLIC_STAGES = frozenset({
 
 # Reviewed literal labels and finite rate-label compositions from both pinned lab modules.
 PUBLIC_STAGES = PUBLIC_STAGES | frozenset(['all-native-players-paused', 'authority-after-follow-rate-change', 'authority-after-follow-rate-change:native-advancement-readiness', 'authority-after-follow-rate-change:native-follow-alignment', 'authority-after-follow-rate-change:post-seek-native-readiness', 'extended-authority-playing', 'extended-cancel-late-callback-window', 'extended-cancel-native-settlement', 'extended-cancel-rejects-late-playback', 'extended-cold-target-ready', 'extended-cold-target-register', 'extended-delayed-canonical-consistency', 'extended-delayed-handoff-B-to-A', 'extended-delayed-native-completion', 'extended-native-cleanup-pause', 'extended-new-generation-discovered', 'extended-real-delayed-handoff', 'extended-real-prepare-before-cancel', 'extended-resume-authority', 'extended-server-observation-capability', 'extended-source-controls-ready', 'extended-source-cursors-settled', 'extended-source-rate-0.8', 'extended-source-rate-0.8:native-advancement-readiness', 'extended-source-rate-0.8:native-follow-alignment', 'extended-source-rate-0.8:post-seek-native-readiness', 'extended-source-seek-enabled', 'extended-transferred-native-rate', 'extended-transferred-native-rate:native-advancement-readiness', 'extended-transferred-native-rate:native-follow-alignment', 'extended-transferred-native-rate:post-seek-native-readiness', 'follow-explicit-rate-change', 'follow-explicit-rate-change-applied', 'follow-original-paused-task-and-speed-restored', 'follow-rate-change-controls-ready', 'follow-restoration', 'follower-after-follow-rate-change', 'follower-after-follow-rate-change:native-advancement-readiness', 'follower-after-follow-rate-change:native-follow-alignment', 'follower-after-follow-rate-change:post-seek-native-readiness', 'follower-avplayer-rate-1.5', 'follower-avplayer-rate-1.5:native-advancement-readiness', 'follower-avplayer-rate-1.5:native-follow-alignment', 'follower-avplayer-rate-1.5:post-seek-native-readiness', 'follower-beyond-recovery-window', 'follower-native-decode-and-pause-ready', 'follower-original-paused', 'follower-original-task', 'follower-pause-controls-settled', 'handoff-A-to-B', 'handoff-canonical-consistency', 'handoff-native-completion', 'handoff-server-canonical-consistency', 'handoff-server-observation-capability', 'launch', 'native-follow-aligned', 'native-follow-start', 'paused-original-task-restored', 'real-apps-isolated-and-registered', 'real-apps-register', 'real-server-and-media-ready', 'server-fixture-initialized', 'server-preflight-only', 'server-probe', 'server-startup', 'source-avplayer-rate-1.5', 'source-avplayer-rate-1.5:native-advancement-readiness', 'source-avplayer-rate-1.5:native-follow-alignment', 'source-avplayer-rate-1.5:post-seek-native-readiness', 'source-context-ready', 'source-load-real-media', 'source-native-decode', 'source-rate-controls-settled', 'target-avplayer-rate-1.5', 'target-avplayer-rate-1.5:native-advancement-readiness', 'target-avplayer-rate-1.5:native-follow-alignment', 'target-avplayer-rate-1.5:post-seek-native-readiness'])
+
+PUBLIC_STAGES = PUBLIC_STAGES | LIFECYCLE_STAGES
 
 PUBLIC_STAGES = PUBLIC_STAGES | {'native-follow-readiness-proof', 'source-load-command-returned', 'scoped-attribution-baseline', 'scoped-attribution-patched', 'scoped-attribution-proof-failure'}
 PUBLIC_STATUSES = frozenset({'passed', 'failed', 'not-verified', 'unavailable'})
@@ -287,6 +290,7 @@ FOLLOW_OBSERVATION_SCHEMA = {
     'rateMeasurement': RATE_SCHEMA, 'command': BRIDGE_SCHEMA,
 }
 DIAGNOSTIC_SCHEMA.update({
+    'followLifecycle': FOLLOW_LIFECYCLE_SCHEMA,
     'bridgeCommandFailure': BRIDGE_SCHEMA,
     'failureStateRefresh': frozenset({'refreshed', 'unavailable'}),
     'rateMeasurement': RATE_SCHEMA,
