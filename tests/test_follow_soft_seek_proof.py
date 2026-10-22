@@ -80,7 +80,7 @@ class EquivalentOrchestrationTests(unittest.TestCase):
         functions = lambda tree: {node.name: ast.dump(node, include_attributes=False) for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
         self.assertEqual(functions(first), functions(second))
         self.assertEqual(c.EXPECTED_COUNT, 2)
-        self.assertEqual(c.REQUEST['attempt'], 42)
+        self.assertEqual(c.REQUEST['attempt'], 43)
 
 
 if __name__ == '__main__':

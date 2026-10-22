@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '4e8ee8c5ffb0f7b75054aacac1ad1cbac38b9eba'
+  SOURCE_SHA: '9abf18305c58d832879e88ff32b2352b9ef7f50e'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '717906f3cf0e227cbd114552a4f7d234cf8c4e7d' &&
-      github.event.head_commit.message == 'test: prove guarded soft-seek dispatch target 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '80a776c1cc1969dac2400f7aa4b6632d7b04841f' &&
+      github.event.head_commit.message == 'test: prove exact soft-seek captured target 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build

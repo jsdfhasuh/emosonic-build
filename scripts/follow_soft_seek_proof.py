@@ -14,21 +14,21 @@ from fixed_flutter_green import GreenVerificationError, observe_green
 from follow_recovery_check import owned_file
 
 request = red.request
-PARENT = '717906f3cf0e227cbd114552a4f7d234cf8c4e7d'
-MESSAGE = 'test: prove guarded soft-seek dispatch target 20261022'
+PARENT = '80a776c1cc1969dac2400f7aa4b6632d7b04841f'
+MESSAGE = 'test: prove exact soft-seek captured target 20261022'
 WORKFLOW = 'follow-soft-seek-proof.yml'
 REQUEST_PATH = 'requests/follow-soft-seek-proof-20261022.json'
 SOURCE_REF = 'refs/heads/test/follow-soft-seek-dispatch-20261022'
-SOURCE_SHA = '4e8ee8c5ffb0f7b75054aacac1ad1cbac38b9eba'
+SOURCE_SHA = '9abf18305c58d832879e88ff32b2352b9ef7f50e'
 BASELINE_SHA = 'e6f7ea84d8ce9a1a29e56f5a083173a9810e4316'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 INVENTORY_PATH = 'tool/follow_soft_seek_dispatch/test_inventory.json'
-INVENTORY_SHA256 = 'eb7492b956fe08132a44cae053acf7407ac77f1e44c0cd039333c2a339de44fc'
+INVENTORY_SHA256 = '93ba9635de7c81893d40505bbc22a045976c977bb324991ed553e9967dcaafe6'
 ASSERTION_MARKER = 'FOLLOW_SOFT_SEEK_CAPTURED_TARGET_SURVIVED_ACTOR_WAIT'
 EXPECTED_COUNT = 2
 REQUEST = dict(request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
                baseline_sha=BASELINE_SHA, server_sha=SERVER_SHA,
-               mode='follow-soft-seek-expected-red-proof', attempt=42)
+               mode='follow-soft-seek-expected-red-proof', attempt=43)
 STAGE = 'entry'
 
 

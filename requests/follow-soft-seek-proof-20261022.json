@@ -1,10 +1,10 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
   "source_ref": "refs/heads/test/follow-soft-seek-dispatch-20261022",
-  "source_sha": "4e8ee8c5ffb0f7b75054aacac1ad1cbac38b9eba",
+  "source_sha": "9abf18305c58d832879e88ff32b2352b9ef7f50e",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "follow-soft-seek-expected-red-proof",
-  "attempt": 42,
+  "attempt": 43,
   "baseline_sha": "e6f7ea84d8ce9a1a29e56f5a083173a9810e4316"
 }
