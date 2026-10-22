@@ -47,7 +47,7 @@ PUBLIC_STAGES = frozenset({
 # Reviewed literal labels and finite rate-label compositions from both pinned lab modules.
 PUBLIC_STAGES = PUBLIC_STAGES | frozenset(['all-native-players-paused', 'authority-after-follow-rate-change', 'authority-after-follow-rate-change:native-advancement-readiness', 'authority-after-follow-rate-change:native-follow-alignment', 'authority-after-follow-rate-change:post-seek-native-readiness', 'extended-authority-playing', 'extended-cancel-late-callback-window', 'extended-cancel-native-settlement', 'extended-cancel-rejects-late-playback', 'extended-cold-target-ready', 'extended-cold-target-register', 'extended-delayed-canonical-consistency', 'extended-delayed-handoff-B-to-A', 'extended-delayed-native-completion', 'extended-native-cleanup-pause', 'extended-new-generation-discovered', 'extended-real-delayed-handoff', 'extended-real-prepare-before-cancel', 'extended-resume-authority', 'extended-server-observation-capability', 'extended-source-controls-ready', 'extended-source-cursors-settled', 'extended-source-rate-0.8', 'extended-source-rate-0.8:native-advancement-readiness', 'extended-source-rate-0.8:native-follow-alignment', 'extended-source-rate-0.8:post-seek-native-readiness', 'extended-source-seek-enabled', 'extended-transferred-native-rate', 'extended-transferred-native-rate:native-advancement-readiness', 'extended-transferred-native-rate:native-follow-alignment', 'extended-transferred-native-rate:post-seek-native-readiness', 'follow-explicit-rate-change', 'follow-explicit-rate-change-applied', 'follow-original-paused-task-and-speed-restored', 'follow-rate-change-controls-ready', 'follow-restoration', 'follower-after-follow-rate-change', 'follower-after-follow-rate-change:native-advancement-readiness', 'follower-after-follow-rate-change:native-follow-alignment', 'follower-after-follow-rate-change:post-seek-native-readiness', 'follower-avplayer-rate-1.5', 'follower-avplayer-rate-1.5:native-advancement-readiness', 'follower-avplayer-rate-1.5:native-follow-alignment', 'follower-avplayer-rate-1.5:post-seek-native-readiness', 'follower-beyond-recovery-window', 'follower-native-decode-and-pause-ready', 'follower-original-paused', 'follower-original-task', 'follower-pause-controls-settled', 'handoff-A-to-B', 'handoff-canonical-consistency', 'handoff-native-completion', 'handoff-server-canonical-consistency', 'handoff-server-observation-capability', 'launch', 'native-follow-aligned', 'native-follow-start', 'paused-original-task-restored', 'real-apps-isolated-and-registered', 'real-apps-register', 'real-server-and-media-ready', 'server-fixture-initialized', 'server-preflight-only', 'server-probe', 'server-startup', 'source-avplayer-rate-1.5', 'source-avplayer-rate-1.5:native-advancement-readiness', 'source-avplayer-rate-1.5:native-follow-alignment', 'source-avplayer-rate-1.5:post-seek-native-readiness', 'source-context-ready', 'source-load-real-media', 'source-native-decode', 'source-rate-controls-settled', 'target-avplayer-rate-1.5', 'target-avplayer-rate-1.5:native-advancement-readiness', 'target-avplayer-rate-1.5:native-follow-alignment', 'target-avplayer-rate-1.5:post-seek-native-readiness'])
 
-PUBLIC_STAGES = PUBLIC_STAGES | {'source-load-command-returned', 'scoped-attribution-baseline', 'scoped-attribution-patched', 'scoped-attribution-proof-failure'}
+PUBLIC_STAGES = PUBLIC_STAGES | {'native-follow-readiness-proof', 'source-load-command-returned', 'scoped-attribution-baseline', 'scoped-attribution-patched', 'scoped-attribution-proof-failure'}
 PUBLIC_STATUSES = frozenset({'passed', 'failed', 'not-verified', 'unavailable'})
 PUBLIC_ERRORS = frozenset({'AssertionError', 'TimeoutError', 'BridgeCommandFailure',
     'HTTPError', 'URLError', 'RuntimeError', 'ConnectionError', 'KeyError',
@@ -76,6 +76,7 @@ ROLES = frozenset({'authority', 'target', 'follower'})
 NUMBER = ('number', -1_000_000_000_000, 1_000_000_000_000)
 COUNTER = ('integer', 0, 1_000_000_000_000)
 NATIVE_SCHEMA = {
+    **{key: bool for key in ('seekInProgress', 'playingIntent')},
     **{key: ('number', 0, 1_000_000_000_000) for key in
        ('positionMs', 'durationMs', 'sampleUncertaintyMs')},
     **{key: ('number', 0, 100) for key in ('playbackRate', 'requestedRate')},
@@ -116,6 +117,11 @@ CLIENT_SCHEMA = {
     'handoffHistory': ('list', HANDOFF_SCHEMA, 8),
 }
 DIAGNOSTIC_SCHEMA = {
+    'checks': ('integer', 0, 11),
+    'failedTestOrdinals': ('list', ('integer', 1, 11), 11),
+    'errorCategory': frozenset({'assertion', 'runner'}),
+    'correctionReadinessPollCount': ('integer', 0, 25),
+    'correctionReadinessElapsedMs': ('number', 0, 5000),
     'diagnostic': {
         'phase': frozenset({'baseline', 'patched'}),
         'category': frozenset({'assertion', 'compiler', 'reporter', 'process', 'runner'}),
@@ -248,6 +254,8 @@ BRIDGE_SCHEMA = {
         'queue_launch_missingPlaybackContext', 'queue_launch_syncTimeout'}),
 }
 RATE_SCHEMA = {
+    'correctionReadinessPollCount': ('integer', 0, 25),
+    'correctionReadinessElapsedMs': ('number', 0, 5000),
     **{key: NUMBER for key in ('expectedRate', 'measurementWindowSeconds', 'requestedPositionMs',
         'readinessTimeoutMs', 'readinessElapsedMs', 'allowedNativeRateMin', 'allowedNativeRateMax',
         'advancementElapsedMs', 'totalReadinessElapsedMs', 'elapsedSeconds', 'nativePositionDeltaMs',
