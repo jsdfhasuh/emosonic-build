@@ -1,11 +1,12 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/fix/follow-recovery-lints-20261022",
-  "source_sha": "466f56d9935afb299724a212d680a743a11c723f",
+  "source_ref": "refs/heads/test/follow-lifecycle-dispatch-capability-20261022",
+  "source_sha": "e6f7ea84d8ce9a1a29e56f5a083173a9810e4316",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "native-follow-timing-observation",
-  "attempt": 27,
+  "attempt": 39,
   "proof_run_id": 39745934922,
-  "validation_run_id": 39767536382
+  "validation_run_id": 39767536382,
+  "ingress_validation_run_id": 39795770390
 }

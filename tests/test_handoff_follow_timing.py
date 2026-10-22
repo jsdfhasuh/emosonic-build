@@ -130,9 +130,38 @@ class RecoveryValidationGateTests(unittest.TestCase):
 
     def test_prepare_gates_both_before_any_source_action(self):
         calls=[]
-        with patch.object(sys,'argv',['helper','source','prepare']),patch.object(c,'require_causal_proof',side_effect=lambda:calls.append('causal')),patch.object(c,'require_recovery_validation',side_effect=lambda:calls.append('recovery')),patch.object(c.base,'main',side_effect=lambda:calls.append('source') or 0):
+        with patch.object(sys,'argv',['helper','source','prepare']),patch.object(c,'require_causal_proof',side_effect=lambda:calls.append('causal')),patch.object(c,'require_recovery_validation',side_effect=lambda:calls.append('recovery')),patch.object(c,'require_ingress_validation',side_effect=lambda:calls.append('ingress')),patch.object(c.base,'main',side_effect=lambda:calls.append('source') or 0):
             self.assertEqual(c.main(),0)
-        self.assertEqual(calls,['causal','recovery','source'])
+        self.assertEqual(calls,['causal','recovery','ingress','source'])
         with patch.object(sys,'argv',['helper','source','prepare']),patch.object(c,'require_causal_proof'),patch.object(c,'require_recovery_validation',side_effect=c.base.request.p.GateError('not complete')),patch.object(c.base,'main') as base:
             self.assertEqual(c.main(),1)
             base.assert_not_called()
+
+
+class IngressValidationGateTests(unittest.TestCase):
+    def evidence(self):
+        run={'id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
+             'path':'.github/workflows/follow-ingress-green.yml','event':'push',
+             'head_branch':'main','run_attempt':1,'status':'completed','conclusion':'success'}
+        jobs={'jobs':[{'name':name,'run_id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
+                       'status':'completed','conclusion':'success',
+                       'steps':[{'name':step,'status':'completed','conclusion':'success'} for step in steps]}
+                      for name,steps in c.INGRESS_STEPS.items()]}
+        jobs['total_count']=len(jobs['jobs'])
+        return run,jobs
+
+    def test_exact_current_candidate_green_required(self):
+        with patch.object(c.base.request.p,'api',side_effect=self.evidence()):c.require_ingress_validation()
+
+    def test_nonterminal_wrong_run_source_workflow_attempt_refused(self):
+        for key,value in [('id',39788641373),('head_sha','0'*40),('path','other'),('status','in_progress'),('conclusion','failure'),('run_attempt',2)]:
+            run,jobs=self.evidence();run[key]=value
+            with self.subTest(key=key),patch.object(c.base.request.p,'api',side_effect=[run,jobs]),self.assertRaises(c.base.request.p.GateError):c.require_ingress_validation()
+
+    def test_failed_missing_or_duplicate_required_step_refused(self):
+        for change in ('failure','missing','duplicate'):
+            run,jobs=self.evidence();steps=jobs['jobs'][0]['steps']
+            if change=='failure':steps[0]['conclusion']='failure'
+            elif change=='missing':steps.pop()
+            else:steps.append(dict(steps[0]))
+            with self.subTest(change=change),patch.object(c.base.request.p,'api',side_effect=[run,jobs]),self.assertRaises(c.base.request.p.GateError):c.require_ingress_validation()

@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '466f56d9935afb299724a212d680a743a11c723f'
+  SOURCE_SHA: 'e6f7ea84d8ce9a1a29e56f5a083173a9810e4316'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '17d8c17ae3b20cd5744e3829eac5c48ea4fc3b56' &&
-      github.event.head_commit.message == 'test: measure recovered Follow before extended Handoff 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '392e468e47f1c0b390c29468b0e0d1f94dce3fe0' &&
+      github.event.head_commit.message == 'test: measure ordered Follow and extended Handoff 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/follow-recovery-lints-20261022
+          SOURCE_REF: refs/heads/test/follow-lifecycle-dispatch-capability-20261022
         run: python3 scripts/handoff_follow_timing.py source prepare
 
   native-macos-server:

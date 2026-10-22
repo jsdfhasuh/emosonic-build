@@ -7,15 +7,15 @@ import handoff_follow_readiness as base
 import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 
-PARENT = '17d8c17ae3b20cd5744e3829eac5c48ea4fc3b56'
-MESSAGE = 'test: measure recovered Follow before extended Handoff 20261022'
+PARENT = '392e468e47f1c0b390c29468b0e0d1f94dce3fe0'
+MESSAGE = 'test: measure ordered Follow and extended Handoff 20261022'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
-SOURCE_SHA = '466f56d9935afb299724a212d680a743a11c723f'
-SOURCE_REF = 'refs/heads/fix/follow-recovery-lints-20261022'
+SOURCE_SHA = 'e6f7ea84d8ce9a1a29e56f5a083173a9810e4316'
+SOURCE_REF = 'refs/heads/test/follow-lifecycle-dispatch-capability-20261022'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=27, proof_run_id=39745934922, validation_run_id=39767536382)
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=39, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39795770390)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
 
@@ -85,6 +85,45 @@ def require_recovery_validation():
                       'Recovery tests, full validation, BOOL proof and cleanup must succeed.')
 
 
+INGRESS_RUN = 39795770390
+INGRESS_HEAD = '392e468e47f1c0b390c29468b0e0d1f94dce3fe0'
+INGRESS_STEPS = {'validate-source': (
+    'Validate 3 storage widget cases then all 101 ingress recovery and lifecycle cases',
+    'Validate complete source analysis, tests, provenance and byte integrity without user Secrets',
+    'Remove private source and generated validation outputs',
+)}
+
+
+def require_ingress_validation():
+    p=base.request.p
+    endpoint=f'/repos/jsdfhasuh/emosonic-build/actions/runs/{INGRESS_RUN}'
+    run=p.api(endpoint)
+    p.require(type(run) is dict and type(run.get('id')) is int and run['id']==INGRESS_RUN
+              and run.get('head_sha')==INGRESS_HEAD
+              and run.get('path')=='.github/workflows/follow-ingress-green.yml'
+              and run.get('event')=='push' and run.get('head_branch')=='main'
+              and type(run.get('run_attempt')) is int and run['run_attempt']==1
+              and run.get('status')=='completed' and run.get('conclusion')=='success',
+              'Exact ingress validation must complete successfully before native testing.')
+    jobs=p.api(endpoint+'/jobs?per_page=100')
+    p.require(type(jobs) is dict and type(jobs.get('jobs')) is list
+              and type(jobs.get('total_count')) is int
+              and jobs['total_count']==len(jobs['jobs'])<=100,
+              'Complete ingress validation jobs unavailable.')
+    for job_name, names in INGRESS_STEPS.items():
+        matches=[j for j in jobs['jobs'] if type(j) is dict and j.get('name')==job_name]
+        p.require(len(matches)==1, 'Exact ingress validation job missing or duplicated.')
+        job=matches[0]
+        p.require(job.get('run_id')==INGRESS_RUN and job.get('head_sha')==INGRESS_HEAD
+                  and job.get('status')=='completed' and job.get('conclusion')=='success'
+                  and type(job.get('steps')) is list, 'Ingress validation job must succeed.')
+        for name in names:
+            steps=[s for s in job['steps'] if type(s) is dict and s.get('name')==name]
+            p.require(len(steps)==1 and steps[0].get('status')=='completed'
+                      and steps[0].get('conclusion')=='success',
+                      'Ingress tests, full validation and cleanup must succeed.')
+
+
 def main():
     stage = 'entry'
     try:
@@ -99,6 +138,7 @@ def main():
         if category=='source' and stage=='prepare':
             require_causal_proof()
             require_recovery_validation()
+            require_ingress_validation()
         source = base.request.p.ROOT / 'source'
         with ExitStack() as stack:
             stack.enter_context(patch.multiple(base, PARENT=PARENT,MESSAGE=MESSAGE,
