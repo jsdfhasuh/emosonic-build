@@ -7,19 +7,19 @@ from unittest.mock import patch
 import current_source_check as request
 import handoff_repair_check as regression
 
-PARENT = '842a6a809ee431eb6d0a83eed31061d96a674d11'
-MESSAGE = 'test: diagnose held seek causal proof 20261022'
+PARENT = 'b466f2b523ac8105197d84cd34de4c653f9f45e2'
+MESSAGE = 'test: validate isolated seek fixture host 20261022'
 WORKFLOW = 'follow-seek-latency-proof.yml'
 REQUEST_PATH = 'requests/follow-seek-latency-20261022.json'
 SOURCE_REF = 'refs/heads/test/follow-seek-latency-20261022'
-SOURCE_SHA = '69c80772e4321a42e9f73f8699a60c5ee5ffa1ff'
+SOURCE_SHA = 'c9969f720209e1083b618c991b1d295aff8d6315'
 BASELINE_SHA = SOURCE_SHA
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 TEST_PATH = 'test/services/emo_follow_sync_controller_test.dart'
 TEST_NAME = 'Follow native seek hold must not sustain 1.5x soft-seek loop'
 ASSERTION_MARKER = 'FOLLOW_SEEK_HOLD_MUST_NOT_REPEAT_UNSETTLED_SOFT_SEEKS'
 REQUEST = dict(request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               baseline_sha=BASELINE_SHA, server_sha=SERVER_SHA, mode='follow-seek-latency-proof', attempt=16)
+               baseline_sha=BASELINE_SHA, server_sha=SERVER_SHA, mode='follow-seek-latency-proof', attempt=17)
 
 
 EXPECTED_TESTS = 13
@@ -43,10 +43,17 @@ def finite_report(raw, stderr, returncode):
         if type(body) is not str:body=''
         if type(stack) is not str:stack=''
         category=next((name for name in ('TimeoutException','StateError','RangeError','LateInitializationError','NoSuchMethodError','MissingPluginException','TestFailure') if name in body),'other')
-        lines=sorted(set(int(x) for x in re.findall(r'emo_follow_sync_controller_test\.dart:(\d+)',body+'\n'+stack)))[:20]
+        lines=sorted(set(int(x) for x in re.findall(r'emo_follow_sync_controller_test\.dart[: ]+(\d+)',body+'\n'+stack)))[:20]
+        known_channels=('com.ryanheise.audio_session','dev.fluttercommunity.plus/connectivity',
+                        'com.example.emosonic/windows_session_volume','com.example.emosonic/windows_session_volume/events',
+                        'plugins.flutter.io/path_provider')
+        known_methods=('getApplicationDocumentsDirectory','getApplicationSupportDirectory','getTemporaryDirectory',
+                       'getApplicationSupportPath','getLibraryDirectory','check','listen','getConfiguration','setActive','getVolume')
         errors.append({'testID':event.get('testID') if type(event.get('testID')) is int and 0<=event['testID']<10000 else None,'isFailure':event.get('isFailure') is True,'exactMarker':body==ASSERTION_MARKER,
                        'containsMarker':ASSERTION_MARKER in body,'category':category,
-                       'fixtureLines':[min(x,100000) for x in lines]})
+                       'fixtureLines':[min(x,100000) for x in lines],
+                       'knownPluginChannels':[v for v in known_channels if ('on channel '+v+')') in body or body.endswith('on channel '+v)],
+                       'knownPluginMethods':[v for v in known_methods if ('method '+v+' on channel ') in body]})
     locations=sorted(set((min(int(a),100000),min(int(b),10000)) for a,b in re.findall(r'emo_follow_sync_controller_test\.dart:(\d+):(\d+): Error:',raw+'\n'+stderr)))[:20]
     return {'stage':'follow-seek-proof-observation','returncode':max(-1000,min(returncode,1000)),
             'targetStarts':cap(sum(e.get('type')=='testStart' and type(e.get('test')) is dict and e['test'].get('name')==TEST_NAME for e in events)),

@@ -12,3 +12,5 @@ After an actual causal result, choose a bounded repair and preserve its regressi
 
 
 The first hosted proof run39742069868 failed without a causal conclusion. Attempt16 retains the identical source and adds finite stage, event/result counts, known exception categories, fixture numeric line locations, and bounded synthetic samples. Private raw output remains suppressed and removed; no assertions or success criteria are relaxed.
+
+Attempt17 pins reviewed test-only c9969f720209e1083b618c991b1d295aff8d6315. The prior diagnostic run39744175535 compiled but all eight new cases failed at an omitted path_provider host boundary; no causal assertion occurred. The fixture now uses the established suite-owned temporary directory handler. All thirteen test bodies and original marker remain unchanged. Finite known channel/method enums identify unexpected host setup failures without raw messages.

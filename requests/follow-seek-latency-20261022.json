@@ -1,10 +1,10 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
   "source_ref": "refs/heads/test/follow-seek-latency-20261022",
-  "source_sha": "69c80772e4321a42e9f73f8699a60c5ee5ffa1ff",
+  "source_sha": "c9969f720209e1083b618c991b1d295aff8d6315",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
-  "baseline_sha": "69c80772e4321a42e9f73f8699a60c5ee5ffa1ff",
+  "baseline_sha": "c9969f720209e1083b618c991b1d295aff8d6315",
   "mode": "follow-seek-latency-proof",
-  "attempt": 16
+  "attempt": 17
 }

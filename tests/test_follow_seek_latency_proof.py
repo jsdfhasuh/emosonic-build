@@ -59,6 +59,17 @@ class FollowSeekProofTests(unittest.TestCase):
             report['message']='FOLLOW_SEEK_LATENCY_SAMPLES '+json.dumps(samples)
             with self.subTest(key=key),self.assertRaises(c.request.p.GateError):self.parse(events)
 
+    def test_plugin_details_are_known_enums_only(self):
+        raw=json.dumps({'type':'error','testID':3,'error':'MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)','stackTrace':'private/emo_follow_sync_controller_test.dart 123:4 private'})
+        report=c.finite_report(raw,'',1)['errors'][0]
+        self.assertEqual(report['knownPluginChannels'],['plugins.flutter.io/path_provider'])
+        self.assertEqual(report['knownPluginMethods'],['getApplicationSupportDirectory'])
+        self.assertEqual(report['fixtureLines'],[123])
+        self.assertNotIn('private',json.dumps(report))
+        raw=json.dumps({'type':'error','error':'MissingPluginException(No implementation found for method privateMethod on channel privateChannel)'})
+        report=c.finite_report(raw,'',1)['errors'][0]
+        self.assertEqual(report['knownPluginChannels'],[]);self.assertEqual(report['knownPluginMethods'],[])
+
     def test_failure_stages_are_precise(self):
         cases=[]
         e=self.report();e[4]['error']='other';cases.append((e,'exact-error'))
