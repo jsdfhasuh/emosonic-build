@@ -1,0 +1,54 @@
+name: Fixed public-server Follow rate contract
+on:
+  push:
+    branches: [main]
+    paths: [requests/follow-server-contract-20261022.json]
+permissions:
+  contents: read
+concurrency:
+  group: emosonic-follow-server-contract-20261022
+  cancel-in-progress: false
+jobs:
+  real-server-contract:
+    if: >-
+      github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' && github.event.before == '90d9d6074ed70268c8f110f1a383d8cff5b464e3' &&
+      github.event.head_commit.message == 'test: prove authoritative follow rate contract 20261022' && github.event.forced == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Test public pipeline logic
+        run: python3 -m unittest discover -s tests -v
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: jsdfhasuh/Emosonic-Server
+          ref: b69a002c9fcad26ec91155bcd5b14ca9776ab970
+          path: .server-red
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: jsdfhasuh/Emosonic-Server
+          ref: 5adc23da173c5f20188d79aafe8fcc1e656eb38a
+          path: .server-green
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install existing public server CI dependencies
+        working-directory: .server-red
+        run: python -m pip install -r ci-requirements.txt
+      - name: Prove original real SQLite rate regression
+        run: python scripts/follow_server_contract.py red
+      - name: Prove fixed real SQLite rate regression
+        run: python scripts/follow_server_contract.py green
+      - name: Validate all Follow store guards
+        run: python scripts/follow_server_contract.py follow
+      - name: Validate complete server unit suite
+        run: python scripts/follow_server_contract.py full
+      - name: Validate real server network suite
+        run: python scripts/follow_server_contract.py network
+      # Public code only. No secrets, production endpoints, release or artifact uploads.

@@ -1,0 +1,7 @@
+{
+  "server_repository": "jsdfhasuh/Emosonic-Server",
+  "baseline_sha": "b69a002c9fcad26ec91155bcd5b14ca9776ab970",
+  "fixed_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
+  "mode": "server-contract-red-green",
+  "attempt": 1
+}
