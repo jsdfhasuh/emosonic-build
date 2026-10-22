@@ -8,22 +8,22 @@ from unittest.mock import patch
 import follow_ingress_proof as ingress
 import follow_recovery_check as recovery
 
-PARENT = '742eb7e936ace69a1f003c4a2555dd2c578d5fc7'
-MESSAGE = 'test: validate ingress ordering repair full green 20261022'
+PARENT = '0168fa93c3f3096190276d46668f272d0c271313'
+MESSAGE = 'test: validate lint-clean ingress repair 20261022'
 WORKFLOW = 'follow-ingress-green.yml'
 REQUEST_PATH = 'requests/follow-ingress-green-20261022.json'
-SOURCE_REF = 'refs/heads/fix/follow-inflight-timeline-ordering-20261022'
-SOURCE_SHA = '88b145873c5ea09b0d50e186bf2c223992681615'
+SOURCE_REF = 'refs/heads/fix/follow-ingress-fixture-lints-20261022'
+SOURCE_SHA = 'caddb6e7de4a821bb6dd04cab12a160f2a651d6a'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 RECOVERY_INVENTORY_SHA256 = '2c882b974b4a49478ca9d5df5cb9aff094a309a7e8f1e42a1fd20403f841c69b'
-INGRESS_INVENTORY_SHA256 = '55b83ff0c47cfb719360065ce9a136671b88bbfd1c42760e13255270bd3a982a'
+INGRESS_INVENTORY_SHA256 = 'fde163ba2e25f529e2ef152523ba5f8df31ff7b1718a3e7398800bb89cfae71e'
 REQUEST = dict(recovery.request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               server_sha=SERVER_SHA, mode='follow-ingress-full-green-validation', attempt=34)
+               server_sha=SERVER_SHA, mode='follow-ingress-full-green-validation', attempt=35)
 RECOVERY_INVENTORY = recovery.inventory
 ORIGINAL_OBSERVER = recovery.observe_green
 ORIGINAL_FULL_OBSERVER = recovery.full_test_observation
 DISPATCH_PATH = "test/services/audio_remote_dispatch_position_test.dart"
-DISPATCH_SHA256 = "8fe8532113c2ad87a096b8a64519c5838feb63d74326eeb22befe0650369d0c6"
+DISPATCH_SHA256 = "855ca0fbaa775b06409667d6ba9969179a191d0868f8a7749eaf85ec555cb5ae"
 
 
 def inventory(source):

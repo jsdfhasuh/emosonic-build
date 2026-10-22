@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '88b145873c5ea09b0d50e186bf2c223992681615'
+  SOURCE_SHA: 'caddb6e7de4a821bb6dd04cab12a160f2a651d6a'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '742eb7e936ace69a1f003c4a2555dd2c578d5fc7' &&
-      github.event.head_commit.message == 'test: validate ingress ordering repair full green 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '0168fa93c3f3096190276d46668f272d0c271313' &&
+      github.event.head_commit.message == 'test: validate lint-clean ingress repair 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/follow-inflight-timeline-ordering-20261022
+          SOURCE_REF: refs/heads/fix/follow-ingress-fixture-lints-20261022
         run: python3 scripts/follow_ingress_green.py source prepare
 
   validate-source:

@@ -1,9 +1,9 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/fix/follow-inflight-timeline-ordering-20261022",
-  "source_sha": "88b145873c5ea09b0d50e186bf2c223992681615",
+  "source_ref": "refs/heads/fix/follow-ingress-fixture-lints-20261022",
+  "source_sha": "caddb6e7de4a821bb6dd04cab12a160f2a651d6a",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "follow-ingress-full-green-validation",
-  "attempt": 34
+  "attempt": 35
 }
