@@ -6,6 +6,8 @@ import math
 import unittest
 BASELINE = None
 PATCHED = None
+SHARED_BASELINE = None
+FINAL_PATCHED = None
 NAMES = {'players', 'decoded', 'playing', 'stopped', 'native_follow_task_ready',
          'follow_native_rate_bounds', 'native_rate_matches', 'aligned_drift',
          'numeric_native_snapshot', 'Matrix'}
@@ -36,7 +38,7 @@ def load(clock, *, patched):
     tree = ast.parse(source)
     names = NAMES | {'follow_correction_identity', 'native_follow_readiness_pending'}
     selected = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name in names]
-    namespace = {'math': math, 'json': json, 'time': clock}
+    namespace = {'math': math, 'json': json, 'time': clock, 'summarize_state': lambda state: {'status':'unavailable'}}
     exec(compile(ast.Module(body=selected, type_ignores=[]), '<reviewed-harness>', 'exec'), namespace)
     return namespace
 
@@ -351,10 +353,216 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual(outcomes, [])
 
 
-TEST_NAMES = tuple(sorted(name for name in ReadinessTests.__dict__ if name.startswith('test_')))
+
+class SharedReadinessTests(unittest.TestCase):
+    def setup_shared(self, *, shared=True, sample=None, late=False):
+        clock = Clock()
+        source = FINAL_PATCHED if shared else SHARED_BASELINE
+        names = NAMES | {'follow_correction_identity', 'native_follow_readiness_pending', 'native_post_seek_ready'}
+        selected = [n for n in ast.parse(source).body
+                    if isinstance(n, (ast.FunctionDef, ast.ClassDef)) and n.name in names]
+        ns = {'math':math, 'json':json, 'time':clock, 'summarize_state':lambda state: {'status':'unavailable'}}
+        exec(compile(ast.Module(body=selected, type_ignores=[]), '<reviewed-shared-readiness>', 'exec'), ns)
+        matrix = ns['Matrix'](); matrix.last = pair(0)
+        reads, outcomes = [], []
+        def read():
+            if late and not reads: clock.now = 4.69
+            elif late and len(reads) >= 2: clock.now = round(clock.now + .13, 6)
+            matrix.last = (sample or pair)(clock.now)
+            reads.append(clock.now)
+            return matrix.last
+        matrix.states = read
+        matrix.outcome = lambda name, **kw: outcomes.append((name, kw, copy.deepcopy(matrix.rate_measurement)))
+        return clock, ns, matrix, reads, outcomes
+
+    def run_follow(self, matrix):
+        matrix.rate(2, 1.5, 'shared', follow_context='authority-context', authority_index=0)
+
+    def test_shared_01_current_baseline_red_redundant_poll_expires(self):
+        clock, _, matrix, reads, outcomes = self.setup_shared(shared=False, late=True)
+        with self.assertRaisesRegex(TimeoutError, 'did not begin advancing'):
+            self.run_follow(matrix)
+        self.assertEqual(reads[:2], [4.69, 4.89])
+        self.assertEqual(clock.now, 5.12)
+        self.assertEqual(outcomes[0][0], 'native-follow-aligned')
+        self.assertEqual(matrix.stage, 'shared:native-advancement-readiness')
+
+    def test_shared_02_late_pair_green_starts_full_window_at_second_sample(self):
+        clock, _, matrix, reads, outcomes = self.setup_shared(late=True)
+        self.run_follow(matrix)
+        self.assertEqual(reads[:3], [4.69, 4.89, 5.22])
+        proof = next(row for row in outcomes if row[0]=='shared:native-advancement-readiness')
+        self.assertEqual(proof[1]['waitDurationMs'], 0)
+        self.assertEqual(proof[1]['totalReadinessMs'], 4890)
+        final = outcomes[-1]
+        self.assertEqual(final[0], 'shared')
+        self.assertGreaterEqual(final[1]['elapsedSeconds'], 3)
+        self.assertEqual(final[1]['elapsedSeconds'], (int(reads[-1]*1000)-int(reads[1]*1000))/1000)
+        self.assertEqual(final[2]['firstNative']['positionMs'], 17335)
+
+    def test_shared_03_nonadvancing_and_discontinuous_pairs_never_fund_readiness(self):
+        for mode in ('frozen', 'backward', 'jump', 'uncertainty'):
+            def sample(at):
+                rows = pair(at)
+                for i in (0, 2):
+                    native = rows[i]['nativePlayers'][0]
+                    if mode == 'frozen': native['positionMs'] = 10000
+                    elif mode == 'backward': native['positionMs'] = 20000-int(at*100)
+                    elif mode == 'jump': native['positionMs'] = 10000+int(at*3000)
+                    else: native['sampleUncertaintyMs'] = 101
+                return rows
+            clock, _, matrix, _, outcomes = self.setup_shared(sample=sample)
+            with self.subTest(mode=mode), self.assertRaises((AssertionError, TimeoutError)):
+                self.run_follow(matrix)
+            self.assertFalse(any(row[0]=='shared:native-advancement-readiness' for row in outcomes))
+
+    def test_shared_04_identity_control_and_rate_changes_reject_before_witness(self):
+        mutations = [lambda rows: rows[2]['nativePlayers'][0].update(id='other'),
+            lambda rows: rows[2].update(followSourceContextId='other'),
+            lambda rows: rows[2]['contexts']['authority-context'].update(controlVersion=9),
+            lambda rows: rows[2]['preflightDiagnostics'].update(recoveryAppliedControlVersion=9),
+            lambda rows: rows[2]['nativePlayers'][0].update(playbackRate=1),
+            lambda rows: rows[0]['nativePlayers'][0].update(playbackRate=1)]
+        for mutate in mutations:
+            def sample(at):
+                rows = pair(at)
+                if at >= .2: mutate(rows)
+                return rows
+            clock, _, matrix, _, outcomes = self.setup_shared(sample=sample)
+            with self.subTest(mutation=mutations.index(mutate)), self.assertRaises(AssertionError):
+                self.run_follow(matrix)
+            self.assertFalse(any(row[0]=='shared:native-advancement-readiness' for row in outcomes))
+
+    def test_shared_05_exact_deadline_is_not_extended_by_a_valid_pair(self):
+        clock, _, matrix, reads, _ = self.setup_shared()
+        def read():
+            clock.now = 4.8 if not reads else 5.0
+            matrix.last = pair(clock.now); reads.append(clock.now)
+            return matrix.last
+        matrix.states = read
+        with self.assertRaisesRegex(TimeoutError, 'five-second readiness budget'):
+            self.run_follow(matrix)
+        self.assertEqual(clock.now, 5)
+
+    def test_shared_06_deadline_rechecked_after_alignment_reporting(self):
+        clock, _, matrix, _, outcomes = self.setup_shared(late=True)
+        original = matrix.outcome
+        def outcome(name, **kw):
+            original(name, **kw)
+            if name == 'native-follow-aligned': clock.now = 5
+        matrix.outcome = outcome
+        with self.assertRaisesRegex(TimeoutError, 'did not begin advancing'):
+            self.run_follow(matrix)
+        self.assertEqual(clock.now, 5)
+
+    def test_shared_07_witness_is_fresh_and_compatible_original_contracts_hold(self):
+        # Four historical cases encode the superseded mandatory 100ms poll or
+        # whole rate AST. Their unchanged bodies test the inverse prior layer;
+        # final replacements are cases 02/06/10/11/12 and exact inverse/tail proof.
+        incompatible = {'test_original_assertions_and_strict_rate_method_are_unchanged',
+            'test_full_continuous_measurement_after_readiness_is_not_shortened',
+            'test_preroll_complete_three_second_window_follows_all_premeasurement_states',
+            'test_steady_state_seek_buffering_remains_immediate_failure'}
+        global PATCHED
+        prior = PATCHED
+        try:
+            PATCHED = FINAL_PATCHED
+            names = sorted(name for name in ReadinessTests.__dict__ if name.startswith('test_') and name not in incompatible)
+            self.assertEqual(len(names), 19)
+            result = unittest.TestResult()
+            unittest.TestSuite(ReadinessTests(name) for name in names).run(result)
+            self.assertEqual(result.testsRun, 19)
+            self.assertFalse(result.errors or result.failures or result.skipped
+                or result.expectedFailures or result.unexpectedSuccesses)
+        finally:
+            PATCHED = prior
+        clock, _, matrix, _, outcomes = self.setup_shared()
+        self.run_follow(matrix)
+        began = clock.now
+        fixed = pair(clock.now)
+        def stalled():
+            matrix.last = copy.deepcopy(fixed)
+            for i in (0,2): matrix.last[i]['nativePlayers'][0]['sampledAtMs'] = 100000+int(clock.now*1000)
+            return matrix.last
+        matrix.states = stalled
+        count = len(outcomes)
+        with self.assertRaises(TimeoutError): self.run_follow(matrix)
+        self.assertGreaterEqual(round(clock.now-began, 6), 5)
+        self.assertEqual(len(outcomes), count)
+
+    def test_shared_08_prefilled_witness_and_wrong_current_owner_are_rejected(self):
+        clock, ns, matrix, _, _ = self.setup_shared()
+        matrix.rate_measurement = {}
+        with self.assertRaises(AssertionError):
+            matrix.follow_alignment('authority-context', 0, 1.5, 0, 5, advancement_witness=[pair(0)])
+        original = matrix.follow_alignment
+        def wrong_owner(*args, **kw):
+            current = original(*args, **kw)
+            return copy.deepcopy(current)
+        matrix.follow_alignment = wrong_owner
+        with self.assertRaises(AssertionError): self.run_follow(matrix)
+
+    def test_shared_09_nonfollow_and_postseek_still_require_new_advancement(self):
+        for postseek in (False, True):
+            clock, ns, matrix, reads, outcomes = self.setup_shared()
+            kwargs = {'expected_position_ms':10000, 'after_seek':state(-.1,'a')} if postseek else {}
+            matrix.rate(0, 1.5, 'ordinary', **kwargs)
+            self.assertGreaterEqual(len(reads), 3)
+            proof = next(row for row in outcomes if row[0]=='ordinary:native-advancement-readiness')
+            self.assertGreaterEqual(proof[1]['waitDurationMs'], 100)
+            self.assertGreaterEqual(outcomes[-1][1]['elapsedSeconds'], 3)
+
+    def test_shared_10_pending_preroll_resets_pair_before_reuse(self):
+        def sample(at):
+            if .2 <= at < .4: return waiting(at)
+            return pair(at)
+        clock, _, matrix, reads, outcomes = self.setup_shared(sample=sample)
+        self.run_follow(matrix)
+        aligned = next(row for row in outcomes if row[0]=='native-follow-aligned')
+        self.assertEqual(aligned[1]['waitDurationMs'], 600)
+        self.assertEqual(outcomes[-1][2]['firstNative']['positionMs'], 10900)
+
+    def test_shared_11_every_bad_strict_window_sample_still_fails(self):
+        for mode in ('paused','buffering','rate','jump','source_context'):
+            def sample(at):
+                rows = pair(at)
+                if at >= .4:
+                    native = rows[2]['nativePlayers'][0]
+                    if mode=='paused': native.update(playbackState=4, playbackRate=0)
+                    elif mode=='buffering': native.update(playbackState=2)
+                    elif mode=='rate': native.update(playbackRate=1)
+                    elif mode=='jump': native['positionMs'] += 200
+                    else: rows[2]['followSourceContextId'] = 'other'
+                return rows
+            clock, _, matrix, _, outcomes = self.setup_shared(sample=sample)
+            with self.subTest(mode=mode), self.assertRaises(AssertionError): self.run_follow(matrix)
+            self.assertEqual(matrix.stage, 'shared')
+            self.assertEqual(clock.now, .4)
+            self.assertFalse(any(row[0]=='shared' for row in outcomes))
+
+    def test_shared_12_nominal_restore_interval_stays_inside_full_window(self):
+        def sample(at):
+            rows = pair(at)
+            if .2 <= at <= 1:
+                rows[2]['nativePlayers'][0]['playbackRate'] = 1.56
+            rows[2]['nativePlayers'][0]['positionMs'] += int(max(0,min(at-.2,.8))*60)
+            return rows
+        clock, _, matrix, reads, outcomes = self.setup_shared(sample=sample)
+        self.run_follow(matrix)
+        final = outcomes[-1]
+        self.assertAlmostEqual(final[1]['elapsedSeconds'], reads[-1] - .2)
+        self.assertEqual(final[2]['firstNative']['positionMs'], 10300)
+        self.assertGreaterEqual(final[1]['elapsedSeconds'], 3)
+        self.assertTrue(any(.2 < at <= 1 for at in reads))
+        self.assertGreater(final[1]['measuredRate'], 1.5)
 
 
-def suite(baseline, patched):
-    global BASELINE, PATCHED
-    BASELINE, PATCHED = baseline, patched
-    return unittest.defaultTestLoader.loadTestsFromTestCase(ReadinessTests)
+TEST_NAMES = tuple(sorted(name for cls in (ReadinessTests, SharedReadinessTests)
+                         for name in cls.__dict__ if name.startswith('test_')))
+
+
+def suite(baseline, patched, shared_baseline=None):
+    global BASELINE, PATCHED, SHARED_BASELINE, FINAL_PATCHED
+    BASELINE, PATCHED, SHARED_BASELINE, FINAL_PATCHED = baseline, shared_baseline, shared_baseline, patched
+    return unittest.TestSuite((unittest.defaultTestLoader.loadTestsFromTestCase(ReadinessTests),
+        unittest.defaultTestLoader.loadTestsFromTestCase(SharedReadinessTests)))

@@ -41,6 +41,10 @@ class AlignmentMatrix(run_lab.Matrix):
 class OriginalContract:
     def test_original_assertion(self):
         assert 2 + 2 == 4
+
+    def test_alignment_and_advancement_share_original_deadline(self):
+        matrix = AlignmentMatrix(Clock(), lambda t: -205 if t < 4.7 else 14)
+        assert matrix.clock.now < 5.25
 '''.encode()
 
 
@@ -55,6 +59,7 @@ def synthetic_pins():
     text = text.replace(anchor, anchor + compat.BASELINE_FIXTURE)
     anchor = '        if self.mutate is not None:\n'
     text = text.replace(anchor, '        add_alignment_fixture_identity(a, f, self.authority_index)\n' + anchor)
+    text = text.replace(compat.DEADLINE_ANCHOR, compat.DEADLINE_ANCHOR + compat.DEADLINE_STIMULUS)
     with patch.multiple(compat, BEFORE_SHA256=compat.digest(SYNTHETIC), AFTER_SHA256=compat.digest(text.encode())):
         yield
 
@@ -131,11 +136,28 @@ class FixtureCompatibilityTests(unittest.TestCase):
         self.assertEqual(callbacks, [(100, 102)])
         self.assertEqual(f['followSourceContextId'], 'wrong-context')
 
-    def test_original_test_methods_and_assertions_are_unchanged(self):
+    def test_only_declared_stimulus_changes_and_inverse_preserves_all_assertions(self):
         with synthetic_pins():
             result = compat.transform(SYNTHETIC)
         self.assertEqual(compat.original_test_contract(ast.parse(SYNTHETIC)),
-                         compat.original_test_contract(ast.parse(result)))
+                         compat.original_test_contract(ast.parse(compat.restore_deadline_stimulus(result))))
+
+    def test_fake_expiry_runs_original_outcome_first_without_touching_samples(self):
+        namespace = {}
+        source = 'def install(matrix):\n' + ''.join(line[4:] + '\n' for line in compat.DEADLINE_STIMULUS.splitlines())
+        exec(source, namespace)
+        clock = types.SimpleNamespace(now=4.89)
+        observed = []
+        native = {'positionMs':123}
+        matrix = types.SimpleNamespace(clock=clock, native=native,
+            outcome=lambda name, **kw: observed.append((name, clock.now, dict(native))))
+        namespace['install'](matrix)
+        matrix.outcome('unrelated')
+        self.assertEqual(clock.now, 4.89)
+        matrix.outcome('native-follow-aligned')
+        self.assertEqual(observed[-1], ('native-follow-aligned', 4.89, {'positionMs':123}))
+        self.assertEqual(clock.now, 5)
+        self.assertEqual(native, {'positionMs':123})
 
     def test_integrated_manifest_success_and_one_shot_rejection(self):
         with tempfile.TemporaryDirectory() as tmp, synthetic_source_pins():

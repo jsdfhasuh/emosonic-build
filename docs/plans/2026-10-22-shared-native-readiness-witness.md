@@ -1,0 +1,9 @@
+# Reuse proven native readiness without extending its budget
+
+The failed native run39818319921 remains failed. Its Follow alignment reached two valid native samples at4.894s with paired drift−30ms, but a redundant sequential advancement observation exceeded the unchanged5s total budget at5.126s. The strict3s measurement and extended Handoff did not execute.
+
+The candidate harness must consume the exact already-observed same-identity advancement pair through the original advancement assertions and original deadline. It must not skip a failed witness, restart the deadline, omit a rate-restoration interval, or weaken movement/rate/identity/uncertainty/jump checks. Non-Follow behavior stays unchanged. The complete continuous3s measurement must start at the last aligned native sample.
+
+Clienta6799a73909cf06d8ba9b830e00d6a628e331205 and server5adc23da173c5f20188d79aafe8fcc1e656eb38a are unchanged. Full validation run39816643590 remains the exact prerequisite. Reviewed deterministic witness tests and all existing harness tests are required before publication. Both full native matrices and both cleanup steps must pass before final test packages. No stable publication, production deployment, new permissions or credentials.
+
+Implementation and independent semantic review are complete. Local evidence:487 public tests,70 private harness tests and35 outer proof cases pass. The layered proof retains23 historical cases on the exact pre-witness layer;19 compatible cases plus12 new cases execute against final methods. Four superseded structural/timing expectations have explicit equivalent final coverage. One disposable deadline fixture advances only its fake clock immediately after the original aligned outcome; all existing timeout/stage/no-measurement assertions remain unchanged. No new runtime pass is claimed.

@@ -7,18 +7,23 @@ import current_native_check as native
 
 
 class PrerollProofExportTests(unittest.TestCase):
-    def test_all_twenty_three_proof_results_are_finite(self):
+    def test_all_thirty_five_proof_results_are_finite(self):
         value = {'stage': 'native-follow-readiness-proof', 'status': 'failed',
-                 'checks': 23, 'failedTestOrdinals': list(range(1, 24))}
+                 'checks': 35, 'failedTestOrdinals': list(range(1, 36))}
         self.assertEqual(native.report_line(json.dumps(value)), value)
+
+    def test_noninteger_proof_counts_are_not_accepted(self):
+        for count in (True, '35', 35.0, float('nan')):
+            value = {'stage':'native-follow-readiness-proof', 'status':'passed', 'checks':count}
+            self.assertEqual(native.report_line(json.dumps(value)), {'stage':'native-follow-readiness-proof','status':'passed'})
 
     def test_unknown_ordinal_count_and_private_fields_are_dropped(self):
         value = {'stage': 'native-follow-readiness-proof', 'status': 'failed',
-                 'checks': 24, 'failedTestOrdinals': [0, 24, 'private assertion', True, 23],
+                 'checks': 36, 'failedTestOrdinals': [0, 36, 'private assertion', True, 35],
                  'privateTrace': 'not exportable'}
         self.assertEqual(native.report_line(json.dumps(value)), {
             'stage': 'native-follow-readiness-proof', 'status': 'failed',
-            'failedTestOrdinals': [23]})
+            'failedTestOrdinals': [35]})
 
 
 if __name__ == '__main__':

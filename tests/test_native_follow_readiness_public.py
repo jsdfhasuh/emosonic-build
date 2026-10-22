@@ -59,7 +59,7 @@ class PublicReadinessTests(unittest.TestCase):
     def test_packaged_payload_pins_and_exact_contract_count(self):
         for name in patcher.PAYLOAD_HASHES: patcher.payload(name)
         self.assertEqual(len(self.fixture.TEST_NAMES), patcher.CONTRACT_CHECKS)
-        self.assertEqual(patcher.CONTRACT_CHECKS, 23)
+        self.assertEqual(patcher.CONTRACT_CHECKS, 35)
         for mapping in (patcher.BASELINE, patcher.AFTER, patcher.PAYLOAD_HASHES):
             self.assertTrue(all(re.fullmatch(r'[0-9a-f]{64}', value) for value in mapping.values()))
 

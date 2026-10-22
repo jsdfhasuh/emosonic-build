@@ -14,7 +14,9 @@ FIXTURE = 'tool/native_playback_mac/test_follow_alignment.py'
 STATE = '.native_follow_readiness/manifest.json'
 ORIGINAL_STATE = '.native_follow_readiness/original-run_lab.py'
 PROOF_STATE = '.native_follow_readiness/contract-proof.json'
-CONTRACT_CHECKS = 23
+CONTRACT_CHECKS = 35
+PROOF_LAYERS = {'priorReadiness': 23, 'finalCompatible': 19, 'sharedWitness': 12}
+SHARED_BASELINE_SHA256 = 'dad22e364b950e8f0b500dac13a084b0ac722f6d91dd265cef77759d2e4029ad'
 NATIVE_STATE = '.native_mac_lab/seek-observability.json'
 NATIVE_ROOT = '.native_mac_lab/just_audio/darwin/just_audio/Sources/just_audio'
 NATIVE_PATHS = {'AudioPlayer.h': NATIVE_ROOT + '/include/just_audio/AudioPlayer.h',
@@ -23,9 +25,9 @@ BASELINE = {LAB: '96dda56b6d8d4e674cb35c7426af69e5f67cee869f977bbc1e09cf95c4bfd1
            PREPARE: '4dcb27fa7d93a74823d5727a271459ed6cd0901999bd33e5180afff0e363da0e',
            FIXTURE: 'f324d2f5106a26837aca41c4733e03f3a08c583b7d3cc1e12017bf34812bd8a5'}
 # Filled from independently reviewed exact transformations, not runtime source.
-AFTER = {'tool/native_playback_mac/run_lab.py': 'dad22e364b950e8f0b500dac13a084b0ac722f6d91dd265cef77759d2e4029ad', 'tool/native_playback_mac/prepare_build.py': 'dfdd215375ac1afd5a90e278733f5ca1a1ef5683317f95526933b5b6fe758532', 'tool/native_playback_mac/test_follow_alignment.py': 'fb1a6225d5e96e724930b9798cbed6e12c5d80fbf683de04b5e74853f7aaa4c4'}
+AFTER = {'tool/native_playback_mac/run_lab.py': '6eb44ffc54f90dab0df7bd320c68e39f0c764c1af126c05fa29e64da22acdc36', 'tool/native_playback_mac/prepare_build.py': 'dfdd215375ac1afd5a90e278733f5ca1a1ef5683317f95526933b5b6fe758532', 'tool/native_playback_mac/test_follow_alignment.py': 'd50cce294a52250a8236b34bf68b0e5e0e26bb599b301b3b9d94fd945efb79ad'}
 NATIVE_HASHES = {'AudioPlayer.h': {'before': 'c8c6df3bc07f10677e0afbeb447c88da2a704b2c8323769247f78768c6a43138', 'after': '6b48fdf8e6bf67849126224151470cb8932d432f2dffd7e6fd8d09ef85796cb2'}, 'AudioPlayer.m': {'before': 'ecec29e1f913f0dca944ca3fb2e45a7ad96a138391af59f99ca3f46dfd5b65b3', 'after': 'dfc408d533c30fe95b8d0a9ad2284f2266fdbaba3377da2bde372fcaad4441c7'}}
-PAYLOAD_HASHES = {'alignment_fixture_compatibility.py': 'bef7836fed2c378a9d5d36797d6974d77147006367b97c921930ab7bf700d111', 'follow_readiness_helpers.py': 'a23c172a5d009e4271efbcfe939810d3c2ca5da756bca853e8cdf0b86c60edd7', 'instrument_seek_observability.py': '678ccfe3e91b6257eb49144da60203e96bfed2183a75bed4acdd1552bf4a5bfa', 'readiness_contract.py': '9ef564eaf9ba078343c1466baae870c3821a0a72b22eba7e0eed16a38d15dbe9'}
+PAYLOAD_HASHES = {'alignment_fixture_compatibility.py': '34641f5286741bc8f10fcfdb0615330160d1a7d45eb7d63f25f6741fe9a5be57', 'follow_readiness_helpers.py': 'a23c172a5d009e4271efbcfe939810d3c2ca5da756bca853e8cdf0b86c60edd7', 'instrument_seek_observability.py': '678ccfe3e91b6257eb49144da60203e96bfed2183a75bed4acdd1552bf4a5bfa', 'readiness_contract.py': '4e374fde41fa2d05c77c0a832d9097cf83905e484f94f5e16c317b6dea0baf6b'}
 
 
 def digest(data): return hashlib.sha256(data).hexdigest()
@@ -91,6 +93,62 @@ def patch_harness(original):
                    if type(item.get(key)) is bool})
     return result''')
     ast.parse(text)
+    return share_advancement_witness(text.encode('utf-8'))
+
+
+def shared_witness_operations():
+    """Only the same-call final aligned pair may fund existing movement checks."""
+    return (
+        ('    def follow_alignment(self, context, authority_index, expected, started, deadline):\n',
+         '    def follow_alignment(self, context, authority_index, expected, started, deadline, advancement_witness=None):\n'
+         '        if advancement_witness is not None:\n'
+         '            assert type(advancement_witness) is list and not advancement_witness\n'),
+        ('                return follower\n',
+         '                if advancement_witness is not None:\n'
+         '                    advancement_witness.append((context, authority_index, expected, follower, previous[1]))\n'
+         '                return follower\n'),
+        ('        aligned_state = None\n', '        aligned_state = None\n        advancement_witness = []\n'),
+        ('                follow_context, authority_index, expected, readiness_started, readiness_deadline)\n',
+         '                follow_context, authority_index, expected, readiness_started, readiness_deadline,\n'
+         '                advancement_witness=advancement_witness)\n'),
+        ('        anchor = first\n        previous = first\n        while True:\n'
+         '            time.sleep(0.1)\n            first_state = observe()\n            first = decoded(first_state)\n',
+         '        anchor = first\n'
+         '        if aligned_state is not None:\n'
+         '            assert len(advancement_witness) == 1\n'
+         '            witness_context, witness_authority, witness_rate, witness_state, anchor = advancement_witness[0]\n'
+         '            assert witness_context == follow_context and witness_authority == authority_index and witness_rate == expected\n'
+         '            assert witness_state is first_state\n'
+         '        previous = anchor\n'
+         '        reuse_aligned_advancement = aligned_state is not None\n'
+         '        while True:\n'
+         '            if reuse_aligned_advancement:\n'
+         '                reuse_aligned_advancement = False\n'
+         '            else:\n'
+         '                time.sleep(0.1)\n                first_state = observe()\n                first = decoded(first_state)\n'),
+    )
+
+
+def share_advancement_witness(original):
+    text = original.decode('utf-8')
+    for old, new in shared_witness_operations(): text = replace_once(text, old, new)
+    result = text.encode('utf-8')
+    if restore_advancement_witness(result) != original:
+        raise ValueError('Shared readiness witness inverse changed')
+    before, after = ast.parse(original), ast.parse(result)
+    old_asserts = [ast.dump(n) for n in ast.walk(before) if isinstance(n, ast.Assert)]
+    new_asserts = [ast.dump(n) for n in ast.walk(after) if isinstance(n, ast.Assert)]
+    if any(new_asserts.count(item) < old_asserts.count(item) for item in old_asserts):
+        raise ValueError('Shared readiness removed an original assertion')
+    tail = "        self.rate_measurement['firstNative'] = numeric_native_snapshot(first)\n"
+    if original.count(tail.encode()) != 1 or result.split(tail.encode(), 1)[1] != original.split(tail.encode(), 1)[1]:
+        raise ValueError('Shared readiness changed strict measurement or later controls')
+    return result
+
+
+def restore_advancement_witness(shared):
+    text = shared.decode('utf-8')
+    for old, new in reversed(shared_witness_operations()): text = replace_once(text, new, old)
     return text.encode('utf-8')
 
 
@@ -137,7 +195,9 @@ def checked(repo, relative, *, new=False):
 
 def expected_manifest():
     return {'status': 'prepared', 'productionRepositoryMutation': False,
-            'disposableOnly': True, 'nativeReadOnlyGetters': True, 'originalFixtureTestMethodsUnchanged': True,
+            'disposableOnly': True, 'nativeReadOnlyGetters': True, 'originalFixtureTestMethodsUnchanged': False, 'originalFixtureAssertionsUnchanged': True,
+            'fixtureTestMethodsChanged': ['test_alignment_and_advancement_share_original_deadline'],
+            'sharedAlignmentAdvancementWitness': True, 'allOriginalAdvancementAssertionsPreserved': True,
             'files': {name: {'before': BASELINE[name], 'after': AFTER[name]} for name in BASELINE},
             'payloads': PAYLOAD_HASHES}
 
@@ -176,7 +236,8 @@ def _verify_source_prepared(source_repo, *, timing_observation=False):
     manifest = json.loads(checked(source_repo, STATE).read_text())
     if (not isinstance(manifest, dict) or manifest != expected_manifest()
             or any(type(manifest.get(key)) is not bool for key in
-                   ('productionRepositoryMutation', 'disposableOnly', 'nativeReadOnlyGetters', 'originalFixtureTestMethodsUnchanged'))):
+                   ('productionRepositoryMutation', 'disposableOnly', 'nativeReadOnlyGetters', 'originalFixtureTestMethodsUnchanged',
+                    'sharedAlignmentAdvancementWitness', 'allOriginalAdvancementAssertionsPreserved', 'originalFixtureAssertionsUnchanged'))):
         raise ValueError('Readiness preparation manifest changed')
     for name in (PREPARE, FIXTURE):
         expected_hash = expected_prepare if name == PREPARE else AFTER[name]
@@ -189,7 +250,8 @@ def _verify_source_prepared(source_repo, *, timing_observation=False):
 
 def expected_proof():
     return {'status': 'passed', 'checks': CONTRACT_CHECKS, 'baseline': BASELINE[LAB],
-            'patched': AFTER[LAB], 'suiteSha256': PAYLOAD_HASHES['readiness_contract.py']}
+            'patched': AFTER[LAB], 'suiteSha256': PAYLOAD_HASHES['readiness_contract.py'],
+            'sharedBaseline': SHARED_BASELINE_SHA256, 'readinessProofLayers': PROOF_LAYERS}
 
 
 class _ContractProofFailure(ValueError):
@@ -222,7 +284,10 @@ def _verify_contract(source_repo):
     names = module.TEST_NAMES
     if len(names) != CONTRACT_CHECKS or len(set(names)) != CONTRACT_CHECKS:
         raise ValueError('Readiness contract test names changed')
-    suite = module.suite(baseline, patched)
+    shared_baseline = restore_advancement_witness(patched)
+    if digest(shared_baseline) != SHARED_BASELINE_SHA256:
+        raise ValueError('Shared readiness baseline changed')
+    suite = module.suite(baseline, patched, shared_baseline)
     result = unittest.TestResult()
     suite.run(result)
     if (result.testsRun != CONTRACT_CHECKS or result.errors or result.failures

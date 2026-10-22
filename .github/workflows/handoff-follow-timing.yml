@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '7164ba9eca1e30448a6e2298e64630d0857128f3' &&
-      github.event.head_commit.message == 'test: measure repaired clock and soft-seek native matrix 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '817937ab93a09ac5c588217140392e5245afa192' &&
+      github.event.head_commit.message == 'test: reuse proven native readiness witness 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build

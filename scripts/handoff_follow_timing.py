@@ -7,15 +7,15 @@ import handoff_follow_readiness as base
 import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 
-PARENT = '7164ba9eca1e30448a6e2298e64630d0857128f3'
-MESSAGE = 'test: measure repaired clock and soft-seek native matrix 20261022'
+PARENT = '817937ab93a09ac5c588217140392e5245afa192'
+MESSAGE = 'test: reuse proven native readiness witness 20261022'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
 SOURCE_SHA = 'a6799a73909cf06d8ba9b830e00d6a628e331205'
 SOURCE_REF = 'refs/heads/fix/follow-clock-and-dispatch-20261022'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=46, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39816643590)
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=47, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39816643590)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
 
