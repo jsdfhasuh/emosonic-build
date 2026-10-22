@@ -19,9 +19,9 @@ SECRET = 'PRIVATE_URI_TOKEN_SOURCE_DO_NOT_EXPORT'
 
 
 def evidence(ordinal):
-    dispatch = dict(phase='B_released', targetMs=10150, nativeBeforeMs=11000, completed=True)
+    dispatch = dict(phase='apply_released', targetMs=10150, nativeBeforeMs=11000, completed=True)
     return dict(change=c.EVIDENCE_CHANGES[ordinal - 1], bSampleElapsedMs=100, cSampleElapsedMs=200,
-                bPositionMs=10150, cPositionMs=10300, pendingTargetMs=10150, bSequence=2, cSequence=3,
+                bPositionMs=10150, cPositionMs=10300, completedServiceOperations=2, pendingApplyObserved=True, initialLoadTargetMs=10000, bSequence=2, cSequence=3,
                 metadataRequests=2, backwardCount=1 if ordinal == 1 else 0,
                 whileHeld=[dict(dispatch)] if ordinal == 1 else [], nativeSeeks=[dict(dispatch)])
 
@@ -191,14 +191,29 @@ class DispatchEvidenceTests(unittest.TestCase):
         self.assertEqual([item['testOrdinal'] for item in report['records']], [1, 2, 3])
         self.assertNotIn(SECRET, json.dumps(report))
 
+    def test_completed_apply_without_duplicate_metadata_is_observable(self):
+        events = fixture()
+        for event in events:
+            if event.get('type') == 'print' and event.get('message', '').startswith(c.EVIDENCE_PREFIX):
+                data = json.loads(event['message'][len(c.EVIDENCE_PREFIX):])
+                data.update(metadataRequests=1, completedServiceOperations=1, pendingApplyObserved=False)
+                event['message'] = c.EVIDENCE_PREFIX + json.dumps(data)
+        report = c.dispatch_observation(raw(events), NAMES)
+        self.assertEqual(report['invalidReports'], 0)
+        self.assertEqual(len(report['records']), 3)
+        self.assertTrue(all(item['pendingApplyObserved'] is False for item in report['records']))
+
     def test_private_unknown_fields_types_ranges_and_change_rejected(self):
         changes = [('secret', SECRET), ('change', SECRET), ('change', 'authority_owner'),
                    ('bSampleElapsedMs', -1), ('cSampleElapsedMs', 60001), ('cSampleElapsedMs', 100),
-                   ('bSequence', 3), ('metadataRequests', 1), ('backwardCount', True),
-                   ('pendingTargetMs', 300001),
+                   ('bSequence', 3), ('metadataRequests', 0), ('backwardCount', True),
+                   ('completedServiceOperations', 0), ('completedServiceOperations', True),
+                   ('completedServiceOperations', 10), ('pendingApplyObserved', 1),
+                   ('initialLoadTargetMs', -1), ('initialLoadTargetMs', 300001),
+                   ('initialLoadTargetMs', True), ('pendingTargetMs', 123), ('serviceApplyInputsMs', [1]),
                    ('nativeSeeks', [dict(phase=SECRET, targetMs=0, nativeBeforeMs=0, completed=True)]),
-                   ('nativeSeeks', [dict(phase='B_released', targetMs=0, nativeBeforeMs=0, completed=1)]),
-                   ('nativeSeeks', [dict(phase='B_released', targetMs=0, nativeBeforeMs=0, completed=True, secret=SECRET)])]
+                   ('nativeSeeks', [dict(phase='apply_released', targetMs=0, nativeBeforeMs=0, completed=1)]),
+                   ('nativeSeeks', [dict(phase='apply_released', targetMs=0, nativeBeforeMs=0, completed=True, secret=SECRET)])]
         changes.append(('whileHeld', [evidence(1)['nativeSeeks'][0]] * 10))
         for key, value in changes:
             events = fixture()
@@ -298,7 +313,7 @@ class PhaseObservationTests(unittest.TestCase):
         self.assertEqual([len(case['stages']) for case in report['cases'][1:]], [3, 3])
 
     def test_diagnostic_limits_and_only_fixed_phase_enum(self):
-        self.assertEqual(len(c.PHASE_STAGES), 44)
+        self.assertEqual(len(c.PHASE_STAGES), 42)
         with patch.object(c, 'MAX_BYTES', 10):
             self.assertEqual(c.phase_observation(raw(self.phases()), NAMES)['reason'], 'output-limit')
         with patch.object(c, 'MAX_EVENTS', 1):

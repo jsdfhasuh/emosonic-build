@@ -23,3 +23,8 @@ Run 39775963962 did not establish causal evidence: all three visible cases ended
 The new FOLLOW_INGRESS_STAGE observation admits only the agreed case ordinal and 44 fixed await-stage enum values, binds them to the pinned reporter test ID, and retains at most 48 stages per case. It always prints summaries for all three ordinals before expected-red rejection, including missing histories. Full bounded histories preserve the unfinished body await even if teardown later emits stages. Invalid/extra fields, arbitrary strings, wrong-case IDs and overflow are counted without being exported.
 
 This is diagnosis only: strict expected-red acceptance, native evidence schema, assertions, timeouts and production bytes are unchanged. Builder predecessor is a3684c1076046c70a7dc9d40278a3badcaa0dcfb and request attempt is 29. No native, package, deployment, release or credential changes.
+
+
+## Completion-oracle baseline
+
+The revised private fixture observes transparent completion of actual service operations, rather than requiring obsolete work to execute. Diagnostic projection retains the completed-operation count, whether a pending apply actually occurred, and the initial native load target. Metadata count permits one request; phase names identify whether a real apply is held or complete. No absence timeout is treated as a pass. Exact expected-red verification, two successful controls, completed native-order oracle, output limits and timeouts remain unchanged. Baseline red and repaired green must use the same frozen fixture. Reviewed test-only source: 1cab571e0a3ee321a583a864802949198e6f21e2. Inventory SHA256: 3bca3aeb1e398d5ed6c8d36ef2448e56ddefb2ea683c1a05358e08f120c25ccb.

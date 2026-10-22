@@ -19,20 +19,20 @@ from fixed_flutter_green import (MAX_BYTES, MAX_EVENTS, GreenVerificationError,
                                  observe_green, verify_green)
 from follow_recovery_check import owned_file
 
-PARENT = '3b1d1382bf6f838aab64560ca88576c6bc5a8afc'
-MESSAGE = 'test: classify ordered stale ingress replay 20261022'
+PARENT = '73c3d268d6877b126d355db743866746736d87a9'
+MESSAGE = 'test: prove ingress completion ordering 20261022'
 WORKFLOW = 'follow-ingress-proof.yml'
 REQUEST_PATH = 'requests/follow-ingress-proof-20261022.json'
-SOURCE_REF = 'refs/heads/test/follow-ingress-native-order-20261022'
-SOURCE_SHA = '5506dac821413f046c2463892c76eb1780746313'
+SOURCE_REF = 'refs/heads/test/follow-ingress-operation-completion-20261022'
+SOURCE_SHA = '1cab571e0a3ee321a583a864802949198e6f21e2'
 BASELINE_SHA = '466f56d9935afb299724a212d680a743a11c723f'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 INVENTORY_PATH = 'tool/follow_ingress/test_inventory.json'
-INVENTORY_SHA256 = '8148ee360c01501679c4825cb417f84ec5b404d4de12dffe804ad153ba42d49f'
+INVENTORY_SHA256 = '3bca3aeb1e398d5ed6c8d36ef2448e56ddefb2ea683c1a05358e08f120c25ccb'
 ASSERTION_MARKER = 'FOLLOW_INGRESS_STALE_PENDING_APPLY_REPLAYED'
 REQUEST = dict(request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
                baseline_sha=BASELINE_SHA, server_sha=SERVER_SHA,
-               mode='follow-ingress-expected-red-proof', attempt=31)
+               mode='follow-ingress-expected-red-proof', attempt=32)
 STAGE = 'entry'
 
 
@@ -172,9 +172,10 @@ def dispatch_observation(raw, names):
     starts, completed, seen = {}, set(), set()
     metrics = {'bSampleElapsedMs': (0, 60000), 'cSampleElapsedMs': (0, 60000),
                'bPositionMs': (0, 300000), 'cPositionMs': (0, 300000),
-               'pendingTargetMs': (0, 300000), 'bSequence': (2, 2), 'cSequence': (3, 3),
-               'metadataRequests': (2, 9), 'backwardCount': (0, 9)}
-    keys = set(metrics) | {'change', 'whileHeld', 'nativeSeeks'}
+               'completedServiceOperations': (1, 9), 'initialLoadTargetMs': (0, 300000),
+               'bSequence': (2, 2), 'cSequence': (3, 3),
+               'metadataRequests': (1, 9), 'backwardCount': (0, 9)}
+    keys = set(metrics) | {'change', 'whileHeld', 'nativeSeeks', 'pendingApplyObserved'}
     events = 0
     for line in raw.splitlines():
         if not line.strip():
@@ -210,12 +211,14 @@ def dispatch_observation(raw, names):
                                for key, (low, high) in metrics.items())
                         or value['cSampleElapsedMs'] <= value['bSampleElapsedMs']):
                     raise ValueError('Invalid finite evidence.')
+                if type(value['pendingApplyObserved']) is not bool:
+                    raise ValueError('Invalid pending apply observation.')
                 for key in ('whileHeld', 'nativeSeeks'):
                     if type(value[key]) is not list or len(value[key]) >= 10:
                         raise ValueError('Invalid dispatch count.')
                     for item in value[key]:
                         if (type(item) is not dict or set(item) != {'phase', 'targetMs', 'nativeBeforeMs', 'completed'}
-                                or item['phase'] not in ('A_loading', 'C_accepted_B_held', 'B_released')
+                                or item['phase'] not in ('A_loading', 'C_accepted_apply_held', 'C_accepted_apply_complete', 'apply_released')
                                 or type(item['completed']) is not bool
                                 or any(type(item[name]) is not int or not 0 <= item[name] <= 300000
                                        for name in ('targetMs', 'nativeBeforeMs'))):
@@ -231,9 +234,9 @@ def dispatch_observation(raw, names):
 PHASE_PREFIX = 'FOLLOW_INGRESS_STAGE '
 PHASE_STEPS = ('create', 'harnessInitialize', 'audioPlayQueue', 'audioUntilPlaying',
                'audioPause', 'audioSeek', 'startFollow', 'firstMetadata', 'firstHold',
-               'bDrain', 'secondMetadata', 'mirrorReady', 'secondHold', 'cDrain',
-               'secondReturned', 'replayCompletion', 'stalePreflightExit',
-               'currentCCompletion', 'finalDrain', 'disposeDrain', 'playbackDispose')
+               'bDrain', 'firstApplyNativeDone', 'mirrorReady', 'firstApplyReturned',
+               'continuationObserved', 'sourceAdvance', 'cDrain', 'operationsComplete',
+               'finalDrain', 'disposeDrain', 'playbackDispose')
 PHASE_STAGES = frozenset(step + suffix for step in PHASE_STEPS for suffix in ('.before', '.after')) | {
     'bIngress.accepted', 'cIngress.accepted'}
 
