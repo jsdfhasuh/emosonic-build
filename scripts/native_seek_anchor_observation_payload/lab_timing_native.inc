@@ -1,4 +1,4 @@
-/* Only actual seek events add CoreMedia rate reads. There are no position reads. */
+/* Event-bound rate reads only: seeks, native speed setters and existing lab state reads. */
 static id LabTimingNumber(double value) {
     return isfinite(value) ? @(value) : [NSNull null];
 }
@@ -13,6 +13,7 @@ static LabTimingRates LabTimingCaptureRates(AVQueuePlayer *player, double reques
     CMTimebaseRef timebase = item.timebase;
     if (timebase) {
         CFRetain(timebase);
+        sample.effectiveReadCount = 1;
         sample.effectiveRate = CMTimebaseGetEffectiveRate(timebase);
         sample.effectiveAvailable = isfinite(sample.effectiveRate);
         sample.identityMatches = player.currentItem == item && item.timebase == timebase;
@@ -30,6 +31,17 @@ static NSDictionary *LabTimingRateDictionary(LabTimingRates value) {
         @"monoBeforeMs": LabTimingNumber(value.monoBeforeMs), @"monoAfterMs": LabTimingNumber(value.monoAfterMs),
         @"requestedRate": LabTimingNumber(value.requestedRate), @"nativeRate": LabTimingNumber(value.nativeRate),
         @"effectiveRate": LabTimingNumber(value.effectiveRate), @"effectiveAvailable": @(value.effectiveAvailable),
-        @"identityMatches": @(value.identityMatches)
+        @"effectiveReadCount": @(value.effectiveReadCount), @"identityMatches": @(value.identityMatches), @"owner": @(value.owner),
+        @"playingIntent": @(value.playingIntent), @"seeking": @(value.seeking),
+        @"processingState": @(value.processingState), @"timeControl": @(value.timeControl)
     };
+}
+
+static NSDictionary *LabClockPointDictionary(LabClockPoint value) {
+    return @{ @"sequence": @(value.sequence), @"owner": @(value.owner),
+        @"rateSequence": @(value.rateSequence), @"seekSequence": @(value.seekSequence),
+        @"positionMs": LabTimingNumber(value.positionMs), @"positionValid": @(value.positionValid),
+        @"wallBeforeMs": LabTimingNumber(value.wallBeforeMs), @"wallAfterMs": LabTimingNumber(value.wallAfterMs),
+        @"monoBeforeMs": LabTimingNumber(value.monoBeforeMs), @"monoAfterMs": LabTimingNumber(value.monoAfterMs),
+        @"rates": LabTimingRateDictionary(value.rates) };
 }

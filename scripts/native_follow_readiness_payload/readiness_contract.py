@@ -38,7 +38,7 @@ def load(clock, *, patched):
     tree = ast.parse(source)
     names = NAMES | {'follow_correction_identity', 'native_follow_readiness_pending'}
     selected = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name in names]
-    namespace = {'math': math, 'json': json, 'time': clock, 'summarize_state': lambda state: {'status':'unavailable'}}
+    namespace = {'math': math, 'json': json, 'time': clock, 'summarize_state': lambda state, *observation: {'status':'unavailable'}}
     exec(compile(ast.Module(body=selected, type_ignores=[]), '<reviewed-harness>', 'exec'), namespace)
     return namespace
 
@@ -361,7 +361,7 @@ class SharedReadinessTests(unittest.TestCase):
         names = NAMES | {'follow_correction_identity', 'native_follow_readiness_pending', 'native_post_seek_ready'}
         selected = [n for n in ast.parse(source).body
                     if isinstance(n, (ast.FunctionDef, ast.ClassDef)) and n.name in names]
-        ns = {'math':math, 'json':json, 'time':clock, 'summarize_state':lambda state: {'status':'unavailable'}}
+        ns = {'math':math, 'json':json, 'time':clock, 'summarize_state':lambda state, *observation: {'status':'unavailable'}}
         exec(compile(ast.Module(body=selected, type_ignores=[]), '<reviewed-shared-readiness>', 'exec'), ns)
         matrix = ns['Matrix'](); matrix.last = pair(0)
         reads, outcomes = [], []

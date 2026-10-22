@@ -66,7 +66,7 @@ class TimingWrapperTests(unittest.TestCase):
         workflow=(root/'.github/workflows'/c.WORKFLOW).read_text()
         self.assertEqual(json.loads((root/c.REQUEST_PATH).read_text()),c.REQUEST)
         for value in (c.PARENT,c.MESSAGE,c.SOURCE_SHA,c.SOURCE_REF,c.REQUEST_PATH):self.assertIn(value,workflow)
-        self.assertLess(workflow.index("handoff_follow_timing.py native handoff"), workflow.index("handoff_follow_timing.py native follow"))
+        self.assertLess(workflow.index("handoff_follow_timing.py native follow"), workflow.index("handoff_follow_timing.py native handoff"))
         self.assertIn('persist-credentials: false',workflow)
         self.assertNotIn('contents: write',workflow)
         self.assertNotIn('upload-artifact',workflow)

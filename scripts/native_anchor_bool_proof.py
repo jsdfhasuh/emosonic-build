@@ -11,7 +11,7 @@ import native_seek_anchor_observation as timing
 
 STAGE = 'native-anchor-bool-proof'
 CASE_COUNT = 11
-BASELINE_PAYLOAD_SHA256 = '4bdad8b89b6dddd3019df3ff149d7250f795b216a6222a269be6482691153782'
+BASELINE_PAYLOAD_SHA256 = 'c8e6130d5ca4f25240c02a9da71a8d524afaeb46a7a4bf237eb895519ca0a470'
 KEY = 'anchorSamePlaybackIdentity'
 PHASES = frozenset(('platform', 'extract', 'compile', 'run', 'baseline', 'patched', 'reducer'))
 REASONS = frozenset(('requires_macos', 'source_contract', 'compile_failed', 'execution_failed',

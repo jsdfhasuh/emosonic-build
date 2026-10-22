@@ -20,11 +20,11 @@ HARNESS = LAB_ROOT + '/run_lab.py'
 COPIED_HELPER = LAB_ROOT + '/native_seek_anchor_observation.py'
 STATE = '.native_timing_observation/manifest.json'
 PAYLOAD_DIRECTORY = 'native_seek_anchor_observation_payload'
-AFTER = {'tool/native_playback_mac/prepare_build.py': '3bb9b9dc1c44a2b58e04c086792e984ede7f764178fa4ae7dbea09f9fbf45279', 'tool/native_playback_mac/run_lab.py': '77bef58abb93b6ec9227e805b59134382da95d11a7bec660dd2074738ea5e317'}
-NATIVE_AFTER = {'AudioPlayer.h': 'aeaae217fbb3e5b6901a85d99019b0c1a19d4d684a3dcd04d10f5e015cbe12a2', 'AudioPlayer.m': '7cc56f17070cdab4a83dfa4efd07eac192a261188ea03c46374df95d4a8f1e2b'}
+AFTER = {'tool/native_playback_mac/prepare_build.py': 'a7aea3aa0530bcd6a39c2e91788a4712093f02570ab631790f4d36dd550a6593', 'tool/native_playback_mac/run_lab.py': '44da20c4a134df49d857b800185a287eb8764e4a6563553ff9f89fc0acda59bc'}
+NATIVE_AFTER = {'AudioPlayer.h': '007d2925fa33997665d64c0a4e1dd6a74c0b21d69f746eae722e5de48b070201', 'AudioPlayer.m': '6e09059b4440a82c4f6d0e86beb37c38245c714a1f3a9163612d5218766b77e3'}
 REJECTION_NAMES = ('budget_or_clock', 'not_healthy', 'primary_identity',
                    'no_timebase', 'effective_rate', 'read_clock', 'capture_quality')
-PAYLOAD_HASHES = {'lab_timing_getters.inc': 'dcb8803d2d76941cbd0268d0f76306f8a56668628b6d50fca5a2fc18e8e8d500', 'lab_timing_native.inc': 'db53e0fce3ff06a097f214e282f0665955864d0f93eebc26e4660b03749c1c4d', 'lab_timing_state.h': '4493ebb4b8f32ad10f7f24c5358bbe7dfcdadc5478ee97fb0652b19354a036cb'}
+PAYLOAD_HASHES = {'lab_timing_getters.inc': 'a7af57b018ccd066f48a7f3215bc20e1ed4353dd21f03720c6605e8e87afcecb', 'lab_timing_native.inc': 'c296f47b02e340d0185daa4277464dca27f77a003ad0cfff88079c7981e79f00', 'lab_timing_state.h': '546e1c25720f424a1d7353a28700058e1a30734e22f328761663501cc4d51abd'}
 
 
 def digest(data):
@@ -96,6 +96,16 @@ def _sample_transform(method):
         _labAnchorItem = item;
         _labAnchorIndex = index;
 ''' + anchor)
+    change.once('        _updatePosition = (int)positionMs;', """        unsigned labOwner = [self labClockOwnerForPlayer:player item:item];
+        LabTimingRates labRates = {.requestedRate=requestedRate, .nativeRate=actualRate, .effectiveRate=effectiveRate,
+            .effectiveAvailable=true, .effectiveReadCount=2, .identityMatches=labOwner>0, .playingIntent=true, .seeking=false,
+            .processingState=(int)ready, .timeControl=(int)AVPlayerTimeControlStatusPlaying, .owner=labOwner,
+            .wallBeforeMs=wallBefore, .wallAfterMs=wallAfter, .monoBeforeMs=readStarted*1000.0, .monoAfterMs=ended*1000.0};
+        LabClockPoint labPoint = {.owner=labOwner, .positionMs=positionMs, .positionValid=labOwner>0,
+            .wallBeforeMs=wallBefore, .wallAfterMs=sampledWall, .monoBeforeMs=readStarted*1000.0,
+            .monoAfterMs=sampledMonotonic*1000.0, .rates=labRates};
+        [self labStoreClockPoint:labPoint anchor:YES];
+        _updatePosition = (int)positionMs;""")
     return change.finish()
 
 
@@ -107,7 +117,12 @@ def _implementation_transform(text):
     __weak AVQueuePlayer *_labAnchorPlayer;
     __weak AudioSource *_labAnchorSource;
     __weak AVPlayerItem *_labAnchorItem;
-    int _labAnchorIndex;''')
+    int _labAnchorIndex;
+    LabClockState _labClock;
+    __weak AVQueuePlayer *_labClockPlayer;
+    __weak AudioSource *_labClockSource;
+    __weak AVPlayerItem *_labClockItem;
+    int _labClockIndex;''')
     anchor = '- (float)speed {\n    return _speed;\n}'
     change.once(anchor, anchor + '\n\n' + payload('lab_timing_getters.inc'))
     start = change.text.index('- (void)samplePositionAnchor {')
@@ -128,8 +143,26 @@ def _implementation_transform(text):
             [self broadcastPlaybackEvent];
             [self labObserveSeekCompletion:labTimingSequence finished:finished player:labTimingPlayer source:labTimingSource item:labTimingItem index:labTimingIndex];
             if (completionHandler) {''')
+    change.once('- (void)setSpeed:(float)speed {\n', '- (void)setSpeed:(float)speed {\n' + """    __weak AVQueuePlayer *labRatePlayer = _player;
+    __weak AudioSource *labRateSource = _audioSource;
+    __weak AVPlayerItem *labRateItem = _player.currentItem;
+    int labRateIndex = _index;
+    unsigned labRateSequence = [self labObserveRateInvocation:speed player:labRatePlayer source:labRateSource item:labRateItem index:labRateIndex];
+""")
+    change.once('    [self updatePosition];\n}\n\n- (void)setLoopMode:', """    [self updatePosition];
+    [self labObserveRateReturn:labRateSequence player:labRatePlayer source:labRateSource item:labRateItem index:labRateIndex];
+}
+
+- (void)setLoopMode:""")
+    old = '            [self setSpeed:(float)[request[@"speed"] doubleValue]];\n            result(@{});'
+    change.once(old, """            unsigned labRateBefore = _labClock.rates;
+            [self setSpeed:(float)[request[@"speed"] doubleValue]];
+            unsigned labReplySequence = _labClock.rates == labRateBefore + 1 ? _labClock.rates : 0;
+            [self labObserveRateReply:labReplySequence returned:NO];
+            result(@{});
+            [self labObserveRateReply:labReplySequence returned:YES];""")
     result = change.finish()
-    # The only new CoreMedia rate read lives in the two event-bound calls.
+    # Extra rate reads are event-bound; no added position reads or polling.
     if result.count('indexedSource.position') != text.count('indexedSource.position'):
         raise ValueError('Observation added a position read')
     return result
@@ -141,7 +174,9 @@ def transform_native(header, implementation):
         raise ValueError('Observation native source pin mismatch')
     change = Transform(header.decode('utf-8'))
     anchor = '@property (readonly, nonatomic) float speed;'
-    change.once(anchor, anchor + '\n- (NSDictionary *)labTimingObservationForPlayer:(AVQueuePlayer *)player item:(AVPlayerItem *)item;')
+    change.once(anchor, anchor + '\n- (NSDictionary *)labTimingObservationForPlayer:(AVQueuePlayer *)player item:(AVPlayerItem *)item;' +
+        '\n- (unsigned)labClockOwnerForPlayer:(AVQueuePlayer *)player item:(AVPlayerItem *)item;' +
+        '\n- (void)labObserveNativePosition:(CMTime)position player:(AVQueuePlayer *)player item:(AVPlayerItem *)item owner:(unsigned)owner wallBefore:(double)wallBefore wallAfter:(double)wallAfter monoBefore:(double)monoBefore monoAfter:(double)monoAfter;')
     updated = {'AudioPlayer.h': change.finish().encode('utf-8'),
                'AudioPlayer.m': _implementation_transform(implementation.decode('utf-8')).encode('utf-8')}
     return updated
@@ -182,7 +217,15 @@ def patch_prepare(original):
 ''')
     anchor = '                @"requestedRate": @(wrapper.speed),\n'
     change.once(anchor, anchor + '                @"timingObservation": [wrapper labTimingObservationForPlayer:engine item:item],\n')
+    anchor = '            NSTimeInterval started = [[NSDate date] timeIntervalSince1970] * 1000.0;\n'
+    change.once(anchor, '            unsigned labClockOwner = [wrapper labClockOwnerForPlayer:engine item:engine.currentItem];\n' +
+        '            double labMonoStarted = [NSProcessInfo processInfo].systemUptime * 1000.0;\n' + anchor)
+    anchor = '            NSTimeInterval ended = [[NSDate date] timeIntervalSince1970] * 1000.0;\n'
+    change.once(anchor, anchor + '            double labMonoEnded = [NSProcessInfo processInfo].systemUptime * 1000.0;\n' +
+        '            [wrapper labObserveNativePosition:position player:engine item:item owner:labClockOwner wallBefore:started wallAfter:ended monoBefore:labMonoStarted monoAfter:labMonoEnded];\n')
     result = change.finish()
+    if result.count('engine.currentTime') != original.decode('utf-8').count('engine.currentTime'):
+        raise ValueError('Native observation added a media position read')
     ast.parse(result)
     return result.encode('utf-8')
 
@@ -277,7 +320,7 @@ def verify_compiled(repo):
     return {'status': 'verified'}
 
 
-def summarize_state(state):
+def summarize_state(state, previous=None, elapsed_ms=None, paired_state=None):
     """Reuse the existing sample, never call its assertive decoder or poll."""
     if type(state) is not dict:
         return {'status': 'unavailable'}
@@ -285,7 +328,10 @@ def summarize_state(state):
     if type(native) is not list or len(native) != 1 or type(native[0]) is not dict:
         return {'status': 'unavailable'}
     try:
-        return summarize(native[0], state)
+        result = summarize(native[0], state)
+        if elapsed_ms is not None:
+            result['clockHistory'] = clock_history(previous, state, native[0], elapsed_ms, paired_state)
+        return result
     except (ArithmeticError, KeyError, TypeError, ValueError):
         return {'status': 'malformed'}
 
@@ -298,8 +344,8 @@ def patch_harness(original):
     anchor = '''            authority, follower = states[authority_index], states[2]
             assert follow_correction_identity(states, authority_index, context) == correction_identity'''
     addition = '''            self.rate_measurement['nativeTiming'] = {
-                'authority': summarize_state(authority),
-                'follower': summarize_state(follower),
+                'authority': summarize_state(authority, self.rate_measurement.get('nativeTiming', {}).get('authority'), (time.monotonic() - started) * 1000, follower),
+                'follower': summarize_state(follower, self.rate_measurement.get('nativeTiming', {}).get('follower'), (time.monotonic() - started) * 1000, authority),
             }
 '''
     change.once(anchor, anchor.replace('            assert ', addition + '            assert ', 1))
@@ -325,8 +371,8 @@ def restore_harness(observed):
     text = observed.decode('utf-8')
     imported = 'from native_seek_anchor_observation import summarize_state\n'
     addition = '''            self.rate_measurement['nativeTiming'] = {
-                'authority': summarize_state(authority),
-                'follower': summarize_state(follower),
+                'authority': summarize_state(authority, self.rate_measurement.get('nativeTiming', {}).get('authority'), (time.monotonic() - started) * 1000, follower),
+                'follower': summarize_state(follower, self.rate_measurement.get('nativeTiming', {}).get('follower'), (time.monotonic() - started) * 1000, authority),
             }
 '''
     if text.count(imported) != 1 or text.count(addition) != 1:
@@ -354,6 +400,9 @@ def _rates(raw):
     result = {'captureElapsedMs': mono, 'clockBracketConsistent': True,
               'effectiveRateStatus': 'unavailable',
               'samePlaybackIdentity': raw.get('identityMatches') is True}
+    if type(raw.get('effectiveReadCount')) is int and 0 <= raw['effectiveReadCount'] <= 2:
+        result['effectiveRateReadCount'] = raw['effectiveReadCount']
+        result['effectiveRateReadBasis'] = 'existing_sampler_locals' if raw['effectiveReadCount'] == 2 else 'event_bound_capture'
     if raw.get('identityMatches') is not True:
         result['effectiveRateStatus'] = 'unavailable_identity_changed'
         return result
@@ -365,6 +414,12 @@ def _rates(raw):
         result['effectiveRate'] = raw['effectiveRate']
         if 'nativeRate' in result:
             result['positiveNominalRateWithHeldClock'] = result['nativeRate'] > 0 and raw['effectiveRate'] == 0
+    for key in ('playingIntent', 'seeking'):
+        if type(raw.get(key)) is bool: result[key] = raw[key]
+    for old, new, low, high in (('owner', 'nativeOwnerOrdinal', 0, 65535),
+            ('processingState', 'processingState', 0, 4), ('timeControl', 'timeControl', -1, 2),
+            ('effectiveReadCount', 'effectiveRateReadCount', 0, 2)):
+        if type(raw.get(old)) is int and low <= raw[old] <= high: result[new] = raw[old]
     return result
 
 
@@ -387,6 +442,7 @@ def summarize(native, dart_state=None):
               'desiredTimelineAgeStatus': 'unavailable',
               'seekRecordsDropped': max(0, raw['seekInvocations'] - 16),
               'seekRecords': []}
+    result['clockObservation'] = clock_observation(raw.get('clockObservation'))
     at = native.get('sampledAtMs')
     records = raw.get('seeks')
     expected_sequences = list(range(max(1, raw['seekInvocations'] - 15), raw['seekInvocations'] + 1))
@@ -435,6 +491,16 @@ def summarize(native, dart_state=None):
                 if consistent:
                     entry['completionAfterInvocationMs'] = elapsed
                     entry['observationBracketMs'] = begin['captureElapsedMs'] + end['captureElapsedMs']
+        for flag, field, dest, basis in (('firstNativeSeen','firstNative','firstNativeObservation','item_current_time'),
+                ('firstAnchorSeen','firstAnchor','firstAdmittedAnchor','source_relative_sampler')):
+            entry[dest+'Status'] = 'unavailable'
+            if record.get(flag) is True:
+                point = clock_point(record.get(field), invocation['monoAfterMs'], invocation['wallAfterMs'], basis)
+                valid = (point is not None and point['nativeOwnerOrdinal'] > 0 and
+                    point['nativeOwnerOrdinal'] == begin.get('nativeOwnerOrdinal') == entry.get('completion', {}).get('nativeOwnerOrdinal') and
+                    point['seekInvocationOrdinal'] == record['sequence'])
+                entry[dest+'Status'] = 'observed' if valid else 'invalid_record'
+                if valid: entry[dest] = point
         result['seekRecords'].append(entry)
     if raw['samplerAdmits']:
         anchor = {'samePlaybackIdentity': raw.get('anchorSamePlaybackIdentity') is True}
@@ -506,3 +572,170 @@ SCHEMA = {
     },
     'lastEffectiveRateRejection': {key: ('number', -2, 4) for key in ('requestedRate', 'nativeRate', 'effectiveRate')},
 }
+
+
+# No cross-layer clock origins or continuous-hold/causal inference are assumed.
+def clock_point(raw, base_mono, base_wall, basis):
+    if type(raw) is not dict or not all(type(raw.get(k)) is int and 0 <= raw[k] <= 65535
+            for k in ('sequence', 'owner', 'rateSequence', 'seekSequence')) or not raw['sequence']:
+        return None
+    bracket = _rates({**raw, 'identityMatches': raw.get('owner', 0) > 0})
+    if bracket is None: return None
+    mono = (raw['monoBeforeMs'] + raw['monoAfterMs']) / 2
+    wall = (raw['wallBeforeMs'] + raw['wallAfterMs']) / 2
+    offset = mono - base_mono
+    if not number(offset, -600000, 600000) or abs(wall - base_wall - offset) > 2: return None
+    out = {'ordinal':raw['sequence'], 'nativeOwnerOrdinal':raw['owner'], 'rateRequestOrdinal':raw['rateSequence'],
+        'seekInvocationOrdinal':raw['seekSequence'], 'basis':basis, 'offsetMs':offset,
+        'sampleUncertaintyMs':bracket['captureElapsedMs']/2+1,
+        'samePlaybackIdentity':raw['owner'] > 0 and type(raw.get('rates')) is dict and
+            raw['rates'].get('identityMatches') is True and raw['rates'].get('owner') == raw['owner'],
+        'positionStatus':'unavailable'}
+    if out['samePlaybackIdentity'] and raw.get('positionValid') is True and number(raw.get('positionMs'), 0, 86400000):
+        out['positionMs'] = raw['positionMs']; out['positionStatus']='observed'
+    rates = _rates(raw.get('rates'))
+    if rates is not None:
+        out['rateCapture'] = rates
+        if type(raw.get('rates')) is dict:
+            delta = raw['rates']['monoBeforeMs'] - raw['monoAfterMs']
+            wall_delta = raw['rates']['wallBeforeMs'] - raw['wallAfterMs']
+            if number(delta,-1000,1000) and abs(wall_delta-delta)<=2:
+                out['rateCaptureStartRelativeToPositionEndMs']=delta
+    return out
+
+
+def retained_sequences(count):
+    return list(range(1, min(2, count)+1)) + list(range(max(3, count-5), count+1))
+
+
+def clock_observation(raw):
+    if type(raw) is not dict: return {'status':'unavailable'}
+    counts = ('rateCount','nativeCount','anchorCount','ownerCount','unmatchedReplies')
+    if not all(type(raw.get(k)) is int and 0 <= raw[k] <= 65535 for k in counts): return {'status':'malformed'}
+    out = {'status':'observed', **{k:raw[k] for k in counts},
+        'clockDomain':'native_uptime_paired_epoch', 'dartAckReceipt':'unavailable',
+        'recoveryArmAge':'unavailable', 'intervalAttribution':'unknown',
+        'counterCapReached':any(raw[k] == 65535 for k in counts), 'rateRecords':[], 'nativeObservations':[], 'admittedAnchors':[]}
+    for field, count in (('rates','rateCount'), ('native','nativeCount'), ('anchors','anchorCount')):
+        values = raw.get(field); expected = retained_sequences(raw[count])
+        if type(values) is not list or len(values) != len(expected) or any(type(row) is not dict or
+                type(row.get('sequence')) is not int or row['sequence'] != seq for row,seq in zip(values,expected)):
+            return {'status':'malformed'}
+        out[field+'Dropped'] = max(0, raw[count]-8)
+    out['coverage'] = 'first_and_tail' if any(out[k+'Dropped'] for k in ('rates','native','anchors')) else 'complete_retained_events'
+    for row in raw['rates']:
+        invocation = row.get('invocation'); begin = _rates(invocation)
+        item = {'ordinal':row['sequence'], 'status':'invalid_clock_bracket', 'nativeReplyMeaning':'dispatch_not_dart_ack'}
+        if begin is not None:
+            item.update(status='setter_invoked', invocation=begin)
+            if number(row.get('requested'), -2, 4): item['requestedNewRate'] = row['requested']
+            bm,bw = invocation['monoAfterMs'], invocation['wallAfterMs']
+            returned = row.get('returned'); end = _rates(returned)
+            if row.get('returnedSeen') is True and end is not None:
+                offset = returned['monoBeforeMs'] - bm
+                if number(offset,0,600000) and abs(returned['wallBeforeMs']-bw-offset)<=2:
+                    item.update(status='setter_returned', returned=end, returnAfterInvocationMs=offset)
+            for flag, mono, wall, dest in (
+                    ('replyBegan','replyBeginMonoMs','replyBeginWallMs','replyDispatchAfterInvocationMs'),
+                    ('replyReturned','replyEndMonoMs','replyEndWallMs','replyReturnAfterInvocationMs')):
+                if row.get(flag) is True and number(row.get(mono),0,1e15) and number(row.get(wall),0,1e15):
+                    delta=row[mono]-bm
+                    if number(delta,0,600000) and abs(row[wall]-bw-delta)<=2: item[dest]=delta
+            for source, flag, basis, dest in (
+                    ('priorAnchor',None,'source_relative_sampler','priorAdmittedAnchor'),
+                    ('firstAnchor','firstAnchorSeen','source_relative_sampler','firstAdmittedAnchor'),
+                    ('firstNative','firstNativeSeen','item_current_time','firstNativeObservation')):
+                item[dest+'Status']='unavailable'
+                if flag is None or row.get(flag) is True:
+                    point=clock_point(row.get(source),bm,bw,basis)
+                    valid=(point is not None and point['nativeOwnerOrdinal'] > 0 and
+                        point['nativeOwnerOrdinal'] == begin.get('nativeOwnerOrdinal'))
+                    if flag is not None:
+                        valid=(valid and point['nativeOwnerOrdinal'] == item.get('returned',{}).get('nativeOwnerOrdinal') and
+                            point['rateRequestOrdinal'] == row['sequence'] and
+                            point['offsetMs'] >= item.get('returnAfterInvocationMs',float('inf')))
+                    if valid: item[dest]=point; item[dest+'Status']='observed'
+                    elif flag is not None and row.get(flag) is True: item[dest+'Status']='invalid_record'
+        out['rateRecords'].append(item)
+    for source,dest,basis in (('native','nativeObservations','item_current_time'),('anchors','admittedAnchors','source_relative_sampler')):
+        records=raw[source]
+        if records and all(number(records[0].get(k),0,1e15) for k in ('monoBeforeMs','wallBeforeMs')):
+            for row in records:
+                point=clock_point(row,records[0]['monoBeforeMs'],records[0]['wallBeforeMs'],basis)
+                if point is not None: out[dest].append(point)
+    out['invalidRecords'] = (len(raw['native'])-len(out['nativeObservations']) + len(raw['anchors'])-len(out['admittedAnchors']) +
+        sum(row['status']=='invalid_clock_bracket' for row in out['rateRecords']))
+    return out
+
+
+CLOCK_ROW_SCHEMA = {
+    'ordinal':('integer',1,65535), 'readinessElapsedMs':('number',0,600000),
+    'remainingReadinessBudgetMs':('number',0,5000), 'serverClockOffsetMs':('number',-600000,600000),
+    'latencySampleCount':('integer',0,65535), 'nativePositionMs':('number',0,86400000),
+    'nativeRate':('number',-2,4), 'requestedRate':('number',-2,4),
+    'nativeSampleUncertaintyMs':('number',0,1000), 'dartSampleUncertaintyMs':('number',0,1000),
+    'dartMinusNativeSampleMs':('number',-1000,1000), 'pairedNativeSampleDeltaMs':('number',-1000,1000),
+    'seekInProgress':bool, 'playingIntent':bool, 'nativeState':('integer',0,4),
+}
+
+
+def clock_history(previous, state, native, elapsed_ms, paired_state):
+    previous=previous.get('clockHistory') if type(previous) is dict else None
+    count=previous.get('count',0) if type(previous) is dict else 0
+    if type(count) is not int or not 0 <= count <= 65535: count=0
+    count=min(65535,count+1)
+    row={'ordinal':count}
+    if number(elapsed_ms,0,600000): row.update(readinessElapsedMs=elapsed_ms,remainingReadinessBudgetMs=max(0,5000-elapsed_ms))
+    for data, old, new in ((state,'serverClockOffsetMs','serverClockOffsetMs'),(state,'latencySampleCount','latencySampleCount'),
+            (state,'dartPositionSampleUncertaintyMs','dartSampleUncertaintyMs'),(native,'positionMs','nativePositionMs'),
+            (native,'playbackRate','nativeRate'),(native,'requestedRate','requestedRate'),
+            (native,'sampleUncertaintyMs','nativeSampleUncertaintyMs'),(native,'seekInProgress','seekInProgress'),
+            (native,'playingIntent','playingIntent'),(native,'playbackState','nativeState')):
+        row[new]=data.get(old)
+    at=native.get('sampledAtMs'); dart=state.get('dartPositionSampledAtMs')
+    if number(at,0,1e15) and number(dart,0,1e15): row['dartMinusNativeSampleMs']=dart-at
+    pair=paired_state.get('nativePlayers') if type(paired_state) is dict else None
+    if type(pair) is list and len(pair)==1 and type(pair[0]) is dict and number(at,0,1e15) and number(pair[0].get('sampledAtMs'),0,1e15):
+        row['pairedNativeSampleDeltaMs']=at-pair[0]['sampledAtMs']
+    rows=previous.get('records',[]) if type(previous) is dict else []
+    if type(rows) is not list or len(rows)>8: rows=[]
+    rows=rows+[row]; rows=rows if len(rows)<=8 else rows[:2]+rows[-6:]
+    clean=[]
+    for item in rows:
+        if type(item) is not dict: continue
+        clean.append({k:v for k,v in item.items() if k in CLOCK_ROW_SCHEMA and
+            ((CLOCK_ROW_SCHEMA[k] is bool and type(v) is bool) or
+             (type(CLOCK_ROW_SCHEMA[k]) is tuple and number(v,*CLOCK_ROW_SCHEMA[k][1:]) and
+              (CLOCK_ROW_SCHEMA[k][0]!='integer' or type(v) is int)))})
+    return {'count':count,'dropped':max(0,count-8),'counterCapReached':count==65535,'coverage':'first_and_tail' if count>8 else 'complete_retained_samples',
+        'clockDomain':'harness_elapsed_and_paired_native_epoch', 'recoveryArmAge':'unavailable', 'records':clean}
+
+
+RATE_SCHEMA.update({'playingIntent':bool,'seeking':bool,'processingState':('integer',0,4),'timeControl':('integer',-1,2),
+    'nativeOwnerOrdinal':('integer',0,65535),'effectiveRateReadCount':('integer',0,2),
+    'effectiveRateReadBasis':frozenset(('existing_sampler_locals','event_bound_capture'))})
+CLOCK_POINT_SCHEMA = {'ordinal':('integer',1,65535),'nativeOwnerOrdinal':('integer',0,65535),
+    'rateRequestOrdinal':('integer',0,65535),'seekInvocationOrdinal':('integer',0,65535),
+    'basis':frozenset(('item_current_time','source_relative_sampler')),'offsetMs':('number',-600000,600000),
+    'sampleUncertaintyMs':('number',0,1000),'rateCaptureStartRelativeToPositionEndMs':('number',-1000,1000),'samePlaybackIdentity':bool,'positionStatus':frozenset(('observed','unavailable')),'positionMs':('number',0,86400000),'rateCapture':RATE_SCHEMA}
+SCHEMA['seekRecords'][1]['firstNativeObservation']=CLOCK_POINT_SCHEMA
+SCHEMA['seekRecords'][1]['firstAdmittedAnchor']=CLOCK_POINT_SCHEMA
+for field in ('firstNativeObservationStatus','firstAdmittedAnchorStatus'):
+    SCHEMA['seekRecords'][1][field]=frozenset(('unavailable','observed','invalid_record'))
+SCHEMA['clockObservation']={
+    'status':frozenset(('observed','unavailable','malformed')),
+    **{k:('integer',0,65535) for k in ('rateCount','nativeCount','anchorCount','ownerCount','unmatchedReplies','ratesDropped','nativeDropped','anchorsDropped','invalidRecords')},
+    'clockDomain':frozenset(('native_uptime_paired_epoch',)), 'dartAckReceipt':frozenset(('unavailable',)),
+    'recoveryArmAge':frozenset(('unavailable',)), 'intervalAttribution':frozenset(('unknown',)), 'counterCapReached':bool,
+    'coverage':frozenset(('first_and_tail','complete_retained_events')),
+    'nativeObservations':('list',CLOCK_POINT_SCHEMA,8),'admittedAnchors':('list',CLOCK_POINT_SCHEMA,8),
+    'rateRecords':('list',{'ordinal':('integer',1,65535),'status':frozenset(('invalid_clock_bracket','setter_invoked','setter_returned')),
+        'nativeReplyMeaning':frozenset(('dispatch_not_dart_ack',)), 'requestedNewRate':('number',-2,4),
+        'invocation':RATE_SCHEMA,'returned':RATE_SCHEMA,
+        **{k:('number',0,600000) for k in ('returnAfterInvocationMs','replyDispatchAfterInvocationMs','replyReturnAfterInvocationMs')},
+        'priorAdmittedAnchor':CLOCK_POINT_SCHEMA,'firstAdmittedAnchor':CLOCK_POINT_SCHEMA,'firstNativeObservation':CLOCK_POINT_SCHEMA,
+        **{k: frozenset(('unavailable','observed','invalid_record')) for k in ('priorAdmittedAnchorStatus','firstAdmittedAnchorStatus','firstNativeObservationStatus')}},8)}
+SCHEMA['clockHistory']={'counterCapReached':bool,'count':('integer',0,65535),'dropped':('integer',0,65535),
+    'coverage':frozenset(('first_and_tail','complete_retained_samples')),
+    'clockDomain':frozenset(('harness_elapsed_and_paired_native_epoch',)), 'recoveryArmAge':frozenset(('unavailable',)),
+    'records':('list',CLOCK_ROW_SCHEMA,8)}
