@@ -163,3 +163,69 @@ class GreenTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class ObservationTests(unittest.TestCase):
+    def observe(self, events, **kwargs):
+        return v.observe_green('\n'.join(json.dumps(e) for e in events), 1,
+                               expected_names=NAMES, fixture_basename=BASE, **kwargs)
+
+    def test_all_errors_and_terminal_after_first_failure(self):
+        events=fixture()
+        events[5]['result']='failure'
+        events[8]['result']='failure'
+        events.insert(-1, {'type':'error','testID':0,'isFailure':True,
+                          'error':'Expected: true\n  Actual: <false>\nprivate secret',
+                          'stackTrace':'package:private/' + BASE + ' 123:45 private secret'})
+        events.insert(-1, {'type':'error','testID':1,'isFailure':False,
+                          'error':'StateError: private secret',
+                          'stackTrace':'/private/' + BASE + ':234:56'})
+        events[-1]['success']=False
+        report=self.observe(events)
+        self.assertEqual(report['completedTests'],3)
+        self.assertEqual(report['visibleTests'],2)
+        self.assertEqual(report['hiddenTests'],1)
+        self.assertEqual(report['results'],dict(success=1,failure=2,error=0))
+        self.assertIs(report['terminalSuccess'],False)
+        self.assertEqual(report['errorCount'],2)
+        self.assertEqual(report['errors'][0],dict(testOrdinal=1,isFailure=True,category='assertion',
+            fixture=BASE,locations=[dict(line=123,column=45)],expected=True,actual=False))
+        self.assertEqual(report['errors'][1]['category'],'StateError')
+        self.assertNotIn('private',json.dumps(report))
+        with self.assertRaises(v.GreenVerificationError):
+            v.verify_green('\n'.join(json.dumps(e) for e in events),1,expected_names=NAMES,fixture_basename=BASE)
+
+    def test_scalar_allowlist_and_private_unknowns(self):
+        for expected,actual,value1,value2 in [('null','<1.5>',None,1.5),('-20','<0>',-20,0)]:
+            event={'type':'error','isFailure':True,'error':f'Expected: {expected}\nActual: {actual}'}
+            error=self.observe([event])['errors'][0]
+            self.assertEqual(error['expected'],value1);self.assertEqual(error['actual'],value2)
+        for text in ('Expected: secret','Actual: <NaN>','Actual: <1000001>',
+                     'Actual: <1> secret','prefix Expected: false','Actual: <true>\nActual: <false>',
+                     'Actual: <1e999>', 'Actual: <'+'9'*4000+'>', 'Expected: "secret"'):
+            report=self.observe([{'type':'error','isFailure':1,'error':text,'stackTrace':BASE+' 1234567:1'}])
+            error=report['errors'][0]
+            self.assertNotIn('expected',error);self.assertNotIn('actual',error)
+            self.assertNotIn('isFailure',error);self.assertNotIn('locations',error)
+            self.assertEqual(error['category'],'other')
+            self.assertNotIn('secret',json.dumps(report))
+
+    def test_caps_unknown_ids_and_duplicate_ids(self):
+        events=fixture()
+        events.insert(4, {'type':'testStart','test':{'id':0,'name':NAMES[0]}})
+        events += [{'type':'error','testID':0,'isFailure':True,'error':'secret'}]*25
+        report=self.observe(events)
+        self.assertEqual(report['errorCount'],25);self.assertEqual(len(report['errors']),20)
+        self.assertTrue(all('testOrdinal' not in e for e in report['errors']))
+        with self.assertRaises(v.GreenVerificationError):
+            v.verify_green('\n'.join(json.dumps(e) for e in events),0,expected_names=NAMES,fixture_basename=BASE)
+
+    def test_malformed_stream_observed_but_never_accepted(self):
+        raw='{"type":"print","type":"done"}\nnot JSON\n'+json.dumps({'type':'done','success':True})
+        report=v.observe_green(raw,0,expected_names=NAMES,fixture_basename=BASE,
+                               stderr='/private/'+BASE+':0:3: Error: secret')
+        self.assertEqual(report['malformedEvents'],2)
+        self.assertEqual(report['terminalCount'],1)
+        self.assertEqual(report['compileLocations'],[dict(line=0,column=3)])
+        self.assertNotIn('private',json.dumps(report))
+        with self.assertRaises(v.GreenVerificationError):
+            v.verify_green(raw,0,expected_names=NAMES,fixture_basename=BASE)

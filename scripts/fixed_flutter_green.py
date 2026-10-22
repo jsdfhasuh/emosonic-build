@@ -171,3 +171,140 @@ def verify_green(raw, returncode, *, expected_names, fixture_basename, stderr=''
     if returncode != 0:
         fail('process-failed')
     return dict(stage='fixed-flutter-green', status='passed', **counts)
+
+
+def observe_green(raw, returncode, *, expected_names, fixture_basename, stderr=''):
+    """Finite whole-stream diagnostics only. Never substitutes for verify_green."""
+    report = {'stage': 'fixed-flutter-observation', 'events': 0, 'malformedEvents': 0,
+              'completedTests': 0, 'visibleTests': 0, 'hiddenTests': 0,
+              'skippedTests': 0, 'results': {'success': 0, 'failure': 0, 'error': 0},
+              'terminalCount': 0, 'terminalSuccess': None, 'errorCount': 0, 'errors': []}
+    if type(returncode) is int:
+        report['exitCode'] = max(-1000, min(returncode, 1000))
+    if (type(expected_names) not in (tuple, list) or not 1 <= len(expected_names) <= MAX_TESTS
+            or any(type(n) is not str or not n or len(n) > 8192 for n in expected_names)
+            or len(set(expected_names)) != len(expected_names)
+            or type(fixture_basename) is not str or len(fixture_basename) > 128
+            or re.fullmatch(r'[A-Za-z0-9_]+_test\.dart', fixture_basename) is None):
+        report['reason'] = 'invalid-inventory'
+        return report
+    if type(raw) is not str or type(stderr) is not str:
+        report['reason'] = 'invalid-output'
+        return report
+    try:
+        if len(raw.encode('utf-8')) + len(stderr.encode('utf-8')) > MAX_BYTES:
+            report['reason'] = 'output-limit'
+            return report
+    except UnicodeError:
+        report['reason'] = 'invalid-output'
+        return report
+
+    def pairs(items):
+        obj = {}
+        for key, value in items:
+            if key in obj:
+                raise ValueError('duplicate key')
+            obj[key] = value
+        return obj
+
+    def constant(_):
+        raise ValueError('non-finite JSON')
+
+    def floating(value):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError('non-finite JSON')
+        return number
+
+    inventory = {name: i for i, name in enumerate(expected_names, 1)}
+    starts, ambiguous, errors = {}, set(), []
+    terminal = []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        if report['events'] >= MAX_EVENTS:
+            report['reason'] = 'event-limit'
+            break
+        report['events'] += 1
+        try:
+            event = json.loads(line, object_pairs_hook=pairs, parse_constant=constant, parse_float=floating)
+            if type(event) is not dict:
+                raise ValueError('not an object')
+        except (ValueError, RecursionError):
+            report['malformedEvents'] += 1
+            continue
+        kind = event.get('type')
+        if kind == 'testStart':
+            test = event.get('test')
+            if type(test) is dict and type(test.get('id')) is int and 0 <= test['id'] < MAX_EVENTS:
+                tid = test['id']
+                if tid in starts:
+                    ambiguous.add(tid)
+                name = test.get('name')
+                starts[tid] = inventory.get(name) if type(name) is str else None
+        elif kind == 'testDone':
+            report['completedTests'] += 1
+            if event.get('hidden') is True:
+                report['hiddenTests'] += 1
+            elif event.get('hidden') is False:
+                report['visibleTests'] += 1
+            if event.get('skipped') is True:
+                report['skippedTests'] += 1
+            result = event.get('result')
+            if type(result) is str and result in report['results']:
+                report['results'][result] += 1
+        elif kind == 'done':
+            report['terminalCount'] += 1
+            terminal.append(event.get('success') if type(event.get('success')) is bool else None)
+        elif kind == 'error':
+            report['errorCount'] += 1
+            if len(errors) < 20:
+                errors.append(event)
+    if len(terminal) == 1:
+        report['terminalSuccess'] = terminal[0]
+    categories = ('TimeoutException', 'StateError', 'RangeError', 'LateInitializationError',
+                  'NoSuchMethodError', 'MissingPluginException', 'TestFailure', 'AssertionError')
+    location = (r'(?<![A-Za-z0-9_])' + re.escape(fixture_basename)
+                + r'(?::|[ \t]+)([0-9]{1,6}):([0-9]{1,6})(?![0-9])')
+    scalar = r'(true|false|null|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)'
+    for event in errors:
+        error = {}
+        tid = event.get('testID')
+        if type(tid) is int and tid not in ambiguous and starts.get(tid) is not None:
+            error['testOrdinal'] = starts[tid]
+        if type(event.get('isFailure')) is bool:
+            error['isFailure'] = event['isFailure']
+        body = event.get('error') if type(event.get('error')) is str else ''
+        stack = event.get('stackTrace') if type(event.get('stackTrace')) is str else ''
+        error['category'] = next((name for name in categories if re.search(
+            r'(?<![A-Za-z0-9_])' + name + r'(?![A-Za-z0-9_])', body)),
+            'assertion' if event.get('isFailure') is True else 'other')
+        locations = sorted({(int(m.group(1)), int(m.group(2)))
+                            for m in re.finditer(location, body + '\n' + stack)})[:5]
+        if locations:
+            error.update(fixture=fixture_basename,
+                         locations=[dict(line=a, column=b) for a, b in locations])
+        for label in ('Expected', 'Actual'):
+            values = []
+            for text in body.splitlines():
+                match = re.fullmatch(r'\s*' + label + r':\s*(?:' + scalar + r'|<' + scalar + r'>)\s*', text)
+                if match:
+                    token = match.group(1) or match.group(2)
+                    try:
+                        value = json.loads(token)
+                    except ValueError:
+                        continue
+                    if value is None or type(value) is bool or (type(value) in (int, float)
+                            and abs(value) <= 1000000 and math.isfinite(value)):
+                        values.append(value)
+            if len(values) == 1:
+                error[label.lower()] = values[0]
+        report['errors'].append(error)
+    compile_pattern = (r'(?<![A-Za-z0-9_])' + re.escape(fixture_basename)
+                       + r':([0-9]{1,6}):([0-9]{1,6}): Error:')
+    locations = sorted({(int(m.group(1)), int(m.group(2)))
+                        for text in (raw, stderr) for m in re.finditer(compile_pattern, text)})[:10]
+    if locations:
+        report.update(fixture=fixture_basename,
+                      compileLocations=[dict(line=a, column=b) for a, b in locations])
+    return report

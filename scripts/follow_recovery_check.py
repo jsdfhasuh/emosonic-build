@@ -8,10 +8,10 @@ import sys
 from unittest.mock import patch
 import current_source_check as request
 import handoff_repair_check as regression
-from fixed_flutter_green import verify_green, GreenVerificationError
+from fixed_flutter_green import verify_green, observe_green, GreenVerificationError
 
-PARENT = '035044c559c65bd6c81b909790998621e2efb1d4'
-MESSAGE = 'test: validate bounded Follow recovery 20261022'
+PARENT = '6bc8dad01c40f1f40af401f546fffa3663c14c59'
+MESSAGE = 'test: inspect bounded recovery regression failures 20261022'
 WORKFLOW = 'follow-recovery-check.yml'
 REQUEST_PATH = 'requests/follow-recovery-check-20261022.json'
 SOURCE_REF = 'refs/heads/fix/follow-bounded-recovery-20261022'
@@ -20,7 +20,7 @@ SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 INVENTORY_PATH = 'tool/follow_recovery/test_inventory.json'
 INVENTORY_SHA256 = '63afda2767df9022696c118494dc2d70ecc0b6d64aa8b5f566f55f824293427b'
 REQUEST = dict(request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               server_sha=SERVER_SHA, mode='bounded-follow-recovery-validation', attempt=19)
+               server_sha=SERVER_SHA, mode='bounded-follow-recovery-validation', attempt=21)
 STAGE = 'entry'
 
 
@@ -84,18 +84,32 @@ def focused():
                 if match: print(json.dumps({'stage':STAGE,'exitCode':max(-1000,min(int(match.group(1)),1000)),'reason':match.group(2)}),flush=True)
                 raise
         with patch.object(p,'quiet',observed): p.codegen(source,env)
+        failed=False
         for ordinal,suite in enumerate(suites,1):
             STAGE='focused-test'
-            result=subprocess.run(['flutter','test','--no-pub','--reporter=json',suite['path']],
-                                  cwd=source,env=env,capture_output=True,text=True,timeout=600)
+            try:
+                result=subprocess.run(['flutter','test','--no-pub','--reporter=json',suite['path']],
+                                      cwd=source,env=env,capture_output=True,text=True,timeout=600)
+            except subprocess.TimeoutExpired:
+                failed=True
+                print(json.dumps({'stage':'focused-test','suiteOrdinal':ordinal,
+                                  'status':'failed','reason':'timeout'}),flush=True)
+                continue
+            STAGE='focused-observation'
+            observation=observe_green(result.stdout,result.returncode,expected_names=suite['names'],
+                                      fixture_basename=Path(suite['path']).name,stderr=result.stderr)
+            print(json.dumps(dict(observation,suiteOrdinal=ordinal)),flush=True)
             STAGE='focused-verification'
             try:
                 report=verify_green(result.stdout,result.returncode,expected_names=suite['names'],
                                     fixture_basename=Path(suite['path']).name,stderr=result.stderr)
             except GreenVerificationError as exc:
                 print(json.dumps(dict(exc.report,suiteOrdinal=ordinal)),flush=True)
-                raise
+                failed=True
+                continue
             print(json.dumps(dict(report,suiteOrdinal=ordinal)),flush=True)
+        STAGE='focused-verification'
+        p.require(not failed,'Every frozen focused suite must pass; private details suppressed.')
     finally:
         if p.source_fingerprint(source,sha,env)!=before:
             STAGE='final-fingerprint'

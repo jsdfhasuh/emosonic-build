@@ -98,13 +98,15 @@ class RecoveryTests(unittest.TestCase):
             stack.enter_context(patch.object(sys, 'argv', ['check', 'source', 'focused']))
             self.assertEqual(c.main(), 1)
             self.assertEqual(fingerprint.call_count, 2)
-            self.assertEqual(command.call_count, 1)
-            report = json.loads(output.getvalue())
-            self.assertEqual(report['category'], 'TimeoutExpired')
-            self.assertEqual(report['failedStage'], 'focused-test')
+            self.assertEqual(command.call_count, 3)
+            reports = [json.loads(line) for line in output.getvalue().splitlines()]
+            self.assertEqual([r['suiteOrdinal'] for r in reports[:-1]], [1,2,3])
+            self.assertTrue(all(r['reason']=='timeout' for r in reports[:-1]))
+            self.assertEqual(reports[-1]['category'], 'GateError')
+            self.assertEqual(reports[-1]['failedStage'], 'focused-verification')
             self.assertNotIn('private', output.getvalue())
 
-    def test_bad_green_is_finite_and_stops_before_next_suite(self):
+    def test_bad_green_is_finite_and_collects_all_three_suites(self):
         result = subprocess.CompletedProcess([], 1, 'private non JSON', 'private stderr')
         with contextlib.ExitStack() as stack:
             output = stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
@@ -112,11 +114,12 @@ class RecoveryTests(unittest.TestCase):
             stack.enter_context(patch.object(sys, 'argv', ['check', 'source', 'focused']))
             self.assertEqual(c.main(), 1)
             self.assertEqual(fingerprint.call_count, 2)
-            self.assertEqual(command.call_count, 1)
+            self.assertEqual(command.call_count, 3)
             self.assertNotIn('private', output.getvalue())
             reports = [json.loads(line) for line in output.getvalue().splitlines()]
             self.assertEqual(reports[0]['suiteOrdinal'], 1)
-            self.assertEqual(reports[-1]['category'], 'GreenVerificationError')
+            self.assertEqual(reports[-1]['category'], 'GateError')
+            self.assertEqual([r['suiteOrdinal'] for r in reports if r['stage']=='fixed-flutter-observation'], [1,2,3])
 
     def test_final_fingerprint_detects_mutation_even_on_timeout(self):
         with contextlib.ExitStack() as stack:
@@ -124,7 +127,7 @@ class RecoveryTests(unittest.TestCase):
             self.focused_patches(stack, error=subprocess.TimeoutExpired('private command', 600), fingerprints=['before', 'after'])
             stack.enter_context(patch.object(sys, 'argv', ['check', 'source', 'focused']))
             self.assertEqual(c.main(), 1)
-            self.assertEqual(json.loads(output.getvalue())['failedStage'], 'final-fingerprint')
+            self.assertEqual(json.loads(output.getvalue().splitlines()[-1])['failedStage'], 'final-fingerprint')
 
     def test_codegen_failure_still_checks_fingerprint_and_never_runs_flutter(self):
         with contextlib.ExitStack() as stack:
@@ -156,6 +159,30 @@ class RecoveryTests(unittest.TestCase):
                 self.assertEqual(call.kwargs['cwd'], self.source)
                 self.assertEqual(verifier.call_args_list[index].kwargs['expected_names'], self.suites[index]['names'])
             self.assertNotIn('private', output.getvalue())
+
+    def test_first_failure_does_not_hide_later_success_and_final_gate_fails(self):
+        results=[]
+        for index, suite in enumerate(self.suites):
+            events=[{'type':'testStart','test':{'id':0,'name':suite['names'][0]}},
+                    {'type':'testDone','testID':0,'hidden':False,'skipped':False,
+                     'result':'failure' if index==0 else 'success'},
+                    {'type':'done','success':index!=0}]
+            results.append(subprocess.CompletedProcess([],1 if index==0 else 0,
+                '\n'.join(json.dumps(e) for e in events),''))
+        with contextlib.ExitStack() as stack:
+            output=stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            fingerprint,_,command=self.focused_patches(stack)
+            command.side_effect=results
+            stack.enter_context(patch.object(sys,'argv',['check','source','focused']))
+            self.assertEqual(c.main(),1)
+            self.assertEqual(command.call_count,3)
+            self.assertEqual(fingerprint.call_count,2)
+            reports=[json.loads(line) for line in output.getvalue().splitlines()]
+            observations=[r for r in reports if r['stage']=='fixed-flutter-observation']
+            self.assertEqual([r['terminalSuccess'] for r in observations],[False,True,True])
+            verified=[r for r in reports if r['stage']=='fixed-flutter-green']
+            self.assertEqual([r['status'] for r in verified],['failed','passed','passed'])
+            self.assertEqual(reports[-1]['category'],'GateError')
 
     def test_forbidden_stage_never_delegates(self):
         for category, stage in (('native', 'follow'), ('source', 'publish'), ('source', 'build_android'), ('regression', 'focused')):

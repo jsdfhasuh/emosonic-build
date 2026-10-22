@@ -8,3 +8,7 @@ The separate macOS Foundation proof checks exact BOOL boxing and ten false-ident
 
 Client: 94c859a4b8a5834e7ce83b5791e8d3b036000733
 Server (unchanged, not executed by this gate): 5adc23da173c5f20188d79aafe8fcc1e656eb38a
+
+## Complete focused failure accounting
+
+Run39759437302 reached actual tests but failed; its first-error-only diagnostic did not establish all suite outcomes. The immutable client and inventory are unchanged. This iteration observes every bounded JSON stream, accepts colon/space Dart stack locations and fixed scalar matcher values, and runs all three focused suites before rejecting any failure. It does not weaken exact green acceptance. Full validation remains blocked on any focused failure. No native or package execution.
