@@ -21,10 +21,10 @@ COPIED_HELPER = LAB_ROOT + '/native_seek_anchor_observation.py'
 STATE = '.native_timing_observation/manifest.json'
 PAYLOAD_DIRECTORY = 'native_seek_anchor_observation_payload'
 AFTER = {'tool/native_playback_mac/prepare_build.py': '3bb9b9dc1c44a2b58e04c086792e984ede7f764178fa4ae7dbea09f9fbf45279', 'tool/native_playback_mac/run_lab.py': '3b6c69c84c424656a3196a613caec7f9fe7de9486010ffade60032b92648215d'}
-NATIVE_AFTER = {'AudioPlayer.h': 'aeaae217fbb3e5b6901a85d99019b0c1a19d4d684a3dcd04d10f5e015cbe12a2', 'AudioPlayer.m': '1afa7022f3ff0ad149226ef666de40b737fcdaea76ce181386006f1a73a19dae'}
+NATIVE_AFTER = {'AudioPlayer.h': 'aeaae217fbb3e5b6901a85d99019b0c1a19d4d684a3dcd04d10f5e015cbe12a2', 'AudioPlayer.m': '7cc56f17070cdab4a83dfa4efd07eac192a261188ea03c46374df95d4a8f1e2b'}
 REJECTION_NAMES = ('budget_or_clock', 'not_healthy', 'primary_identity',
                    'no_timebase', 'effective_rate', 'read_clock', 'capture_quality')
-PAYLOAD_HASHES = {'lab_timing_getters.inc': '4bdad8b89b6dddd3019df3ff149d7250f795b216a6222a269be6482691153782', 'lab_timing_native.inc': 'db53e0fce3ff06a097f214e282f0665955864d0f93eebc26e4660b03749c1c4d', 'lab_timing_state.h': '4493ebb4b8f32ad10f7f24c5358bbe7dfcdadc5478ee97fb0652b19354a036cb'}
+PAYLOAD_HASHES = {'lab_timing_getters.inc': 'dcb8803d2d76941cbd0268d0f76306f8a56668628b6d50fca5a2fc18e8e8d500', 'lab_timing_native.inc': 'db53e0fce3ff06a097f214e282f0665955864d0f93eebc26e4660b03749c1c4d', 'lab_timing_state.h': '4493ebb4b8f32ad10f7f24c5358bbe7dfcdadc5478ee97fb0652b19354a036cb'}
 
 
 def digest(data):

@@ -18,8 +18,8 @@
     return @{
         @"samplerCalls": @(_labTiming.samplerCalls), @"samplerRejects": rejects,
         @"samplerAdmits": @(_labTiming.samplerAdmits),
-        @"anchorSamePlaybackIdentity": @(_labAnchorPlayer != nil && _labAnchorSource != nil && _labAnchorItem != nil &&
-            _labAnchorPlayer == player && _labAnchorSource == _audioSource && _labAnchorItem == item && _labAnchorIndex == _index),
+        @"anchorSamePlaybackIdentity": @((BOOL)(_labAnchorPlayer != nil && _labAnchorSource != nil && _labAnchorItem != nil &&
+            _labAnchorPlayer == player && _labAnchorSource == _audioSource && _labAnchorItem == item && _labAnchorIndex == _index)),
         @"anchorPositionMs": LabTimingNumber(_labTiming.anchorPositionMs),
         @"anchorWallMs": LabTimingNumber(_labTiming.anchorWallMs),
         @"anchorRequestedRate": LabTimingNumber(_labTiming.anchorRequestedRate),
