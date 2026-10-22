@@ -7,16 +7,17 @@ from unittest.mock import patch
 import follow_ingress_green as previous
 from follow_ingress_proof import strict_json
 
-PARENT = '7809eb04da2b1ef77c68218592500d676a4b1228'
-MESSAGE = 'test: validate clock and guarded soft-seek repairs 20261022'
+PARENT = '2839becc4798f91a00f4760d72098a35e5fadca5'
+MESSAGE = 'test: verify real scrobble load boundary and timing repairs 20261022'
 WORKFLOW = 'follow-timing-green.yml'
 REQUEST_PATH = 'requests/follow-timing-green-20261022.json'
 SOURCE_REF = 'refs/heads/fix/follow-clock-and-dispatch-20261022'
-SOURCE_SHA = '7ececae70fe698eeeccea9428605a491199c5ab5'
+SOURCE_SHA = 'a6799a73909cf06d8ba9b830e00d6a628e331205'
 SERVER_SHA = previous.SERVER_SHA
 REQUEST = dict(previous.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               mode='follow-timing-full-green-validation', attempt=44)
+               mode='follow-timing-full-green-validation', attempt=45)
 COMPONENTS = (
+    ('tool/follow_clock_dispatch/scrobble_inventory.json', '8ea210a1b56c25d40de2fa566e44be95bfe7d8899b8aafe78f1f89b12ffc9711', (18,)),
     ('tool/server_clock_source_ownership/green_inventory.json', '9b2dd5591ae9aab6e2988655a3cc74c381c5000c31c453b185b9ff9fbef1fb62', (17, 7)),
     ('tool/follow_soft_seek_dispatch/green_inventory.json', 'd4a3556ed19d951071b46408f3140c8f98cdc9773e2ca07f7c0a662aa78f4f13', (2, 3, 1)),
 )
@@ -39,7 +40,7 @@ def component_inventory(source, path, digest, counts):
     for suite, count in zip(suites, counts):
         require(type(suite) is dict and set(suite) == {'path', 'sha256', 'names'}
                 and type(suite['path']) is str
-                and re.fullmatch(r'test/services/[a-z0-9_]+_test\.dart', suite['path'])
+                and re.fullmatch(r'test/(?:services|remediation)/[a-z0-9_]+_test\.dart', suite['path'])
                 and type(suite['sha256']) is str
                 and re.fullmatch(r'[0-9a-f]{64}', suite['sha256']), 'Private fixture schema invalid.')
         fixture = previous.recovery.owned_file(source, suite['path'])

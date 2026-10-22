@@ -61,3 +61,15 @@ class TimingGreenTests(unittest.TestCase):
         self.assertIn('persist-credentials: false',text)
         for forbidden in ('continue-on-error','RELEASE_WRITE_TOKEN','macos-'):
             self.assertNotIn(forbidden,text)
+
+    def test_accepts_owned_remediation_fixture_with_exact_hash(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);spec=self.materialize(root,lambda s:s.update(path='test/remediation/synthetic_component_test.dart'))
+            target=root/'test/remediation/synthetic_component_test.dart';target.parent.mkdir();target.write_bytes((root/'test/services/synthetic_component_test.dart').read_bytes())
+            self.assertEqual(len(gate.component_inventory(root,*spec)[0]['names']),2)
+
+    def test_rejects_other_test_directories_and_traversal(self):
+        for path in ('test/other/synthetic_component_test.dart','test/remediation/../services/synthetic_component_test.dart','test/remediation/nested/synthetic_component_test.dart'):
+            with self.subTest(path=path),tempfile.TemporaryDirectory() as d:
+                root=Path(d);spec=self.materialize(root,lambda s:s.update(path=path))
+                with self.assertRaises(gate.previous.recovery.request.p.GateError):gate.component_inventory(root,*spec)
