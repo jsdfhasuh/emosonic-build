@@ -31,7 +31,9 @@ PUBLIC_STAGES = frozenset({
     'native-handoff-and-pause', 'follow-restoration-and-native-pause',
     'extended-cold-target-ready', 'extended-real-delayed-handoff',
     'extended-cancel-rejects-late-playback', 'failed-preflight-loopback-observations',
-    'server-runtime-failure-observation',
+    'server-runtime-failure-observation', 'handoff-A-to-B',
+    'handoff-server-observation-capability', 'handoff-server-canonical-consistency',
+    'handoff-canonical-consistency',
 }) | frozenset(base + suffix for base in (
     'source-avplayer-rate-1.5', 'target-avplayer-rate-1.5', 'follower-avplayer-rate-1.5',
     'authority-after-follow-rate-change', 'follower-after-follow-rate-change')
@@ -53,6 +55,144 @@ PUBLIC_METRICS = frozenset({
 })
 
 
+# Reviewed, path-specific diagnostic schemas; no identifiers or free text.
+HANDOFF_STATES = frozenset(['cancelled', 'committing', 'completed', 'failed', 'preparing', 'ready', 'starting', 'timedOut'])
+HANDOFF_ERROR_CODES = frozenset(['commit_cancelled', 'commit_failed', 'commit_timeout', 'context_closed', 'dependency_failed', 'execution_unknown', 'invalid_handoff_prepare', 'missing_source_client', 'prepare_failed', 'prepare_timeout', 'server_restart', 'source_changed', 'start_failed', 'start_timeout'])
+PROTOCOL_CODES = frozenset(['authority_offline', 'bad_request', 'capability_required', 'client_sequence_conflict', 'conflict', 'context_closed', 'forbidden', 'internal_error', 'not_found', 'not_supported', 'queue_required', 'rate_limited', 'restore_in_progress', 'stale_version', 'unauthorized'])
+CONNECTION_STATES = frozenset(['authenticated', 'disconnected', 'ready', 'registered', 'socketConnected'])
+LAB_STATES = frozenset(['active', 'disabled', 'failed', 'negotiating', 'probing'])
+FAILURE_REASONS = frozenset(['authority_device_unavailable', 'authority_socket_unavailable', 'clock_gate_incomplete', 'commit_effective_at_missing', 'commit_position_at_or_beyond_duration', 'commit_position_missing', 'commit_received_too_late', 'complete_before_effective_at', 'complete_control_version_conflict', 'complete_device_mismatch', 'complete_duration_invalid', 'complete_not_playing', 'complete_position_conflict', 'complete_queue_index_conflict', 'complete_rate_conflict', 'complete_sample_in_future', 'complete_sample_late', 'complete_sample_stale', 'complete_track_conflict', 'control_version_conflict', 'controller_role_required', 'duration_bounds_mismatch', 'effective_at_capability_required', 'execution_before_effective_at', 'execution_too_late', 'handoff_already_in_progress', 'handoff_execution_before_effective_at', 'handoff_execution_too_late', 'handoff_position_at_or_beyond_duration', 'handoff_start_ack_timeout', 'invalid_actual_position', 'playback_not_playing', 'playback_rate_mismatch', 'playing_source_sample_stale', 'position_projection_mismatch', 'position_sample_in_future', 'position_sample_stale', 'prepare_enqueue_failed', 'provisional_control_version_mismatch', 'queue_index_mismatch', 'requester_generation_changed', 'scheduled_commit_cancelled', 'source_control_not_settled', 'source_device_state_incomplete', 'source_device_state_missing', 'source_not_playing', 'source_sample_in_future', 'source_sample_stale', 'source_state_not_authoritative', 'source_state_wrong_epoch', 'source_state_wrong_pair', 'source_track_mismatch', 'start_ack_control_mismatch', 'target_capability_required', 'target_client_offline', 'target_generation_changed', 'target_generation_offline', 'track_id_mismatch', 'unrecognized'])
+
+ROLES = frozenset({'authority', 'target', 'follower'})
+NUMBER = ('number', -1_000_000_000_000, 1_000_000_000_000)
+COUNTER = ('integer', 0, 1_000_000_000_000)
+NATIVE_SCHEMA = {
+    **{key: ('number', 0, 1_000_000_000_000) for key in
+       ('positionMs', 'durationMs', 'sampleUncertaintyMs')},
+    **{key: ('number', 0, 100) for key in ('playbackRate', 'requestedRate')},
+    'playbackState': ('integer', 0, 4),
+    **{key: ('integer', 0, 2) for key in
+       ('avPlayerStatus', 'avItemStatus', 'avTimeControlStatus')},
+}
+HANDOFF_SCHEMA = {
+    'role': frozenset({'source', 'target', 'unrecognized'}),
+    'status': HANDOFF_STATES | {'unrecognized'},
+    'errorCode': HANDOFF_ERROR_CODES | PROTOCOL_CODES | {'unrecognized'},
+    'protocolErrorCode': PROTOCOL_CODES,
+    'knownFailureReason': FAILURE_REASONS,
+    'exceptionCategory': frozenset({'TimeoutException', 'StateError'}),
+    **{key: bool for key in ('present', 'contextMatches', 'sourceMatchesExpected',
+       'targetPairMatchesExpected', 'prepared', 'provisionalCommitAccepted',
+       'provisionalPlaybackStarted', 'releaseHandled')},
+    'controlVersion': COUNTER, 'canonicalControlVersion': COUNTER,
+}
+CLIENT_SCHEMA = {
+    'role': ROLES,
+    'connection': CONNECTION_STATES | {'unrecognized'},
+    'labStatus': LAB_STATES | {'unrecognized'},
+    'bindingRole': frozenset({'localAuthority', 'handoffTarget', 'follower',
+                             'broadcastParticipant', 'unrecognized'}),
+    'bindingPhase': frozenset({'provisional', 'reconciling', 'confirmed', 'unrecognized'}),
+    **{key: bool for key in ('actualIdentityPresent', 'identitySeedMatches',
+       'bindingContextMatches', 'currentContextMatches', 'canonicalContextPresent',
+       'canonicalAuthorityIsSource', 'canonicalAuthorityIsTarget', 'canonicalTrackMatches',
+       'trackMatches', 'queueMatches', 'indexMatches', 'nativeEvidenceValid',
+       'nativePlaying', 'nativeStopped', 'queueAndContextControlAgree')},
+    **{key: COUNTER for key in ('controlVersion', 'queueControlVersion',
+       'canonicalAppliedControlVersion', 'observedOwnAppliedControlVersion',
+       'localExecutionControlVersion')},
+    'nativePlayerCount': ('integer', 0, 100),
+    'native': ('list', NATIVE_SCHEMA, 2),
+    'handoff': HANDOFF_SCHEMA,
+    'handoffHistory': ('list', HANDOFF_SCHEMA, 8),
+}
+DIAGNOSTIC_SCHEMA = {
+    'handoffDiagnostics': ('list', CLIENT_SCHEMA, 3),
+    'handoffBeforeStart': ('list', CLIENT_SCHEMA, 3),
+    'nativeErrors': ('list', {
+        'role': ROLES,
+        'nativeErrorDomain': frozenset({'AVFoundationErrorDomain', 'NSURLErrorDomain',
+            'NSOSStatusErrorDomain', 'CoreMediaErrorDomain', 'NSCocoaErrorDomain',
+            'other-native-domain'}),
+        'nativeErrorCode': ('integer', -2147483648, 2147483647),
+    }, 3),
+    'nativePlayback': ('list', {
+        'clientOrdinal': ('integer', 0, 2),
+        'trackMatchesFirstClient': bool, 'queueMatchesFirstClient': bool,
+        'native': ('list', NATIVE_SCHEMA, 2),
+    }, 3),
+}
+
+
+PLAYBACK_STATES = frozenset({'idle', 'playing', 'paused', 'stopped', 'buffering',
+                            'loading', 'unrecognized'})
+CANONICAL_SCHEMA = {
+    'state': PLAYBACK_STATES, 'queueState': PLAYBACK_STATES,
+    **{key: bool for key in ('trackPresent', 'trackMatchesBaseline', 'queuePresent',
+       'queueIndexValid', 'queueMatchesBaseline', 'queueIndexMatchesBaseline',
+       'queueTrackPresent', 'queueTrackMatchesCurrentSong',
+       'canonicalTrackMatchesQueueCurrentSong', 'authorityIsSource', 'authorityIsTarget')},
+    **{key: COUNTER for key in ('trackFixtureIndex', 'queueLength', 'queueCurrentIndex',
+       'queueCurrentSongFixtureIndex', 'queueTrackFixtureIndex', 'controlVersion',
+       'appliedControlVersion', 'version', 'epoch', 'queueControlVersion',
+       'queueRevision', 'queueVersion', 'queueEpoch')},
+    'positionMs': NUMBER, 'queuePositionMs': NUMBER, 'playbackRate': ('number', 0, 100),
+}
+CLIENT_SCHEMA['canonicalStateAndQueue'] = CANONICAL_SCHEMA
+DIAGNOSTIC_SCHEMA['serverCanonicalObservation'] = {
+    'status': frozenset({'read_only_snapshot', 'refused_unowned_fixture',
+        'refused_database_scope', 'context_absent', 'observation_unavailable'}),
+    'errorType': frozenset({'OperationalError', 'DatabaseError', 'ValueError',
+        'JSONDecodeError', 'KeyError', 'TypeError', 'OSError', 'FileNotFoundError', 'OtherError'}),
+    'currentCanonical': CANONICAL_SCHEMA, 'cachedCanonicalPayload': CANONICAL_SCHEMA,
+    'devices': ('list', {
+        'role': frozenset({'authority', 'target'}), 'state': PLAYBACK_STATES,
+        **{key: bool for key in ('present', 'generationMatches', 'isAuthority',
+                                'trackPresent', 'trackMatchesBaseline')},
+        **{key: COUNTER for key in ('trackFixtureIndex', 'appliedControlVersion', 'epoch')},
+        'positionMs': NUMBER, 'playbackRate': ('number', 0, 100),
+    }, 2),
+    'handoff': {
+        'status': HANDOFF_STATES | {'timeout', 'committed', 'timed_out', 'canceled',
+                                    'aborted', 'superseded', 'unrecognized'},
+        **{key: COUNTER for key in ('baseControlVersion', 'provisionalControlVersion', 'epoch')},
+        'completionCanonicalPresent': bool, 'completionCanonical': CANONICAL_SCHEMA,
+        'completionProof': {
+            'trackPresent': bool, 'trackMatchesBaseline': bool,
+            **{key: COUNTER for key in ('trackFixtureIndex', 'queueIndex', 'appliedControlVersion')},
+            'positionMs': NUMBER, 'playbackRate': ('number', 0, 100),
+        },
+    },
+}
+
+
+def diagnostic_value(value, schema):
+    if schema is bool:
+        return value if type(value) is bool else None
+    if isinstance(schema, frozenset):
+        return value if type(value) is str and value in schema else None
+    if isinstance(schema, dict):
+        if not isinstance(value, dict):
+            return None
+        result = {}
+        for key, field_schema in schema.items():
+            if key in value:
+                clean = diagnostic_value(value[key], field_schema)
+                if clean is not None:
+                    result[key] = clean
+        return result or None
+    if schema[0] == 'list':
+        if not isinstance(value, list):
+            return None
+        result = [diagnostic_value(item, schema[1]) for item in value[:schema[2]]]
+        return [item for item in result if item is not None]
+    if schema[0] in ('number', 'integer'):
+        accepted = (int,) if schema[0] == 'integer' else (int, float)
+        if type(value) in accepted and schema[1] <= value <= schema[2]:
+            return value
+    return None
+
+
 def report_line(line):
     try:
         data = json.loads(line)
@@ -62,11 +202,12 @@ def report_line(line):
         return None
     result = {key: value for key, value in data.items()
               if key in PUBLIC_METRICS and type(value) in (bool, int, float)
-              and (type(value) is not float or math.isfinite(value))}
+              and (type(value) is bool or -1_000_000_000_000 <= value <= 1_000_000_000_000)}
     for key, allowed in (('stage', PUBLIC_STAGES), ('status', PUBLIC_STATUSES),
                          ('errorType', PUBLIC_ERRORS)):
         if isinstance(data.get(key), str) and data[key] in allowed:
             result[key] = data[key]
+    result.update(diagnostic_value(data, DIAGNOSTIC_SCHEMA) or {})
     return result if result else None
 
 

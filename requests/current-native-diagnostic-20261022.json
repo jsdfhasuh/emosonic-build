@@ -1,0 +1,9 @@
+{
+  "source_repository": "jsdfhasuh/emosonic",
+  "source_ref": "refs/heads/codex/fix-discovery-cache-banners-20261022",
+  "source_sha": "c381e75f32a084068e803c847e9887497e1cec37",
+  "server_sha": "8e9a319002c0ffa6054cd98e06dd271070ed729b",
+  "version": "1.0.10+27",
+  "mode": "native-diagnostic-only",
+  "attempt": 2
+}

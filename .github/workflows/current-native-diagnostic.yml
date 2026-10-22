@@ -1,0 +1,108 @@
+name: Fixed-source native Handoff diagnostics
+
+on:
+  push:
+    branches: [main]
+    paths: [requests/current-native-diagnostic-20261022.json]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emosonic-current-native-diagnostic-20261022
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: 'c381e75f32a084068e803c847e9887497e1cec37'
+  BUILD_VERSION: '1.0.10+27'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    if: >-
+      github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' && github.event.before == '3ad13bfa8fd64392704a85fe453c272609b27b54' &&
+      github.event.head_commit.message == 'test: diagnose fixed-source native handoff 20261022' && github.event.forced == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: android-build
+    outputs:
+      source_sha: ${{ steps.prepare.outputs.source_sha }}
+      version: ${{ steps.prepare.outputs.version }}
+      apk_name: ${{ steps.prepare.outputs.apk_name }}
+      installer_name: ${{ steps.prepare.outputs.installer_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Test public pipeline logic
+        run: python3 -m unittest discover -s tests -v
+      - name: Verify fixed source for build-only same-version rebuild
+        id: prepare
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_REF: refs/heads/codex/fix-discovery-cache-banners-20261022
+        run: python3 scripts/current_native_diagnostic.py source prepare
+
+  native-macos-server:
+    needs: prepare
+    runs-on: macos-26
+    timeout-minutes: 55
+    environment: android-build
+    env:
+      CI: 'true'
+      BOT: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      # Explicit user approval for only these disposable test app entitlements.
+      EMOSONIC_MAC_LAB_NETWORK_APPROVED: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Fetch fixed private client without retained credentials
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        run: python3 scripts/current_native_diagnostic.py source fetch
+      - name: Checkout fixed public isolated server
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: jsdfhasuh/Emosonic-Server
+          ref: 8e9a319002c0ffa6054cd98e06dd271070ed729b
+          path: .native-server
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Adapt only the disposable harness server guard
+        run: python3 scripts/current_native_diagnostic.py native prepare
+      - name: Install real isolated server dependencies without logging private output
+        run: python3 scripts/current_native_diagnostic.py native dependencies
+      - name: Validate native measurement boundaries
+        run: python3 scripts/current_native_diagnostic.py native unit
+      - name: Preflight actual HTTP media and strict registration before compilation
+        run: python3 scripts/current_native_diagnostic.py native preflight
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.41.2'
+          channel: stable
+          cache: false
+      - name: Compile three sandboxed same-source native test clients
+        run: python3 scripts/current_native_diagnostic.py native build
+      - name: Measure actual Handoff delayed preparation and cancellation
+        run: python3 scripts/current_native_diagnostic.py native handoff
+      - name: Measure actual follower transfer and restoration
+        run: python3 scripts/current_native_diagnostic.py native follow
+      - name: Verify native processes stopped and remove owned test bundles and server
+        id: native-cleanup
+        if: always()
+        run: python3 scripts/current_native_diagnostic.py native cleanup
+      - name: Remove private source and build diagnostics after verified native teardown
+        if: ${{ always() && steps.native-cleanup.outcome == 'success' }}
+        run: python3 scripts/current_native_diagnostic.py source cleanup
+      # No native test bundles, private profiles, raw logs or source artifacts uploaded.

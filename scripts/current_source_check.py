@@ -15,6 +15,7 @@ SERVER_SHA = '8e9a319002c0ffa6054cd98e06dd271070ed729b'
 VERSION = '1.0.10+27'
 PARENT = '9ac5235b312f0427e3a33e78388bf641c34d0741'
 MESSAGE = 'test: rebuild current client for isolated server tests 20261022'
+WORKFLOW = 'current-source-check.yml'
 REQUEST_PATH = 'requests/current-source-20261022.json'
 REQUEST = {'source_repository': p.SOURCE, 'source_ref': SOURCE_REF,
            'source_sha': SOURCE_SHA, 'server_sha': SERVER_SHA,
@@ -31,7 +32,7 @@ def context():
     p.require(os.environ.get('GITHUB_REPOSITORY') == p.BUILDER, 'Wrong repository.')
     p.require(os.environ.get('GITHUB_REF') == 'refs/heads/main', 'Only trusted main may run.')
     p.require(os.environ.get('GITHUB_EVENT_NAME') == 'push', 'Only the fixed rebuild push may run.')
-    p.require(os.environ.get('GITHUB_WORKFLOW_REF') == p.BUILDER + '/.github/workflows/current-source-check.yml@refs/heads/main', 'Wrong rebuild workflow.')
+    p.require(os.environ.get('GITHUB_WORKFLOW_REF') == p.BUILDER + '/.github/workflows/' + WORKFLOW + '@refs/heads/main', 'Wrong rebuild workflow.')
     sha = p.checked_sha(os.environ.get('GITHUB_SHA'))
     for name in ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT'):
         p.require(re.fullmatch(r'[1-9][0-9]*', os.environ.get(name, '')), 'Invalid workflow identity.')
