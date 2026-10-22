@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "trialCount": 16,
+  "maxWindowsPerTrial": 2,
+  "maxWindowObservationsPerTrial": 2,
+  "maxNativeSamplesPerTrial": 181,
+  "orders": [
+    [
+      0,
+      1,
+      3,
+      2
+    ],
+    [
+      1,
+      2,
+      0,
+      3
+    ],
+    [
+      2,
+      3,
+      1,
+      0
+    ],
+    [
+      3,
+      0,
+      2,
+      1
+    ]
+  ],
+  "reportShape": {
+    "schemaVersion": "finite_number",
+    "experiment": {
+      "literal": "isolated_native_rate_transition"
+    },
+    "measurementMeaning": {
+      "literal": "net_advancement_not_acoustic_continuity_or_located_stall"
+    },
+    "hostLeadSupplied": "boolean",
+    "pitchAlgorithm": {
+      "literal": "timeDomain"
+    },
+    "sandboxIdentityVerified": "boolean",
+    "ownedMediaRemoved": "boolean",
+    "trialCount": "finite_number",
+    "completedTrials": "finite_number",
+    "fullyMeasuredTrials": "finite_number",
+    "allCleanupStopped": "boolean",
+    "interruptionCoverage": {
+      "literal": "process_exit_or_host_timeout_not_player_cancel"
+    },
+    "trials": {
+      "array": {
+        "trialOrdinal": "finite_number",
+        "arm": "finite_number",
+        "round": "finite_number",
+        "order": "finite_number",
+        "status": {
+          "enum": [
+            "completed",
+            "identity_or_native_failure",
+            "load_not_ready",
+            "native_exception",
+            "sample_cap",
+            "startup_not_advancing"
+          ]
+        },
+        "cleanupStopped": "boolean",
+        "sampleCount": "finite_number",
+        "validSampleCount": "finite_number",
+        "transitionCount": "finite_number",
+        "windowCount": "finite_number",
+        "windows": {
+          "array": {
+            "before": {
+              "timeMs": "finite_number",
+              "uncertaintyMs": "finite_number",
+              "positionMs": "finite_number"
+            },
+            "after": {
+              "timeMs": "finite_number",
+              "uncertaintyMs": "finite_number",
+              "positionMs": "finite_number"
+            },
+            "durationMs": "finite_number",
+            "advanceMediaMs": "finite_number",
+            "minimumExpectedRate": "finite_number",
+            "maximumExpectedRate": "finite_number",
+            "uncertaintyMarginMediaMs": "finite_number",
+            "minimumDeficitMediaMs": "finite_number",
+            "maximumDeficitMediaMs": "finite_number",
+            "ordinal": "finite_number",
+            "requestedRate": "finite_number",
+            "didWrite": "boolean",
+            "invocationMs": "finite_number",
+            "assignmentElapsedMs": "finite_number",
+            "positionRefreshElapsedMs": "finite_number",
+            "beforeEffectiveRate": "finite_number_or_null",
+            "afterEffectiveRate": "finite_number_or_null"
+          }
+        },
+        "windowObservations": {
+          "array": {
+            "ordinal": "finite_number",
+            "status": {
+              "enum": [
+                "observed",
+                "unavailable_before",
+                "unavailable_after",
+                "crosses_next_transition"
+              ]
+            }
+          }
+        },
+        "cleanupItemRemoved": "boolean",
+        "loadReady": "boolean",
+        "startupAdvancing": "boolean",
+        "loadElapsedMs": "finite_number",
+        "startupElapsedMs": "finite_number",
+        "pitchReadbackMatches": "boolean",
+        "waitPolicyReadbackMatches": "boolean",
+        "terminalWaiting": {
+          "enum": [
+            "none",
+            "minimize_stalls",
+            "evaluate_buffer",
+            "no_item",
+            "other"
+          ]
+        },
+        "terminalTimeControl": "finite_number",
+        "forwardJumpCount": "finite_number",
+        "backwardJumpCount": "finite_number",
+        "largestSampleGapMs": "finite_number",
+        "notReadySampleCount": "finite_number",
+        "notPlayingSampleCount": "finite_number",
+        "bufferEmptySampleCount": "finite_number",
+        "nativeErrorSampleCount": "finite_number",
+        "invalidIdentitySampleCount": "finite_number",
+        "fullyMeasured": "boolean"
+      }
+    }
+  }
+}

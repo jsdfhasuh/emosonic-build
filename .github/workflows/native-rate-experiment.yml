@@ -1,0 +1,61 @@
+name: Isolated sandboxed native rate transition measurement
+on:
+  push:
+    branches: [main]
+    paths: [requests/native-rate-experiment-20261022.json]
+permissions:
+  contents: read
+concurrency:
+  group: emosonic-native-rate-experiment-20261022
+  cancel-in-progress: false
+env:
+  SOURCE_SHA: '7e040ebbfcc08ea16a05ee0a359036c7f3e4d4fe'
+  BUILD_VERSION: '1.0.10+27'
+defaults:
+  run:
+    shell: bash
+jobs:
+  prepare:
+    if: >-
+      github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' && github.event.before == 'aeb111d803f6bb15813f3a76f50fc2a1dfe2f440' &&
+      github.event.head_commit.message == 'test: measure isolated native rate transitions 20261022' && github.event.forced == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: android-build
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Test public pipeline and finite experiment gate
+        run: python3 -B -m unittest discover -s tests
+      - name: Resolve the exact reviewed experiment-only source
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_REF: refs/heads/test/native-rate-transition-comparison-20261022
+        run: python3 -B scripts/native_rate_experiment.py prepare
+  native-rate-experiment:
+    needs: prepare
+    runs-on: macos-26
+    timeout-minutes: 15
+    environment: android-build
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Fetch exact experiment source without retained credentials
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        run: python3 -B scripts/native_rate_experiment.py fetch
+      - name: Measure all sixteen sandboxed local-media trials
+        run: python3 -B scripts/native_rate_experiment.py run
+      - name: Verify process exit and remove owned source media and raw outputs
+        if: always()
+        run: python3 -B scripts/native_rate_experiment.py cleanup
+      # No Flutter, network entitlement, raw logs, private source or artifact upload.
