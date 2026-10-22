@@ -12,3 +12,7 @@ Server (unchanged, not executed by this gate): 5adc23da173c5f20188d79aafe8fcc1e6
 ## Complete focused failure accounting
 
 Run39759437302 reached actual tests but failed; its first-error-only diagnostic did not establish all suite outcomes. The immutable client and inventory are unchanged. This iteration observes every bounded JSON stream, accepts colon/space Dart stack locations and fixed scalar matcher values, and runs all three focused suites before rejecting any failure. It does not weaken exact green acceptance. Full validation remains blocked on any focused failure. No native or package execution.
+
+## Controlled fixture event delivery
+
+Client15bdc56b8a93db62bba2b5549073e1e09a8a88ff is a three-file test/plan/inventory-only descendant of94c859a4. Production bytes are unchanged. Run39760886626 proved original13 and provenance6 green, while11 boundary cases failed the host scheduling prerequisite at line1215. The new test-only synchronous fake-native stream and bounded microtask drains remove artificial event-loop delay; all45 names and5s/50ms/4% assertions remain. This gate reruns all64 and complete source validation, with no native or package stages.
