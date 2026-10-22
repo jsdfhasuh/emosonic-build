@@ -1,4 +1,4 @@
-"""One fixed 67-case/full-source green gate; historical expected-red is untouched."""
+"""One fixed 101-case/full-source green gate; historical expected-red is untouched."""
 import hashlib
 import json
 import re
@@ -8,22 +8,44 @@ from unittest.mock import patch
 import follow_ingress_proof as ingress
 import follow_recovery_check as recovery
 
-PARENT = '0168fa93c3f3096190276d46668f272d0c271313'
-MESSAGE = 'test: validate lint-clean ingress repair 20261022'
+PARENT = 'c794d1609a23a28658cbb74027aa79589d797103'
+MESSAGE = 'test: validate lifecycle-compatible ingress repair 20261022'
 WORKFLOW = 'follow-ingress-green.yml'
 REQUEST_PATH = 'requests/follow-ingress-green-20261022.json'
-SOURCE_REF = 'refs/heads/fix/follow-ingress-fixture-lints-20261022'
-SOURCE_SHA = 'caddb6e7de4a821bb6dd04cab12a160f2a651d6a'
+SOURCE_REF = 'refs/heads/test/follow-lifecycle-dispatch-capability-20261022'
+SOURCE_SHA = 'e6f7ea84d8ce9a1a29e56f5a083173a9810e4316'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 RECOVERY_INVENTORY_SHA256 = '2c882b974b4a49478ca9d5df5cb9aff094a309a7e8f1e42a1fd20403f841c69b'
 INGRESS_INVENTORY_SHA256 = 'fde163ba2e25f529e2ef152523ba5f8df31ff7b1718a3e7398800bb89cfae71e'
 REQUEST = dict(recovery.request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               server_sha=SERVER_SHA, mode='follow-ingress-full-green-validation', attempt=35)
+               server_sha=SERVER_SHA, mode='follow-ingress-full-green-validation', attempt=36)
 RECOVERY_INVENTORY = recovery.inventory
 ORIGINAL_OBSERVER = recovery.observe_green
 ORIGINAL_FULL_OBSERVER = recovery.full_test_observation
+LIFECYCLE_INVENTORY_PATH = "tool/follow_ingress/lifecycle_test_inventory.json"
+LIFECYCLE_INVENTORY_SHA256 = "5ab6e70f6628cc7f5768c13cd06b71725a8df0d589e1c40d64d9989cb816fdb3"
+LIFECYCLE_PATH = "test/services/emo_follow_recovery_lifecycle_test.dart"
 DISPATCH_PATH = "test/services/audio_remote_dispatch_position_test.dart"
 DISPATCH_SHA256 = "855ca0fbaa775b06409667d6ba9969179a191d0868f8a7749eaf85ec555cb5ae"
+
+
+def lifecycle_inventory(source):
+    require = recovery.request.p.require
+    raw = recovery.owned_file(source, LIFECYCLE_INVENTORY_PATH).read_bytes()
+    require(hashlib.sha256(raw).hexdigest() == LIFECYCLE_INVENTORY_SHA256, 'Lifecycle inventory changed.')
+    value = json.loads(raw)
+    require(type(value) is dict and set(value) == {'suites'} and type(value['suites']) is list
+            and len(value['suites']) == 1, 'Lifecycle inventory schema invalid.')
+    suite = value['suites'][0]
+    require(type(suite) is dict and set(suite) == {'path', 'sha256', 'names'}
+            and suite['path'] == LIFECYCLE_PATH, 'Lifecycle fixture path invalid.')
+    require(hashlib.sha256(recovery.owned_file(source, suite['path']).read_bytes()).hexdigest()
+            == suite['sha256'], 'Lifecycle fixture changed.')
+    names = suite['names']
+    require(type(names) is list and 1 <= len(names) <= 1000
+            and all(type(n) is str and 0 < len(n) <= 8192 for n in names)
+            and len(set(names)) == len(names), 'Lifecycle names invalid.')
+    return suite
 
 
 def inventory(source):
@@ -34,7 +56,10 @@ def inventory(source):
     suite = ingress.inventory(source)
     recovery.request.p.require(suite['path'] not in {item['path'] for item in suites},
                                'Ingress fixture must be an additional suite.')
-    return suites + [suite]
+    lifecycle = lifecycle_inventory(source)
+    recovery.request.p.require(lifecycle['path'] not in {s['path'] for s in suites + [suite]},
+                               'Lifecycle fixture must be additional.')
+    return suites + [suite, lifecycle]
 
 
 def focused_observation(raw, returncode, **kwargs):

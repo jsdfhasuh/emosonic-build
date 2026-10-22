@@ -16,8 +16,9 @@ class GreenAdapterTest(unittest.TestCase):
 
     def test_combines_exact_original_and_ingress_inventories(self):
         old=self.suites(); new=dict(path='test/services/ingress_test.dart',names=['a','b','c'])
-        with patch.object(gate,'RECOVERY_INVENTORY',return_value=old),patch.object(gate.ingress,'inventory',return_value=new):
-            self.assertEqual(gate.inventory(Path('/owned')),old+[new])
+        lifecycle=dict(path=gate.LIFECYCLE_PATH,names=['life'])
+        with patch.object(gate,'RECOVERY_INVENTORY',return_value=old),patch.object(gate.ingress,'inventory',return_value=new),patch.object(gate,'lifecycle_inventory',return_value=lifecycle):
+            self.assertEqual(gate.inventory(Path('/owned')),old+[new,lifecycle])
 
     def test_rejects_missing_original_case(self):
         old=self.suites();old[0]['names'].pop()
@@ -97,5 +98,24 @@ class DispatchEvidenceTest(unittest.TestCase):
 
     def test_failed_full_suite_keeps_original_failure_observation(self):
         self.assertFalse(self.exercise(lambda e:e.pop(),code=1)['verified'])
+
+class LifecycleInventoryTest(unittest.TestCase):
+    def exercise(self, change=None, wrong_hash=False):
+        with tempfile.TemporaryDirectory() as directory:
+            source=Path(directory);file=source/gate.LIFECYCLE_PATH;file.parent.mkdir(parents=True);file.write_bytes(b'fixture')
+            value={'suites':[{'path':gate.LIFECYCLE_PATH,'sha256':hashlib.sha256(b'fixture').hexdigest(),'names':['one','two']}]}
+            if change:change(value['suites'][0])
+            data=json.dumps(value).encode();path=source/gate.LIFECYCLE_INVENTORY_PATH;path.parent.mkdir(parents=True);path.write_bytes(data)
+            with patch.object(gate,'LIFECYCLE_INVENTORY_SHA256','0'*64 if wrong_hash else hashlib.sha256(data).hexdigest()):return gate.lifecycle_inventory(source)
+
+    def test_exact_private_fixture_and_names(self):self.assertEqual(self.exercise()['names'],['one','two'])
+
+    def test_wrong_inventory_or_fixture_hash_rejected(self):
+        with self.assertRaises(gate.recovery.request.p.GateError):self.exercise(wrong_hash=True)
+        with self.assertRaises(gate.recovery.request.p.GateError):self.exercise(lambda s:s.update(sha256='0'*64))
+
+    def test_wrong_path_empty_or_duplicate_names_rejected(self):
+        for change in [lambda s:s.update(path='other.dart'),lambda s:s.update(names=[]),lambda s:s.update(names=['same','same'])]:
+            with self.subTest(change=change),self.assertRaises(gate.recovery.request.p.GateError):self.exercise(change)
 
 if __name__=='__main__':unittest.main()

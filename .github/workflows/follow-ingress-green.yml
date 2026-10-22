@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: 'caddb6e7de4a821bb6dd04cab12a160f2a651d6a'
+  SOURCE_SHA: 'e6f7ea84d8ce9a1a29e56f5a083173a9810e4316'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '0168fa93c3f3096190276d46668f272d0c271313' &&
-      github.event.head_commit.message == 'test: validate lint-clean ingress repair 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'c794d1609a23a28658cbb74027aa79589d797103' &&
+      github.event.head_commit.message == 'test: validate lifecycle-compatible ingress repair 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/follow-ingress-fixture-lints-20261022
+          SOURCE_REF: refs/heads/test/follow-lifecycle-dispatch-capability-20261022
         run: python3 scripts/follow_ingress_green.py source prepare
 
   validate-source:
@@ -71,7 +71,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
         run: python3 scripts/follow_ingress_green.py source fetch
-      - name: Validate all 67 exact ingress and recovery cases
+      - name: Validate all 101 exact ingress recovery and lifecycle cases
         run: python3 scripts/follow_ingress_green.py source focused
       - name: Validate complete source analysis, tests, provenance and byte integrity without user Secrets
         run: python3 scripts/follow_ingress_green.py source validate_source
