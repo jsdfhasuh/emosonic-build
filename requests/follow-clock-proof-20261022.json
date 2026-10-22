@@ -1,0 +1,10 @@
+{
+  "source_repository": "jsdfhasuh/emosonic",
+  "source_ref": "refs/heads/test/server-clock-source-ownership-20261022",
+  "source_sha": "5e27debfa3968d42eded2f61e81fb9bb29aafd1a",
+  "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
+  "version": "1.0.10+27",
+  "mode": "follow-clock-expected-red-proof",
+  "attempt": 41,
+  "baseline_sha": "e6f7ea84d8ce9a1a29e56f5a083173a9810e4316"
+}

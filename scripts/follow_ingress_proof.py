@@ -85,13 +85,18 @@ def inventory(source):
     return suite
 
 
-def exact_red(raw, returncode, *, names, basename, causal_ordinal, stderr=''):
+def exact_red(raw, returncode, *, names, basename, causal_ordinal, stderr='',
+              expected_count=3, assertion_marker=ASSERTION_MARKER):
     """Normalize only one already-proved causal failure, then reuse strict green."""
     def fail(reason):
         raise GreenVerificationError(dict(stage='follow-ingress-red', status='failed', reason=reason))
-    if (type(names) not in (list, tuple) or len(names) != 3
+    if (type(expected_count) is not int or not 2 <= expected_count <= 128
+            or type(assertion_marker) is not str
+            or re.fullmatch(r'[A-Z][A-Z0-9_]{7,127}', assertion_marker) is None
+            or type(names) not in (list, tuple) or len(names) != expected_count
             or any(type(name) is not str or not name or len(name) > 8192 for name in names)
-            or len(set(names)) != 3 or type(causal_ordinal) is not int or not 1 <= causal_ordinal <= 3):
+            or len(set(names)) != expected_count or type(causal_ordinal) is not int
+            or not 1 <= causal_ordinal <= expected_count):
         fail('invalid-inventory')
     if type(returncode) is not int or returncode != 1:
         fail('expected-exit-one')
@@ -126,7 +131,7 @@ def exact_red(raw, returncode, *, names, basename, causal_ordinal, stderr=''):
     tid = target['id']
     error_index, error = errors[0]
     if (type(error.get('testID')) is not int or error['testID'] != tid
-            or error.get('isFailure') is not True or error.get('error') != ASSERTION_MARKER):
+            or error.get('isFailure') is not True or error.get('error') != assertion_marker):
         fail('causal-error-mismatch')
     completions = [(index, event) for index, event in enumerate(events)
                    if event.get('type') == 'testDone' and type(event.get('testID')) is int
@@ -157,7 +162,7 @@ def exact_red(raw, returncode, *, names, basename, causal_ordinal, stderr=''):
     return dict(stage='follow-ingress-red', status='expected-failure-confirmed',
                 visibleTests=report['visibleTests'], hiddenTests=report['hiddenTests'],
                 completedTests=report['completedTests'], causalOrdinal=causal_ordinal,
-                expectedFailures=1, passedControls=2, unexpectedFailures=0)
+                expectedFailures=1, passedControls=expected_count - 1, unexpectedFailures=0)
 
 
 EVIDENCE_PREFIX = 'FOLLOW_INGRESS_NATIVE_ORDER '
