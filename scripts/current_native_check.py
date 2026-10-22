@@ -34,6 +34,10 @@ PUBLIC_STAGES = frozenset({
     'server-runtime-failure-observation', 'handoff-A-to-B',
     'handoff-server-observation-capability', 'handoff-server-canonical-consistency',
     'handoff-canonical-consistency',
+    'handoff-check-target-track', 'handoff-check-target-queue',
+    'handoff-check-canonical-track', 'handoff-check-canonical-state',
+    'handoff-check-canonical-control', 'handoff-check-media-provenance',
+    'handoff-check-continuity', 'handoff-check-native-rate',
 }) | frozenset(base + suffix for base in (
     'source-avplayer-rate-1.5', 'target-avplayer-rate-1.5', 'follower-avplayer-rate-1.5',
     'authority-after-follow-rate-change', 'follower-after-follow-rate-change')
@@ -107,6 +111,17 @@ CLIENT_SCHEMA = {
     'handoffHistory': ('list', HANDOFF_SCHEMA, 8),
 }
 DIAGNOSTIC_SCHEMA = {
+    'failureLocation': {'module': frozenset({'run_lab.py', 'extended_handoff.py'}),
+                        'line': ('integer', 1, 100000)},
+    'consistencyObservation': {
+        **{key: bool for key in ('trackMatches', 'queueAndIndexMatch',
+            'canonicalTrackMatches', 'canonicalPlaying', 'controlVersionsMatch')},
+        **{key: ('integer', 0, 1_000_000) for key in ('streamCount',
+            'targetStreamCount', 'targetTrackStreamCount', 'numericTimestampCount', 'postStartStreamCount')},
+        **{key: NUMBER for key in ('latestRequestDeltaMs', 'continuityErrorMs',
+            'sampleElapsedMs', 'sourcePositionMs', 'targetPositionMs')},
+        'nativeRate': ('number', 0, 100),
+    },
     'handoffDiagnostics': ('list', CLIENT_SCHEMA, 3),
     'handoffBeforeStart': ('list', CLIENT_SCHEMA, 3),
     'nativeErrors': ('list', {
