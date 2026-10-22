@@ -43,6 +43,11 @@ PUBLIC_STAGES = frozenset({
     'authority-after-follow-rate-change', 'follower-after-follow-rate-change')
     for suffix in ('', ':post-seek-native-readiness', ':native-advancement-readiness',
                    ':native-follow-alignment'))
+
+# Reviewed literal labels and finite rate-label compositions from both pinned lab modules.
+PUBLIC_STAGES = PUBLIC_STAGES | frozenset(['all-native-players-paused', 'authority-after-follow-rate-change', 'authority-after-follow-rate-change:native-advancement-readiness', 'authority-after-follow-rate-change:native-follow-alignment', 'authority-after-follow-rate-change:post-seek-native-readiness', 'extended-authority-playing', 'extended-cancel-late-callback-window', 'extended-cancel-native-settlement', 'extended-cancel-rejects-late-playback', 'extended-cold-target-ready', 'extended-cold-target-register', 'extended-delayed-canonical-consistency', 'extended-delayed-handoff-B-to-A', 'extended-delayed-native-completion', 'extended-native-cleanup-pause', 'extended-new-generation-discovered', 'extended-real-delayed-handoff', 'extended-real-prepare-before-cancel', 'extended-resume-authority', 'extended-server-observation-capability', 'extended-source-controls-ready', 'extended-source-cursors-settled', 'extended-source-rate-0.8', 'extended-source-rate-0.8:native-advancement-readiness', 'extended-source-rate-0.8:native-follow-alignment', 'extended-source-rate-0.8:post-seek-native-readiness', 'extended-source-seek-enabled', 'extended-transferred-native-rate', 'extended-transferred-native-rate:native-advancement-readiness', 'extended-transferred-native-rate:native-follow-alignment', 'extended-transferred-native-rate:post-seek-native-readiness', 'follow-explicit-rate-change', 'follow-explicit-rate-change-applied', 'follow-original-paused-task-and-speed-restored', 'follow-rate-change-controls-ready', 'follow-restoration', 'follower-after-follow-rate-change', 'follower-after-follow-rate-change:native-advancement-readiness', 'follower-after-follow-rate-change:native-follow-alignment', 'follower-after-follow-rate-change:post-seek-native-readiness', 'follower-avplayer-rate-1.5', 'follower-avplayer-rate-1.5:native-advancement-readiness', 'follower-avplayer-rate-1.5:native-follow-alignment', 'follower-avplayer-rate-1.5:post-seek-native-readiness', 'follower-beyond-recovery-window', 'follower-native-decode-and-pause-ready', 'follower-original-paused', 'follower-original-task', 'follower-pause-controls-settled', 'handoff-A-to-B', 'handoff-canonical-consistency', 'handoff-native-completion', 'handoff-server-canonical-consistency', 'handoff-server-observation-capability', 'launch', 'native-follow-aligned', 'native-follow-start', 'paused-original-task-restored', 'real-apps-isolated-and-registered', 'real-apps-register', 'real-server-and-media-ready', 'server-fixture-initialized', 'server-preflight-only', 'server-probe', 'server-startup', 'source-avplayer-rate-1.5', 'source-avplayer-rate-1.5:native-advancement-readiness', 'source-avplayer-rate-1.5:native-follow-alignment', 'source-avplayer-rate-1.5:post-seek-native-readiness', 'source-context-ready', 'source-load-real-media', 'source-native-decode', 'source-rate-controls-settled', 'target-avplayer-rate-1.5', 'target-avplayer-rate-1.5:native-advancement-readiness', 'target-avplayer-rate-1.5:native-follow-alignment', 'target-avplayer-rate-1.5:post-seek-native-readiness'])
+
+PUBLIC_STAGES = PUBLIC_STAGES | {'source-load-command-returned', 'scoped-attribution-baseline', 'scoped-attribution-patched', 'scoped-attribution-proof-failure'}
 PUBLIC_STATUSES = frozenset({'passed', 'failed', 'not-verified', 'unavailable'})
 PUBLIC_ERRORS = frozenset({'AssertionError', 'TimeoutError', 'BridgeCommandFailure',
     'HTTPError', 'URLError', 'RuntimeError', 'ConnectionError', 'KeyError',
@@ -111,6 +116,25 @@ CLIENT_SCHEMA = {
     'handoffHistory': ('list', HANDOFF_SCHEMA, 8),
 }
 DIAGNOSTIC_SCHEMA = {
+    'diagnostic': {
+        'phase': frozenset({'baseline', 'patched'}),
+        'category': frozenset({'assertion', 'compiler', 'reporter', 'process', 'runner'}),
+        'code': frozenset({'assertion_failed', 'compilation_failed', 'invalid_test_stream', 'process_failed', 'runner_timeout', 'runner_unavailable'}),
+        'exitCode': ('integer', -255, 255), 'failedTestOrdinal': ('integer', 1, 6),
+        'sourceModule': frozenset({'native_lab_scoped_attribution_test.dart', 'native_lab_scoped_api_client.dart', 'api_client_providers.dart'}),
+        'sourceLine': ('integer', 1, 2000),
+    },
+    'nativeLogClassifications': ('list', {
+        'clientOrdinal': ('integer', 0, 2),
+        'readStatus': frozenset({'unverified', 'symlink_refused', 'oversized', 'unavailable', 'read', 'ownership_refused'}),
+        **{key: ('integer', 0, 1000000) for key in ('scopedNativeQueueBeforePlay',
+            'scopedSingleSourceBeforePlay', 'staleExecutionGuard', 'staleCommandSideEffect', 'playFailed', 'playSlowStart')},
+    }, 3),
+    'waitObservation': {'waitStage': PUBLIC_STAGES, 'elapsedMs': ('number', 0, 10000000),
+                        'timeoutSeconds': ('number', 0, 1000), 'pollCount': ('integer', 0, 1000000)},
+    'startupStreams': {key: ('integer', 0, 1000000) for key in ('streamCount',
+        'authorityStreamCount', 'targetStreamCount', 'followerStreamCount', 'unlabelledStreamCount')},
+    'failureFrames': ('list', {'module': frozenset({'run_lab.py', 'extended_handoff.py'}), 'line': ('integer', 1, 100000)}, 8),
     'failureLocation': {'module': frozenset({'run_lab.py', 'extended_handoff.py'}),
                         'line': ('integer', 1, 100000)},
     'consistencyObservation': {
@@ -132,6 +156,35 @@ DIAGNOSTIC_SCHEMA = {
         'nativeErrorCode': ('integer', -2147483648, 2147483647),
     }, 3),
     'nativePlayback': ('list', {
+        'setup': {
+            **{key: bool for key in ('canControl', 'canSeek', 'selectedTargetIsLocal',
+                'contextPresent', 'bindingContextMatchesCurrent', 'canonicalAuthorityIsSelf',
+                'trackPresent', 'queueIndexValid', 'queueTrackMatchesActual')},
+            'queueLength': ('integer', 0, 1000000), 'currentIndex': ('integer', -1, 1000000),
+            'bindingRole': frozenset({'localAuthority', 'handoffTarget', 'follower', 'broadcastParticipant', 'unrecognized'}),
+            'bindingPhase': frozenset({'provisional', 'reconciling', 'confirmed', 'unrecognized'}),
+            'preflight': {
+                'connection': CONNECTION_STATES | {'unrecognized'},
+                'processingState': frozenset({'idle', 'loading', 'buffering', 'ready', 'completed', 'unrecognized'}),
+                'controlPhase': frozenset({'ready', 'hydrating', 'restoring', 'overlay', 'handoff', 'pending', 'unknown', 'failed', 'dependencyFailed', 'reconciling', 'unrecognized'}),
+                'queueHydrationStatus': frozenset({'idle', 'committing', 'hydrating', 'ready', 'error', 'disposed', 'unrecognized'}),
+                'recoveryKind': frozenset({'follow', 'broadcast', 'unrecognized'}),
+                'recoveryPhase': frozenset({'acquiring', 'active', 'stopPending', 'restoring', 'terminalFeedbackPending', 'unrecognized'}),
+                **{key: bool for key in ('strictV2', 'followNegotiated', 'identitySeedMatches',
+                    'followRecoveryGateActive', 'broadcastRecoveryGateActive', 'queueHydrating',
+                    'restoreInProgress', 'recoveryContextMatchesCurrent', 'recoveryAuthorityMatchesSelf',
+                    'clientLeasePresent', 'clientLeaseContextMatchesCurrent', 'audioLeasePresent',
+                    'audioLeaseContextMatchesCurrent', 'leaseGenerationAgreement',
+                    'observedOwnAppliedMatchesCanonical', 'canonicalQueueMatchesActual',
+                    'canonicalTrackMatchesActual', 'canonicalIndexMatchesActual',
+                    'connectionGenerationChangedSincePreviousObservation')},
+                **{key: COUNTER for key in ('connectionGeneration', 'pendingTransportRequestCount',
+                    'recoveryControlVersion', 'recoveryAppliedControlVersion', 'clientLeaseControlVersion',
+                    'audioLeaseControlVersion', 'epoch', 'version', 'queueRevision', 'controlVersion',
+                    'queueControlVersion', 'observedOwnAppliedControlVersion', 'selfAuthorityContextCount',
+                    'canonicalQueueLength')},
+            },
+        },
         'clientOrdinal': ('integer', 0, 2),
         'trackMatchesFirstClient': bool, 'queueMatchesFirstClient': bool,
         'native': ('list', NATIVE_SCHEMA, 2),
@@ -180,6 +233,62 @@ DIAGNOSTIC_SCHEMA['serverCanonicalObservation'] = {
     },
 }
 
+
+
+# Finite failure/Follow evidence already produced by the reviewed lab.
+FOLLOW_CONDITIONS = frozenset(['authority_rate', 'follower_rate', 'hard_drift_limit', 'lab_five_second_settling', 'native_35s_progression', 'native_evidence', 'rate_change', 'restoration', 'safe_follow_task'])
+BRIDGE_SCHEMA = {
+'action': frozenset(['cancelHandoff', 'follow', 'handoff', 'next', 'pause', 'play', 'playQueue', 'refresh', 'seek', 'speed', 'stopFollow', 'unrecognized']),
+'exceptionCategory': frozenset(['ArgumentError', 'EmoInboundContractViolation', 'EmoProtocolException', 'EmoProtocolPayloadViolation', 'FormatException', 'HttpException', 'PlatformException', 'PlayerException', 'PlayerInterruptedException', 'SocketException', 'StateError', 'TimeoutException', 'unrecognized']),
+'followReason': frozenset(['follow_audio_lane_busy', 'follow_audio_service_missing', 'follow_broadcast_active', 'follow_capture_invalid_index', 'follow_connection_generation_changed', 'follow_handoff_active', 'follow_local_identity_missing', 'follow_other_execution_lease', 'follow_recovery_already_active', 'follow_recovery_clear_failed', 'follow_recovery_persist_failed', 'follow_restore_audio_unavailable', 'follow_restore_cursor_regression', 'follow_restore_invalid_audio_shape', 'follow_restore_not_fully_applied', 'follow_source_context_closed', 'follow_source_context_required', 'follow_source_equals_suspended', 'follow_start_ack_mismatch', 'follow_status_not_accepted', 'follow_stop_connection_not_ready', 'follow_stop_context_required', 'follow_stop_source_mismatch', 'follow_suspended_context_count', 'follow_suspended_context_not_fully_applied', 'follow_suspended_local_work_pending']),
+    'httpStatus': ('integer', 100, 599), 'protocolCode': PROTOCOL_CODES,
+    'bodyStatus': frozenset({'unavailable', 'oversized', 'invalid_json', 'unexpected_shape', 'parsed'}),
+    'commandReason': frozenset({'bridge_command_busy', 'playback_control_disabled', 'playback_rate_control_disabled',
+        'queue_launch_emptyQueue', 'queue_launch_remoteNotSupported', 'queue_launch_missingRemoteSession',
+        'queue_launch_missingPlaybackContext', 'queue_launch_syncTimeout'}),
+}
+RATE_SCHEMA = {
+    **{key: NUMBER for key in ('expectedRate', 'measurementWindowSeconds', 'requestedPositionMs',
+        'readinessTimeoutMs', 'readinessElapsedMs', 'allowedNativeRateMin', 'allowedNativeRateMax',
+        'advancementElapsedMs', 'totalReadinessElapsedMs', 'elapsedSeconds', 'nativePositionDeltaMs',
+        'measuredRate', 'alignmentElapsedMs', 'alignmentDriftMs', 'alignmentUncertaintyMs')},
+    'nativeSamples': COUNTER,
+    **{key: NATIVE_SCHEMA for key in ('afterSeekNative', 'lastReadinessNative', 'initialNative',
+        'lastAdvancementNative', 'firstNative', 'lastNative', 'authorityNative', 'followerNative',
+        'alignmentSourceNative', 'alignmentFollowerNative')},
+}
+FOLLOW_PLAYER_SCHEMA = {
+    'native': NATIVE_SCHEMA,
+    **{key: NUMBER for key in ('dartReadSkewMs', 'clockOffsetMs', 'dartMinusNativeAtDartReadMs',
+        'runtimeAdaptiveDelayMs', 'configuredMinDelayMs', 'configuredMaxDelayMs', 'lastObservedControllerDriftMs',
+        'observedSourceSampleAgeMs', 'observedSourceReceiveAgeMs', 'observedSourceAppliedControlVersion',
+        'observedProjectionDelayMs', 'nativeMinusObservedTargetAtDartReadMs')},
+    **{key: bool for key in ('observedSourceFactPresent', 'observedSourceFactMatchesCurrent', 'observedSourceTimingValid')},
+    'observedProjectionBasis': frozenset({'strict_sampled_at', 'unavailable', 'unrecognized'}),
+}
+FOLLOW_OBSERVATION_SCHEMA = {
+    'safety': {key: bool for key in ('retiredSourceStopped', 'exactNativeFollowTask',
+        'authorityPhysicalGenerationMatches', 'canonicalAuthorityMatches', 'contextEpochMatches',
+        'followerObservedAuthorityMatches', 'followerObservedEpochMatches', 'connectionGenerationsMatch',
+        'followerPhysicalGenerationMatches', 'followRecoveryActive')},
+    'authority': FOLLOW_PLAYER_SCHEMA, 'follower': FOLLOW_PLAYER_SCHEMA,
+    **{key: NUMBER for key in ('followerMinusAuthorityClockOffsetMs', 'alignedNativeDriftMs',
+        'readUncertaintyMs', 'nativeReadSkewMs', 'syncToleranceMs', 'hardSeekThresholdMs',
+        'leadCompensationMs', 'elapsedSeconds', 'unsettledSeconds')},
+    'phase': frozenset({'rate_change', 'restoration'}), 'errorType': PUBLIC_ERRORS | {'unrecognized'},
+    'rateMeasurement': RATE_SCHEMA, 'command': BRIDGE_SCHEMA,
+}
+DIAGNOSTIC_SCHEMA.update({
+    'bridgeCommandFailure': BRIDGE_SCHEMA,
+    'failureStateRefresh': frozenset({'refreshed', 'unavailable'}),
+    'rateMeasurement': RATE_SCHEMA,
+    'followObservation': FOLLOW_OBSERVATION_SCHEMA,
+    'followFirstFailure': {'condition': FOLLOW_CONDITIONS, 'observation': FOLLOW_OBSERVATION_SCHEMA},
+    'followConditions': {key: bool for key in FOLLOW_CONDITIONS},
+    'conditions': {key: bool for key in FOLLOW_CONDITIONS},
+    'followOutcomes': {key: frozenset({'passed', 'failed', 'unavailable'}) for key in ('continuity', 'rate_change', 'restoration')},
+    'followPhaseFailures': {key: FOLLOW_OBSERVATION_SCHEMA for key in ('rate_change', 'restoration')},
+})
 
 def diagnostic_value(value, schema):
     if schema is bool:
