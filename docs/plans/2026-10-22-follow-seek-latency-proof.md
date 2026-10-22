@@ -1,0 +1,11 @@
+# Real-service Follow seek-latency causal proof
+
+Run only a fixed test-only client commit descended from reviewed candidate1efc826b. Production bytes must remain unchanged. The exact source ref/SHA and single bounded main transition are required; source version remains1.0.10+27. The server5adc identity is recorded, but this proof does not launch a server or native application.
+
+The preceding actual native run39737608665 passed Handoff, delayed transfer and cancellation, but failed Follow's original initial five-second alignment deadline. Five softCorrectDrift decisions were logged, not necessarily five actual seeks. The final native snapshot showed approximately298ms lag during a pending seek. No direct native-event subscription invokes Follow correction; accepted remote source updates drive it.
+
+This lean proof runs the actual controller/service/vendored Dart player with a controlled native-platform seek hold. Its final causal marker is accepted only as the exact error string of the sole named test failure. Compilation, setup errors, skipped tests, wrong test failures and marker substrings do not count. All prerequisite assertions must pass before the marker. Exactly thirteen visible tests must finish: the one causal failure and twelve passing controls, with no skipped or failed hidden lifecycle events. The fixed target deliberately fails if the reviewed hold maintains a nonconverging loop. This establishes a causal mechanism under controlled timing, not that the hosted run had that exact seek duration.
+
+Only two Ubuntu jobs execute: public gate tests plus exact source admission, then pinned Flutter setup, private source fetch, code generation, 13-test expected-red proof with all twelve noncausal controls passing and unconditional owned source cleanup. No full native compilation, final package, release, deployment, new credentials, sandbox permission changes or artifact upload. Private test output is parsed locally and only finite proof status/counts are printed; source fingerprints are verified before and after execution.
+
+After an actual causal result, choose a bounded repair and preserve its regression unchanged for fixed green. Do not relax the original 50ms/five-second acceptance requirement or substitute a speculative delay for a repair. The independent read-only timing diagnostic draft is not part of this workflow.

@@ -1,0 +1,76 @@
+name: Follow seek latency real-service causal proof
+
+on:
+  push:
+    branches: [main]
+    paths: [requests/follow-seek-latency-20261022.json]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emosonic-follow-seek-latency-20261022
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: '69c80772e4321a42e9f73f8699a60c5ee5ffa1ff'
+  BUILD_VERSION: '1.0.10+27'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    if: >-
+      github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' && github.event.before == 'c759ec74bf2b6a64b7b9f74cd23d818584345f2f' &&
+      github.event.head_commit.message == 'test: prove follow seek latency feedback 20261022' && github.event.forced == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: android-build
+    outputs:
+      source_sha: ${{ steps.prepare.outputs.source_sha }}
+      version: ${{ steps.prepare.outputs.version }}
+      apk_name: ${{ steps.prepare.outputs.apk_name }}
+      installer_name: ${{ steps.prepare.outputs.installer_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Test public pipeline logic
+        run: python3 -m unittest discover -s tests -v
+      - name: Verify fixed source for build-only same-version rebuild
+        id: prepare
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_REF: refs/heads/test/follow-seek-latency-20261022
+        run: python3 scripts/follow_seek_latency_proof.py source prepare
+
+  red-baseline:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: android-build
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.41.2'
+          channel: stable
+          cache: false
+      - name: Fetch fixed test-only baseline without persisted credentials
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        run: python3 scripts/follow_seek_latency_proof.py regression fetch-baseline
+      - name: Require exact real-controller held-seek feedback regression
+        run: python3 scripts/follow_seek_latency_proof.py regression red
+      - name: Remove private baseline and generated diagnostics
+        if: always()
+        run: python3 scripts/follow_seek_latency_proof.py source cleanup
+
