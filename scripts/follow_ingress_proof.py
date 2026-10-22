@@ -19,20 +19,20 @@ from fixed_flutter_green import (MAX_BYTES, MAX_EVENTS, GreenVerificationError,
                                  observe_green, verify_green)
 from follow_recovery_check import owned_file
 
-PARENT = 'a3684c1076046c70a7dc9d40278a3badcaa0dcfb'
-MESSAGE = 'test: diagnose ingress fixture await phases 20261022'
+PARENT = 'c1feea7341860e4c00d549faaf94718dcb7f366c'
+MESSAGE = 'test: validate coherent ingress fixture acknowledgments 20261022'
 WORKFLOW = 'follow-ingress-proof.yml'
 REQUEST_PATH = 'requests/follow-ingress-proof-20261022.json'
-SOURCE_REF = 'refs/heads/test/follow-ingress-barrier-diagnostics-20261022'
-SOURCE_SHA = '28b05652403eab21100e8960e94bfabed331482e'
+SOURCE_REF = 'refs/heads/test/follow-ingress-coherent-source-20261022'
+SOURCE_SHA = '37a0e10762bcb9a363076f0830be228c18df9024'
 BASELINE_SHA = '466f56d9935afb299724a212d680a743a11c723f'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 INVENTORY_PATH = 'tool/follow_ingress/test_inventory.json'
-INVENTORY_SHA256 = '65676025dce1f558a8082df54c6a95fef9449c4c1a6dc62a04b0883b17faa67c'
+INVENTORY_SHA256 = '7b79e9c9e1d43355a4f07f2cbe9ee779a8961871c1acdd366f45a89d6a4c0500'
 ASSERTION_MARKER = 'FOLLOW_INGRESS_STALE_PENDING_APPLY_REPLAYED'
 REQUEST = dict(request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
                baseline_sha=BASELINE_SHA, server_sha=SERVER_SHA,
-               mode='follow-ingress-expected-red-proof', attempt=29)
+               mode='follow-ingress-expected-red-proof', attempt=30)
 STAGE = 'entry'
 
 
