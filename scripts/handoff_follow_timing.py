@@ -7,15 +7,15 @@ import handoff_follow_readiness as base
 import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 
-PARENT = '817937ab93a09ac5c588217140392e5245afa192'
-MESSAGE = 'test: reuse proven native readiness witness 20261022'
+PARENT = 'b3e7b59ef9bc2c28596a5d02469346dee69dde21'
+MESSAGE = 'test: validate post-restore native settlement matrix 20261022'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
-SOURCE_SHA = 'a6799a73909cf06d8ba9b830e00d6a628e331205'
-SOURCE_REF = 'refs/heads/fix/follow-clock-and-dispatch-20261022'
+SOURCE_SHA = '3093662be2bcc31fefde455baf5d6f68e51784dc'
+SOURCE_REF = 'refs/heads/fix/follow-post-restore-verification-20261022'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=47, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39816643590)
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=50, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39832443427)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
 
@@ -85,10 +85,10 @@ def require_recovery_validation():
                       'Recovery tests, full validation, BOOL proof and cleanup must succeed.')
 
 
-INGRESS_RUN = 39816643590
-INGRESS_HEAD = '7164ba9eca1e30448a6e2298e64630d0857128f3'
+INGRESS_RUN = 39832443427
+INGRESS_HEAD = 'b3e7b59ef9bc2c28596a5d02469346dee69dde21'
 INGRESS_STEPS = {'validate-source': (
-    'Validate every original focused case and both fixed timing components',
+    'Validate all original focused cases and post-restoration boundaries',
     'Validate complete source analysis, tests, provenance and byte integrity without user Secrets',
     'Remove private source and generated validation outputs',
 )}
@@ -100,7 +100,7 @@ def require_ingress_validation():
     run=p.api(endpoint)
     p.require(type(run) is dict and type(run.get('id')) is int and run['id']==INGRESS_RUN
               and run.get('head_sha')==INGRESS_HEAD
-              and run.get('path')=='.github/workflows/follow-timing-green.yml'
+              and run.get('path')=='.github/workflows/follow-post-restore-green.yml'
               and run.get('event')=='push' and run.get('head_branch')=='main'
               and type(run.get('run_attempt')) is int and run['run_attempt']==1
               and run.get('status')=='completed' and run.get('conclusion')=='success',

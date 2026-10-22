@@ -22,6 +22,13 @@ def parse(text):
 
 
 class CorrectionObservationTests(unittest.TestCase):
+    def test_fixed_post_restore_cancellation_reasons_only(self):
+        for reason in ('owner_changed', 'source_changed', 'restore_not_acknowledged'):
+            row = parse(log('[[EMO_FOLLOW_SYNC]] seekRecovery cancelled reason=' + reason))['records'][0]
+            self.assertEqual(row['reason'], reason)
+        row = parse(log('[[EMO_FOLLOW_SYNC]] seekRecovery cancelled reason=PRIVATE_UNKNOWN'))['records'][0]
+        self.assertEqual(row['reason'], 'unrecognized')
+
     def test_actual_decision_fields_are_pre_recovery_policy_inputs(self):
         body = ('[[EMO_FOLLOW_SYNC]] action=softCorrectDrift trackId=PRIVATE index=0 '
             'positionMs=12000 driftMs=-80 correction=rateLimited settled=true '

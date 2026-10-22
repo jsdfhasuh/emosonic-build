@@ -52,7 +52,7 @@ SNAPSHOT_SCHEMA = {
     'requestedRate': ('number', 0, 10), 'positionMs': ('number', 0, 86400000),
 }
 CORRECTION_REASONS = ('settled', 'hard_drift', 'transport_paused', 'transport_replaced',
-    'policy_preempted', 'target_changed', 'rate_owner_changed', 'seek_error', 'start_follow',
+    'policy_preempted', 'target_changed', 'rate_owner_changed', 'owner_changed', 'source_changed', 'restore_not_acknowledged', 'seek_error', 'start_follow',
     'start_context_follow', 'stop_follow', 'stop_context_follow', 'restore_context_follow',
     'complete_context_follow_stop', 'source_idle', 'strict_source_rate_changed',
     'drift_within_tolerance', 'hard_seek', 'apply_follow', 'timer', 'dispose',

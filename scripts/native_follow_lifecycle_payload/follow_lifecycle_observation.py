@@ -63,7 +63,7 @@ ACTIONS = ('applyTrackOrQueue', 'applyStateOnly', 'softCorrectDrift', 'hardSeek'
 MARKER = '[[EMO_FOLLOW_R18]] '
 LOG_ENTRY = re.compile(r'^\[\d{4}-\d{2}-\d{2}T[\d:.+Z-]+\] \[(?:DEBUG|INFO|WARNING|ERROR)\] \[[A-Za-z0-9_.]+\] (.*)$')
 CORRECTION_REASONS = ('settled', 'hard_drift', 'transport_paused', 'transport_replaced',
-    'policy_preempted', 'target_changed', 'rate_owner_changed', 'seek_error', 'start_follow',
+    'policy_preempted', 'target_changed', 'rate_owner_changed', 'owner_changed', 'source_changed', 'restore_not_acknowledged', 'seek_error', 'start_follow',
     'start_context_follow', 'stop_follow', 'stop_context_follow', 'restore_context_follow',
     'complete_context_follow_stop', 'source_idle', 'strict_source_rate_changed',
     'drift_within_tolerance', 'hard_seek', 'apply_follow', 'timer', 'dispose',

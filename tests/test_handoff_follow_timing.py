@@ -141,7 +141,7 @@ class RecoveryValidationGateTests(unittest.TestCase):
 class IngressValidationGateTests(unittest.TestCase):
     def evidence(self):
         run={'id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
-             'path':'.github/workflows/follow-timing-green.yml','event':'push',
+             'path':'.github/workflows/follow-post-restore-green.yml','event':'push',
              'head_branch':'main','run_attempt':1,'status':'completed','conclusion':'success'}
         jobs={'jobs':[{'name':name,'run_id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
                        'status':'completed','conclusion':'success',

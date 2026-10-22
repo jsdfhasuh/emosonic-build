@@ -1,12 +1,12 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/fix/follow-clock-and-dispatch-20261022",
-  "source_sha": "a6799a73909cf06d8ba9b830e00d6a628e331205",
+  "source_ref": "refs/heads/fix/follow-post-restore-verification-20261022",
+  "source_sha": "3093662be2bcc31fefde455baf5d6f68e51784dc",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "native-follow-timing-observation",
-  "attempt": 47,
+  "attempt": 50,
   "proof_run_id": 39745934922,
   "validation_run_id": 39767536382,
-  "ingress_validation_run_id": 39816643590
+  "ingress_validation_run_id": 39832443427
 }

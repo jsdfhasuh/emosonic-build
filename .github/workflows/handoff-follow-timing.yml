@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: 'a6799a73909cf06d8ba9b830e00d6a628e331205'
+  SOURCE_SHA: '3093662be2bcc31fefde455baf5d6f68e51784dc'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '817937ab93a09ac5c588217140392e5245afa192' &&
-      github.event.head_commit.message == 'test: reuse proven native readiness witness 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'b3e7b59ef9bc2c28596a5d02469346dee69dde21' &&
+      github.event.head_commit.message == 'test: validate post-restore native settlement matrix 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/follow-clock-and-dispatch-20261022
+          SOURCE_REF: refs/heads/fix/follow-post-restore-verification-20261022
         run: python3 scripts/handoff_follow_timing.py source prepare
 
   native-macos-server:
