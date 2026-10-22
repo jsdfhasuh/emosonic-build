@@ -1,0 +1,5 @@
+# Deterministic matched-pong feasible-offset proof
+
+This is a fixed test-only baseline gate. It delegates the existing strict expected-red verifier without changing historical defaults, error classification, finite diagnostics, visible/hidden terminal accounting, exact sole-marker requirement or source fingerprint/cleanup. The unchanged-estimator source is dcf57562a1f35247f81a28888137c27855adf06d, parent3093662b, with six cases and causal ordinal1. The pinned private manifest, sole marker and synthetic whole-stream reporter contract were mechanically validated before publication. Builder parent is b283f2c6044825ca98953e63d2efab7b043f72fe.
+
+Goal: under stable clocks and bounded timestamp quantization, prove whether the real tracker can keep its point estimate outside a newly received tighter matched-pong feasible interval. This is not a claim that the prior native run contained any invented RTT history. No estimator repair, native measurement, package or deployment acceptance is implied by the expected-red result. Native effective-clock observation remains independently pinned to3093662b.
