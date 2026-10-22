@@ -1,0 +1,80 @@
+name: Follow post-restoration full source validation
+
+on:
+  push:
+    branches: [main]
+    paths: [requests/follow-post-restore-green-20261022.json]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emosonic-follow-post-restore-green-20261022
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: '3093662be2bcc31fefde455baf5d6f68e51784dc'
+  BUILD_VERSION: '1.0.10+27'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    if: >-
+      github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' && github.event.before == '8bb951fa5c7195a0ef43a705b2fd76ed2bca4a10' &&
+      github.event.head_commit.message == 'test: validate post-restore native settlement repair 20261022' && github.event.forced == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: android-build
+    outputs:
+      source_sha: ${{ steps.prepare.outputs.source_sha }}
+      version: ${{ steps.prepare.outputs.version }}
+      apk_name: ${{ steps.prepare.outputs.apk_name }}
+      installer_name: ${{ steps.prepare.outputs.installer_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Test public pipeline logic
+        run: python3 -m unittest discover -s tests -v
+      - name: Verify fixed source for build-only same-version rebuild
+        id: prepare
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_REF: refs/heads/fix/follow-post-restore-verification-20261022
+        run: python3 scripts/follow_restore_green.py source prepare
+
+  validate-source:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: android-build
+    env:
+      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+      BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.41.2'
+          channel: stable
+          cache: false
+      - name: Fetch the exact frozen source without retaining credentials
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        run: python3 scripts/follow_restore_green.py source fetch
+      - name: Validate all original focused cases and post-restoration boundaries
+        run: python3 scripts/follow_restore_green.py source focused
+      - name: Validate complete source analysis, tests, provenance and byte integrity without user Secrets
+        run: python3 scripts/follow_restore_green.py source validate_source
+      - name: Remove private source and generated validation outputs
+        if: always()
+        run: python3 scripts/follow_restore_green.py source cleanup

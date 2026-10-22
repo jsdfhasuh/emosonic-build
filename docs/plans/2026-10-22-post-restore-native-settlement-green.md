@@ -1,0 +1,3 @@
+# Validate post-restoration native settlement repair
+
+Prepared, not executed; fixed reviewed client 3093662be2bcc31fefde455baf5d6f68e51784dc, server 5adc23da173c5f20188d79aafe8fcc1e656eb38a. The unchanged-algorithm baseline run 39828773929 proved one exact causal failure with all three controls and three hidden lifecycle cases passing. This green gate will preserve all 152 focused tests, add the reviewed nine-case component inventory (161 focused cases total), then run unchanged fatal analyzer, full tests, explicit four dispatch cases, provenance/fingerprint checks and mandatory cleanup. No native run, package, release, deployment or new credential scope.
