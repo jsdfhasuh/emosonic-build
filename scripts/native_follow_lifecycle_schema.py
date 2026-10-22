@@ -51,7 +51,59 @@ SNAPSHOT_SCHEMA = {
         'queueHydrating', 'seekInProgress', 'playingIntent', 'nativePlaying', 'nativePaused')},
     'requestedRate': ('number', 0, 10), 'positionMs': ('number', 0, 86400000),
 }
+CORRECTION_REASONS = ('settled', 'hard_drift', 'transport_paused', 'transport_replaced',
+    'policy_preempted', 'target_changed', 'rate_owner_changed', 'seek_error', 'start_follow',
+    'start_context_follow', 'stop_follow', 'stop_context_follow', 'restore_context_follow',
+    'complete_context_follow_stop', 'source_idle', 'strict_source_rate_changed',
+    'drift_within_tolerance', 'hard_seek', 'apply_follow', 'timer', 'dispose',
+    'socket_disconnect', 'disconnect', 'soft_seek', 'reset_follow_sync')
+CORRECTION_EVENTS = ('action_decision', 'seek_recovery_cancelled', 'seek_recovery_exhausted',
+    'seek_recovery_restore_failed', 'speed_correction_apply', 'speed_correction_restore',
+    'speed_correction_restore_failed', 'speed_setting_invocation')
+CORRECTION_SEQUENCE_SCHEMA = {
+    'timeBasis': frozenset({'first_selected_log_event_wall'}),
+    'recordRetention': frozenset({'first64_last64'}),
+    'monotonicClockPaired': bool, 'recoveryWindowStartObserved': bool,
+    'wallClockRegressionObserved': bool, 'recordsTruncated': bool,
+    **{name: COUNT for name in ('eventCount', 'recordsDropped', 'unknownReasonCount', 'invalidFieldCount', 'timestampIssueCount')},
+    'counts': {name: COUNT for name in CORRECTION_EVENTS},
+    'records': ('list', {
+        'ordinal': ('integer', 1, 1000000), 'event': frozenset(CORRECTION_EVENTS),
+        'timeStatus': frozenset({'unavailable', 'unpaired_wall'}), 'wallOffsetMs': ('number', -600000, 600000),
+        'action': frozenset({'applyTrackOrQueue', 'applyStateOnly', 'softCorrectDrift', 'hardSeek',
+            'smoothCorrectDrift', 'ignoreProgressHeartbeat'}),
+        'reason': frozenset(CORRECTION_REASONS + ('unrecognized',)), 'supported': bool,
+        'positionMs': ('integer', 0, 86400000), 'settled': bool, 'sourceControlChanged': bool,
+        'correction': frozenset({'speedUp', 'slowDown', 'rateLimited', 'seek', 'none'}),
+        'adaptiveFollowDelayMs': ('integer', 0, 60000), 'followLeadCompensationMs': ('integer', -60000, 60000),
+        'followSyncToleranceMs': ('integer', 0, 60000),
+        'driftMs': ('integer', -86400000, 86400000), 'durationMs': ('integer', 0, 5000),
+        **{name: ('number', .5, 2) for name in ('rate', 'baseSpeed', 'syncSpeed')},
+    }, 128),
+}
+ENDPOINT_TIMING_SCHEMA = {
+    'status': frozenset({'observed', 'unavailable'}),
+    'meaning': frozenset({'latest_stored_fact_not_controller_decision'}),
+    'clients': ('list', {
+        'clientOrdinal': ('integer', 0, 2),
+        **{name: ('number', 0, 60000) for name in ('runtimeAdaptiveDelayMs', 'configuredMinDelayMs',
+            'configuredMaxDelayMs', 'observedProjectionDelayMs')},
+        **{name: ('number', -86400000, 86400000) for name in ('lastObservedControllerDriftMs',
+            'nativeMinusObservedTargetAtDartReadMs')},
+        **{name: ('number', -60000, 600000) for name in ('observedSourceSampleAgeMs', 'observedSourceReceiveAgeMs')},
+        'observedSourceAppliedControlVersion': ('number', 0, 1e12),
+        **{name: bool for name in ('observedSourceFactPresent', 'observedSourceFactMatchesCurrent', 'observedSourceTimingValid')},
+        'observedProjectionBasis': frozenset({'strict_sampled_at', 'unavailable'}),
+        **{name: ('number', 0, 86400000) for name in ('observedProjectedTargetMs', 'dartPositionMs', 'nativePositionMs')},
+        'serverClockOffsetMs': ('number', -600000, 600000), 'dartReadSkewMs': ('number', -1000, 1000),
+        'latencySampleCount': COUNT,
+        'nativeRate': ('number', 0, 2), 'requestedRate': ('number', .5, 2),
+        'nativeSampleUncertaintyMs': ('number', 0, 1000),
+        'dartSampleUncertaintyMs': ('number', 0, 1000),
+    }, 3),
+}
 LOG_SCHEMA = {
+    'correctionSequence': CORRECTION_SEQUENCE_SCHEMA,
     'coverage': frozenset({'complete', 'partial', 'truncated', 'rotated', 'ownership_refused',
         'file_bound_exceeded', 'unavailable'}),
     'bytesRead': ('integer', 0, 8388608),
@@ -70,6 +122,7 @@ LOG_SCHEMA = {
         'smoothCorrectDrift', 'ignoreProgressHeartbeat')},
 }
 FOLLOW_LIFECYCLE_SCHEMA = {
+    'endpointTiming': ENDPOINT_TIMING_SCHEMA,
     'status': frozenset({'observing', 'observed', 'not_observed', 'observation_unavailable'}),
     'originalPausedTask': SNAPSHOT_SCHEMA, 'commandState': SNAPSHOT_SCHEMA,
     'commandDurationMs': ('number', 0, 45000),

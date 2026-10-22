@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '392e468e47f1c0b390c29468b0e0d1f94dce3fe0' &&
-      github.event.head_commit.message == 'test: measure ordered Follow and extended Handoff 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '6274f95c3fc3223dd0ba18fafe20b4f09c68884c' &&
+      github.event.head_commit.message == 'test: observe Follow correction stop and clock estimates 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build

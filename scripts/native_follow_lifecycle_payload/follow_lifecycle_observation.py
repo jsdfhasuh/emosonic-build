@@ -4,6 +4,7 @@ No commands, network calls, sleeps, acceptance gates, or deadline changes.
 Private identities stay in memory solely for equality and ownership checks.
 """
 import io
+from datetime import datetime
 import json
 import math
 import os
@@ -61,6 +62,152 @@ ACTIONS = ('applyTrackOrQueue', 'applyStateOnly', 'softCorrectDrift', 'hardSeek'
            'smoothCorrectDrift', 'ignoreProgressHeartbeat')
 MARKER = '[[EMO_FOLLOW_R18]] '
 LOG_ENTRY = re.compile(r'^\[\d{4}-\d{2}-\d{2}T[\d:.+Z-]+\] \[(?:DEBUG|INFO|WARNING|ERROR)\] \[[A-Za-z0-9_.]+\] (.*)$')
+CORRECTION_REASONS = ('settled', 'hard_drift', 'transport_paused', 'transport_replaced',
+    'policy_preempted', 'target_changed', 'rate_owner_changed', 'seek_error', 'start_follow',
+    'start_context_follow', 'stop_follow', 'stop_context_follow', 'restore_context_follow',
+    'complete_context_follow_stop', 'source_idle', 'strict_source_rate_changed',
+    'drift_within_tolerance', 'hard_seek', 'apply_follow', 'timer', 'dispose',
+    'socket_disconnect', 'disconnect', 'soft_seek', 'reset_follow_sync')
+CORRECTION_EVENTS = ('action_decision', 'seek_recovery_cancelled', 'seek_recovery_exhausted',
+    'seek_recovery_restore_failed', 'speed_correction_apply', 'speed_correction_restore',
+    'speed_correction_restore_failed', 'speed_setting_invocation')
+CORRECTION_LIMIT = 128
+
+
+def _finite_field(token, low, high, *, integer=False):
+    pattern = r'-?\d+' if integer else r'-?(?:\d+(?:\.\d+)?)(?:[eE][+-]?\d+)?'
+    if not isinstance(token, str) or len(token) > 32 or re.fullmatch(pattern, token) is None:
+        return None
+    value = int(token) if integer else float(token)
+    return value if math.isfinite(value) and low <= value <= high else None
+
+
+def _correction_event(body, logger):
+    """Known invocation/decision logs only, never evidence of native completion."""
+    if logger == 'AudioPlayerService' and body.startswith('Setting playback speed to: '):
+        value = _finite_field(body[len('Setting playback speed to: '):], .5, 2)
+        return {'event': 'speed_setting_invocation', **({'rate': value} if value is not None else {})}, int(value is None)
+    if logger != 'EmoRealtimeClient' or not body.startswith('[[EMO_FOLLOW_SYNC]] '):
+        return None, 0
+    body = body[len('[[EMO_FOLLOW_SYNC]] '):]
+    if body.startswith('action='):
+        action = body.split(' ', 1)[0][7:]
+        if action not in ACTIONS: return None, 0
+        row = {'event': 'action_decision', 'action': action}
+        # These are the existing ordinary-policy decision inputs logged BEFORE
+        # bounded recovery handling, not its later common-time recovery drift.
+        match = re.fullmatch(r'action=\S+ trackId=\S+ index=\S+ positionMs=(\S+) driftMs=(\S+) '
+            r'correction=(\S+) settled=(\S+) adaptiveFollowDelayMs=(\S+) followLeadCompensationMs=(\S+) '
+            r'followSyncToleranceMs=(\S+) latencySamples=\S+ sourceControlChanged=(\S+)', body)
+        if not match: return row, 1
+        position, drift, correction, settled, delay, lead, tolerance, changed = match.groups()
+        invalid = 0
+        for token, key, low, high in ((position, 'positionMs', 0, 86400000),
+                (drift, 'driftMs', -86400000, 86400000), (delay, 'adaptiveFollowDelayMs', 0, 60000),
+                (lead, 'followLeadCompensationMs', -60000, 60000), (tolerance, 'followSyncToleranceMs', 0, 60000)):
+            value = _finite_field(token, low, high, integer=True)
+            if value is not None: row[key] = value
+            else: invalid += 1
+        for token, key in ((settled, 'settled'), (changed, 'sourceControlChanged')):
+            if token in ('true', 'false'): row[key] = token == 'true'
+            else: invalid += 1
+        if correction in ('speedUp', 'slowDown', 'rateLimited', 'seek', 'none'):
+            row['correction'] = correction
+        else: invalid += 1
+        return row, invalid
+    names = (
+        ('seekRecovery cancelled reason=', 'seek_recovery_cancelled'),
+        ('seekRecovery exhausted supported=', 'seek_recovery_exhausted'),
+        ('seekRecovery restore failed error=', 'seek_recovery_restore_failed'),
+        ('speedCorrection restore failed reason=', 'speed_correction_restore_failed'),
+        ('speedCorrection restore reason=', 'speed_correction_restore'),
+        ('speedCorrection apply ', 'speed_correction_apply'),
+    )
+    event = next((name for prefix, name in names if body.startswith(prefix)), None)
+    if event is None:
+        return None, 0
+    row, invalid = {'event': event}, 0
+    if event == 'seek_recovery_restore_failed':
+        return row, 0  # Error content is deliberately not parsed.
+    if event == 'seek_recovery_exhausted':
+        value = body[len('seekRecovery exhausted supported='):]
+        if value in ('true', 'false'): row['supported'] = value == 'true'
+        else: invalid += 1
+        return row, invalid
+    if event == 'speed_correction_apply':
+        match = re.fullmatch(r'speedCorrection apply targetKey=\S+ driftMs=(\S+) baseSpeed=(\S+) syncSpeed=(\S+) durationMs=(\S+)', body)
+        if not match: return row, 1
+        for token, (key, low, high, integer) in zip(match.groups(), (
+                ('driftMs', -86400000, 86400000, True), ('baseSpeed', .5, 2, False),
+                ('syncSpeed', .5, 2, False), ('durationMs', 0, 5000, True))):
+            value = _finite_field(token, low, high, integer=integer)
+            if value is not None: row[key] = value
+            else: invalid += 1
+        return row, invalid
+    if event == 'seek_recovery_cancelled':
+        reason = body[len('seekRecovery cancelled reason='):]
+    elif event == 'speed_correction_restore_failed':
+        match = re.match(r'speedCorrection restore failed reason=(\S+) error=', body)
+        reason = match.group(1) if match else None
+    else:
+        match = re.fullmatch(r'speedCorrection restore reason=(\S+) targetKey=\S+ speed=(\S+)', body)
+        reason = match.group(1) if match else None
+        value = _finite_field(match.group(2), .5, 2) if match else None
+        if value is not None: row['rate'] = value
+        else: invalid += 1
+    row['reason'] = reason if reason in CORRECTION_REASONS else 'unrecognized'
+    return row, invalid
+
+
+class _CorrectionSequence:
+    """Small finite reducer. File order is authoritative; wall time is unpaired."""
+    def __init__(self):
+        self.origin = self.previous = None
+        self.value = {'timeBasis': 'first_selected_log_event_wall', 'monotonicClockPaired': False,
+            'recoveryWindowStartObserved': False, 'eventCount': 0, 'recordsDropped': 0,
+            'recordRetention': 'first64_last64',
+            'recordsTruncated': False, 'unknownReasonCount': 0, 'invalidFieldCount': 0,
+            'timestampIssueCount': 0, 'wallClockRegressionObserved': False,
+            'counts': dict.fromkeys(CORRECTION_EVENTS, 0), 'records': []}
+
+    def observe(self, line, body):
+        header = re.match(r'^\[([^\]]+)\] \[(?:DEBUG|INFO|WARNING|ERROR)\] \[([A-Za-z0-9_.]+)\] ', line)
+        if not header: return
+        row, invalid = _correction_event(body, header.group(2))
+        if row is None: return
+        value = self.value
+        _increment(value, 'eventCount'); _increment(value['counts'], row['event'])
+        value['invalidFieldCount'] = min(MAX_COUNT, value['invalidFieldCount'] + invalid)
+        if row.get('reason') == 'unrecognized': _increment(value, 'unknownReasonCount')
+        row['ordinal'] = value['eventCount']
+        row['timeStatus'] = 'unavailable'
+        stamp = header.group(1)
+        try:
+            # Dart DateTime ISO output has three or six fractional digits. Do
+            # not infer the timezone of local wall timestamps or pair them
+            # with the controller Stopwatch / Python monotonic clock.
+            if re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(?:\d{3})?Z?', stamp) is None:
+                raise ValueError('Unsupported timestamp')
+            now = datetime.fromisoformat(stamp)
+            if value['eventCount'] == 1: self.origin = now
+            if self.origin is None or now.tzinfo != self.origin.tzinfo:
+                raise ValueError('Unpaired timestamp basis')
+            if self.previous is not None and now < self.previous:
+                value['wallClockRegressionObserved'] = True
+            self.previous = now
+            offset = (now - self.origin).total_seconds() * 1000
+            if not -600000 <= offset <= 600000: raise ValueError('Timestamp bound')
+            row['wallOffsetMs'] = round(offset, 3)
+            row['timeStatus'] = 'unpaired_wall'
+        except (ValueError, TypeError, OverflowError):
+            _increment(value, 'timestampIssueCount')
+        if len(value['records']) < CORRECTION_LIMIT:
+            value['records'].append(row)
+        else:
+            value['recordsTruncated'] = True
+            _increment(value, 'recordsDropped')
+            value['records'].pop(CORRECTION_LIMIT // 2)
+            value['records'].append(row)
 
 
 def _increment(values, key):
@@ -89,6 +236,7 @@ def _parse_log_lines(lines):
         'speedRestoreFailedCount': 0, 'stackTruncated': False}
     stack_lines = 0
     in_stack = False
+    corrections = _CorrectionSequence()
     for line in lines:
         if len(line) > 8192:
             in_stack = False
@@ -115,6 +263,7 @@ def _parse_log_lines(lines):
             in_stack = False
         if body is None:
             continue
+        corrections.observe(line, body)
         if body.startswith(MARKER):
             body = body[len(MARKER):]
             event = body.split(' ', 1)[0]
@@ -152,6 +301,7 @@ def _parse_log_lines(lines):
             result['seekBoundedTimeoutCount'] = min(MAX_COUNT, result['seekBoundedTimeoutCount'] + 1)
         if body.startswith('[[EMO_FOLLOW_SYNC]] speedCorrection restore failed '):
             result['speedRestoreFailedCount'] = min(MAX_COUNT, result['speedRestoreFailedCount'] + 1)
+    result['correctionSequence'] = corrections.value
     return result
 
 
@@ -454,6 +604,70 @@ def observe_follow_wait(matrix, stage, states):
 def finish_follow_lifecycle(matrix):
     try:
         observer = getattr(matrix, 'follow_lifecycle_observation', None)
-        return observer.finish() if observer is not None else {'status': 'not_observed'}
+        result = dict(observer.finish()) if observer is not None else {'status': 'not_observed'}
     except Exception:
-        return {'status': 'observation_unavailable'}
+        result = {'status': 'observation_unavailable'}
+    # Reuse the exact final samples already held by Matrix. No state request,
+    # new native read, control, or inference about the last recovery decision.
+    try:
+        result['endpointTiming'] = _endpoint_timing(getattr(matrix, 'last', None))
+    except Exception:
+        result['endpointTiming'] = {'status': 'unavailable'}
+    return result
+
+
+def _endpoint_timing(states):
+    if type(states) is not list or not 1 <= len(states) <= 3:
+        return {'status': 'unavailable'}
+    output = {'status': 'observed', 'meaning': 'latest_stored_fact_not_controller_decision', 'clients': []}
+    fields = (
+        ('runtimeAdaptiveDelayMs', 0, 60000), ('configuredMinDelayMs', 0, 60000),
+        ('configuredMaxDelayMs', 0, 60000), ('lastObservedControllerDriftMs', -86400000, 86400000),
+        ('observedSourceSampleAgeMs', -60000, 600000), ('observedSourceReceiveAgeMs', -60000, 600000),
+        ('observedSourceAppliedControlVersion', 0, 1e12), ('observedProjectionDelayMs', 0, 60000),
+        ('observedProjectedTargetMs', 0, 86400000))
+    def number(value, low, high):
+        return type(value) in (int, float) and math.isfinite(value) and low <= value <= high
+    for ordinal, state in enumerate(states):
+        if type(state) is not dict: continue
+        row = {'clientOrdinal': ordinal}
+        raw = state.get('followTimingDiagnostics')
+        if type(raw) is dict:
+            for name, low, high in fields:
+                if number(raw.get(name), low, high): row[name] = raw[name]
+            for name in ('observedSourceFactPresent', 'observedSourceFactMatchesCurrent', 'observedSourceTimingValid'):
+                if type(raw.get(name)) is bool: row[name] = raw[name]
+            if raw.get('observedProjectionBasis') in ('strict_sampled_at', 'unavailable'):
+                row['observedProjectionBasis'] = raw['observedProjectionBasis']
+        if number(state.get('serverClockOffsetMs'), -600000, 600000):
+            row['serverClockOffsetMs'] = state['serverClockOffsetMs']
+        if type(state.get('latencySampleCount')) is int and 0 <= state['latencySampleCount'] <= MAX_COUNT:
+            row['latencySampleCount'] = state['latencySampleCount']
+        if number(state.get('dartPositionMs'), 0, 86400000): row['dartPositionMs'] = state['dartPositionMs']
+        if number(state.get('dartPositionSampleUncertaintyMs'), 0, 1000):
+            row['dartSampleUncertaintyMs'] = state['dartPositionSampleUncertaintyMs']
+        native = state.get('nativePlayers')
+        if type(native) is list and len(native) == 1 and type(native[0]) is dict:
+            item = native[0]
+            for old, new, low, high in (
+                    ('positionMs', 'nativePositionMs', 0, 86400000),
+                    ('playbackRate', 'nativeRate', 0, 2), ('requestedRate', 'requestedRate', .5, 2),
+                    ('sampleUncertaintyMs', 'nativeSampleUncertaintyMs', 0, 1000)):
+                if number(item.get(old), low, high): row[new] = item[old]
+            dart_at, native_at = state.get('dartPositionSampledAtMs'), item.get('sampledAtMs')
+            if number(dart_at, 0, 1e15) and number(native_at, 0, 1e15):
+                skew = dart_at - native_at
+                if number(skew, -1000, 1000):
+                    row['dartReadSkewMs'] = skew
+                    if (type(item.get('playbackState')) is int and item['playbackState'] == 3
+                            and 'nativePositionMs' in row and 'nativeRate' in row
+                            and row['nativeRate'] > 0 and item.get('seekInProgress') is False
+                            and item.get('playingIntent') is True
+                            and type(item.get('avTimeControlStatus')) is int and item['avTimeControlStatus'] == 2
+                            and row.get('observedProjectionBasis') == 'strict_sampled_at'
+                            and 'observedProjectedTargetMs' in row):
+                        residual = row['nativePositionMs'] + skew * row['nativeRate'] - row['observedProjectedTargetMs']
+                        if number(residual, -86400000, 86400000):
+                            row['nativeMinusObservedTargetAtDartReadMs'] = round(residual, 3)
+        output['clients'].append(row)
+    return output
