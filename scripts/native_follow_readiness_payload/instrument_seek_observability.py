@@ -4,7 +4,7 @@ def instrument_seek_observability(target):
     paths = {'AudioPlayer.h': target / relative / 'include/just_audio/AudioPlayer.h',
              'AudioPlayer.m': target / relative / 'AudioPlayer.m'}
     expected = {'AudioPlayer.h': 'c8c6df3bc07f10677e0afbeb447c88da2a704b2c8323769247f78768c6a43138',
-        'AudioPlayer.m': 'ce2f0661be34e093a2cab4f3db697128f6468236b5c30103d4979d20aef74b62'}
+        'AudioPlayer.m': 'ecec29e1f913f0dca944ca3fb2e45a7ad96a138391af59f99ca3f46dfd5b65b3'}
     originals = {}
     for name, path in paths.items():
         if any(p.is_symlink() for p in (path, *path.parents)) or not path.is_file():

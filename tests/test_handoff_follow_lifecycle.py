@@ -11,7 +11,7 @@ class FocusedFollowOrchestrationTests(unittest.TestCase):
     def test_exact_request_workflow_and_fixed_scope(self):
         root = Path(__file__).resolve().parents[1]
         self.assertEqual(json.loads((root / c.REQUEST_PATH).read_text()), c.REQUEST)
-        self.assertEqual(c.SOURCE_SHA, '01967c853a4e6020097e9a2da61f9785b470ff7d')
+        self.assertEqual(c.SOURCE_SHA, '1efc826b85c305bd60210aa705444114c1a0d5e2')
         workflow = (root / '.github/workflows' / c.WORKFLOW).read_text()
         for value in (c.PARENT, c.MESSAGE, c.REQUEST_PATH, 'github.event.forced == false'):
             self.assertIn(value, workflow)

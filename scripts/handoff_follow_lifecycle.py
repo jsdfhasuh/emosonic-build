@@ -4,14 +4,14 @@ from unittest.mock import patch
 import handoff_follow_readiness as base
 import native_follow_lifecycle as lifecycle
 
-PARENT = '2db031056576e138cf0ef21df0f09cbf1088a63f'
-MESSAGE = 'test: validate bounded native follow preroll 20261022'
+PARENT = '304c98c82260644fb5c75816e924bdc466dca9a8'
+MESSAGE = 'test: verify repaired native position anchors 20261022'
 WORKFLOW = 'handoff-follow-lifecycle.yml'
 REQUEST_PATH = 'requests/handoff-follow-lifecycle-20261022.json'
-SOURCE_SHA = base.SOURCE_SHA
-SOURCE_REF = base.SOURCE_REF
+SOURCE_SHA = '1efc826b85c305bd60210aa705444114c1a0d5e2'
+SOURCE_REF = 'refs/heads/fix/darwin-position-anchor-20261022'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
-REQUEST = dict(base.REQUEST, server_sha=SERVER_SHA, mode='native-follow-lifecycle-validation', attempt=10)
+REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF, server_sha=SERVER_SHA, mode='native-follow-lifecycle-validation', attempt=13)
 NATIVE_STAGES = ('prepare', 'dependencies', 'unit', 'preflight', 'attribution', 'build', 'handoff', 'follow', 'cleanup')
 
 

@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '01967c853a4e6020097e9a2da61f9785b470ff7d'
+  SOURCE_SHA: '1efc826b85c305bd60210aa705444114c1a0d5e2'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '2db031056576e138cf0ef21df0f09cbf1088a63f' &&
-      github.event.head_commit.message == 'test: validate bounded native follow preroll 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '304c98c82260644fb5c75816e924bdc466dca9a8' &&
+      github.event.head_commit.message == 'test: verify repaired native position anchors 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/handoff-play-initiation-20261022
+          SOURCE_REF: refs/heads/fix/darwin-position-anchor-20261022
         run: python3 scripts/handoff_follow_lifecycle.py source prepare
 
   native-macos-server:

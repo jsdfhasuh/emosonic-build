@@ -1,9 +1,9 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/fix/handoff-play-initiation-20261022",
-  "source_sha": "01967c853a4e6020097e9a2da61f9785b470ff7d",
+  "source_ref": "refs/heads/fix/darwin-position-anchor-20261022",
+  "source_sha": "1efc826b85c305bd60210aa705444114c1a0d5e2",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "native-follow-lifecycle-validation",
-  "attempt": 10
+  "attempt": 13
 }
