@@ -16,15 +16,16 @@ def suites(counts):
 
 class ClockIntervalGreen(unittest.TestCase):
     def test_exact_delegation_restores_previous_gate(self):
-        old = (c.previous.SOURCE_SHA, c.previous.inventory)
+        old = (c.previous.SOURCE_SHA, c.previous.inventory, c.previous.previous.previous.RECOVERY_INVENTORY_SHA256)
         def check():
             self.assertEqual(c.previous.SOURCE_SHA, c.SOURCE_SHA)
             self.assertEqual(c.previous.REQUEST, c.REQUEST)
             self.assertIs(c.previous.inventory, c.inventory)
+            self.assertEqual(c.previous.previous.previous.RECOVERY_INVENTORY_SHA256,c.RECOVERY_DIGEST)
             return 7
         with patch.object(c.previous, 'main', side_effect=check):
             self.assertEqual(c.main(), 7)
-        self.assertEqual((c.previous.SOURCE_SHA, c.previous.inventory), old)
+        self.assertEqual((c.previous.SOURCE_SHA, c.previous.inventory,c.previous.previous.previous.RECOVERY_INVENTORY_SHA256), old)
 
     def test_only_reviewed_legacy_digest_replaced_and_all_cases_required(self):
         timing = c.previous.previous

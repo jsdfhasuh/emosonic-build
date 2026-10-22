@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: 'e84443ef9ec5f7bee9f8a0a60291fe89bb2b03bd'
+  SOURCE_SHA: '54844e610f5d5c6e935431be087f1fae64fe96d6'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '2c24a0b2f92f1b26df1e0ed482062f0b8b7c1157' &&
-      github.event.head_commit.message == 'test: validate feasible matched-pong clock repair 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'fb38f21040bc6e35659384c68e9b04a355d86106' &&
+      github.event.head_commit.message == 'test: verify native expiry oracle and feasible clock repair 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/server-clock-feasible-interval-20261022
+          SOURCE_REF: refs/heads/test/follow-expiry-native-oracle-20261022
         run: python3 scripts/follow_clock_interval_green.py source prepare
 
   validate-source:

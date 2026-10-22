@@ -1,9 +1,9 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/fix/server-clock-feasible-interval-20261022",
-  "source_sha": "e84443ef9ec5f7bee9f8a0a60291fe89bb2b03bd",
+  "source_ref": "refs/heads/test/follow-expiry-native-oracle-20261022",
+  "source_sha": "54844e610f5d5c6e935431be087f1fae64fe96d6",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "follow-clock-interval-full-green-validation",
-  "attempt": 54
+  "attempt": 56
 }
