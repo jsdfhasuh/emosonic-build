@@ -19,20 +19,20 @@ from fixed_flutter_green import (MAX_BYTES, MAX_EVENTS, GreenVerificationError,
                                  observe_green, verify_green)
 from follow_recovery_check import owned_file
 
-PARENT = '73c3d268d6877b126d355db743866746736d87a9'
-MESSAGE = 'test: prove ingress completion ordering 20261022'
+PARENT = '4d18f3090bac570b2ad9f65807b3adf29ade49bb'
+MESSAGE = 'test: verify complete ingress fixture inventory 20261022'
 WORKFLOW = 'follow-ingress-proof.yml'
 REQUEST_PATH = 'requests/follow-ingress-proof-20261022.json'
-SOURCE_REF = 'refs/heads/test/follow-ingress-operation-completion-20261022'
-SOURCE_SHA = '1cab571e0a3ee321a583a864802949198e6f21e2'
+SOURCE_REF = 'refs/heads/test/follow-ingress-completion-inventory-20261022'
+SOURCE_SHA = '37a675b48a8f1c7b0397c410cef4f1069def7962'
 BASELINE_SHA = '466f56d9935afb299724a212d680a743a11c723f'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 INVENTORY_PATH = 'tool/follow_ingress/test_inventory.json'
-INVENTORY_SHA256 = '3bca3aeb1e398d5ed6c8d36ef2448e56ddefb2ea683c1a05358e08f120c25ccb'
+INVENTORY_SHA256 = '55b83ff0c47cfb719360065ce9a136671b88bbfd1c42760e13255270bd3a982a'
 ASSERTION_MARKER = 'FOLLOW_INGRESS_STALE_PENDING_APPLY_REPLAYED'
 REQUEST = dict(request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
                baseline_sha=BASELINE_SHA, server_sha=SERVER_SHA,
-               mode='follow-ingress-expected-red-proof', attempt=32)
+               mode='follow-ingress-expected-red-proof', attempt=33)
 STAGE = 'entry'
 
 
