@@ -7,15 +7,15 @@ import handoff_follow_readiness as base
 import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 
-PARENT = 'b3e7b59ef9bc2c28596a5d02469346dee69dde21'
-MESSAGE = 'test: validate post-restore native settlement matrix 20261022'
+PARENT = 'abb2a8ac460088c9dadbf87754219727e168a614'
+MESSAGE = 'test: complete current-source extended handoff matrix 20261022'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
 SOURCE_SHA = '3093662be2bcc31fefde455baf5d6f68e51784dc'
 SOURCE_REF = 'refs/heads/fix/follow-post-restore-verification-20261022'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=50, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39832443427)
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=51, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39832443427)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
 

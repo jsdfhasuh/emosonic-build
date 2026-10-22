@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == 'b3e7b59ef9bc2c28596a5d02469346dee69dde21' &&
-      github.event.head_commit.message == 'test: validate post-restore native settlement matrix 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'abb2a8ac460088c9dadbf87754219727e168a614' &&
+      github.event.head_commit.message == 'test: complete current-source extended handoff matrix 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -96,10 +96,10 @@ jobs:
         run: python3 scripts/handoff_follow_timing.py native attribution
       - name: Compile three sandboxed same-source native test clients
         run: python3 scripts/handoff_follow_timing.py native build
-      - name: Measure actual follower transfer and restoration
-        run: python3 scripts/handoff_follow_timing.py native follow
       - name: Measure normal delayed and cancelled actual Handoff
         run: python3 scripts/handoff_follow_timing.py native handoff
+      - name: Measure actual follower transfer and restoration
+        run: python3 scripts/handoff_follow_timing.py native follow
       - name: Verify native processes stopped and remove owned test bundles and server
         id: native-cleanup
         if: always()
