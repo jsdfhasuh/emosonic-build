@@ -15,3 +15,11 @@ Server: 5adc23da173c5f20188d79aafe8fcc1e656eb38a, unchanged and not executed her
 Public builder predecessor: f88b7d69bc774a7195303b78b6bb6471ab87bf28.
 
 This expected-red result is causal evidence, not a repaired/green candidate. The original full-source analysis, full tests, vendor integrity and all 64 existing focused cases remain mandatory on the later repaired candidate. This workflow does not replace them and performs no native build/run, package build, server deployment or stable release. Existing stable files and workflows remain byte-for-byte unchanged.
+
+## Await-phase diagnostic iteration
+
+Run 39775963962 did not establish causal evidence: all three visible cases ended in TimeoutException, three hidden lifecycle cases passed, and no native-order record was emitted. The diagnostic-only source descendant is 28b05652403eab21100e8960e94bfabed331482e on refs/heads/test/follow-ingress-barrier-diagnostics-20261022. Private inventory SHA256: 65676025dce1f558a8082df54c6a95fef9449c4c1a6dc62a04b0883b17faa67c. Fixture SHA256: 4e94b9b678d46697d46dfd20a900e1aeb827446cbc58350dda4e97c87863367d.
+
+The new FOLLOW_INGRESS_STAGE observation admits only the agreed case ordinal and 44 fixed await-stage enum values, binds them to the pinned reporter test ID, and retains at most 48 stages per case. It always prints summaries for all three ordinals before expected-red rejection, including missing histories. Full bounded histories preserve the unfinished body await even if teardown later emits stages. Invalid/extra fields, arbitrary strings, wrong-case IDs and overflow are counted without being exported.
+
+This is diagnosis only: strict expected-red acceptance, native evidence schema, assertions, timeouts and production bytes are unchanged. Builder predecessor is a3684c1076046c70a7dc9d40278a3badcaa0dcfb and request attempt is 29. No native, package, deployment, release or credential changes.

@@ -1,10 +1,10 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/test/follow-ingress-pending-apply-20261022",
-  "source_sha": "87251d4976fd884efefe765a18f8b12b1eabe63e",
+  "source_ref": "refs/heads/test/follow-ingress-barrier-diagnostics-20261022",
+  "source_sha": "28b05652403eab21100e8960e94bfabed331482e",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "baseline_sha": "466f56d9935afb299724a212d680a743a11c723f",
   "mode": "follow-ingress-expected-red-proof",
-  "attempt": 28
+  "attempt": 29
 }

@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '87251d4976fd884efefe765a18f8b12b1eabe63e'
+  SOURCE_SHA: '28b05652403eab21100e8960e94bfabed331482e'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == 'f88b7d69bc774a7195303b78b6bb6471ab87bf28' &&
-      github.event.head_commit.message == 'test: prove stale pending ingress replay 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'a3684c1076046c70a7dc9d40278a3badcaa0dcfb' &&
+      github.event.head_commit.message == 'test: diagnose ingress fixture await phases 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -39,7 +39,7 @@ jobs:
       - name: Verify immutable test-only source pin
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
-          SOURCE_REF: refs/heads/test/follow-ingress-pending-apply-20261022
+          SOURCE_REF: refs/heads/test/follow-ingress-barrier-diagnostics-20261022
         run: python3 scripts/follow_ingress_proof.py source prepare
 
   expected-red:

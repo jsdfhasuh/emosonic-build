@@ -19,20 +19,20 @@ from fixed_flutter_green import (MAX_BYTES, MAX_EVENTS, GreenVerificationError,
                                  observe_green, verify_green)
 from follow_recovery_check import owned_file
 
-PARENT = 'f88b7d69bc774a7195303b78b6bb6471ab87bf28'
-MESSAGE = 'test: prove stale pending ingress replay 20261022'
+PARENT = 'a3684c1076046c70a7dc9d40278a3badcaa0dcfb'
+MESSAGE = 'test: diagnose ingress fixture await phases 20261022'
 WORKFLOW = 'follow-ingress-proof.yml'
 REQUEST_PATH = 'requests/follow-ingress-proof-20261022.json'
-SOURCE_REF = 'refs/heads/test/follow-ingress-pending-apply-20261022'
-SOURCE_SHA = '87251d4976fd884efefe765a18f8b12b1eabe63e'
+SOURCE_REF = 'refs/heads/test/follow-ingress-barrier-diagnostics-20261022'
+SOURCE_SHA = '28b05652403eab21100e8960e94bfabed331482e'
 BASELINE_SHA = '466f56d9935afb299724a212d680a743a11c723f'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 INVENTORY_PATH = 'tool/follow_ingress/test_inventory.json'
-INVENTORY_SHA256 = '6db76d19ef749275814527166fc5a3a9f9ce7c328840fdaa3c1578db5be2d7c1'
+INVENTORY_SHA256 = '65676025dce1f558a8082df54c6a95fef9449c4c1a6dc62a04b0883b17faa67c'
 ASSERTION_MARKER = 'FOLLOW_INGRESS_STALE_PENDING_APPLY_REPLAYED'
 REQUEST = dict(request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
                baseline_sha=BASELINE_SHA, server_sha=SERVER_SHA,
-               mode='follow-ingress-expected-red-proof', attempt=28)
+               mode='follow-ingress-expected-red-proof', attempt=29)
 STAGE = 'entry'
 
 
@@ -228,6 +228,64 @@ def dispatch_observation(raw, names):
     return report
 
 
+PHASE_PREFIX = 'FOLLOW_INGRESS_STAGE '
+PHASE_STEPS = ('create', 'harnessInitialize', 'audioPlayQueue', 'audioUntilPlaying',
+               'audioPause', 'audioSeek', 'startFollow', 'firstMetadata', 'firstHold',
+               'bDrain', 'secondMetadata', 'mirrorReady', 'secondHold', 'cDrain',
+               'secondReturned', 'replayCompletion', 'stalePreflightExit',
+               'currentCCompletion', 'finalDrain', 'disposeDrain', 'playbackDispose')
+PHASE_STAGES = frozenset(step + suffix for step in PHASE_STEPS for suffix in ('.before', '.after')) | {
+    'bIngress.accepted', 'cIngress.accepted'}
+
+
+def phase_observation(raw, names):
+    """Diagnostic only: three bounded, case-scoped fixed-enum await histories."""
+    report = dict(stage='follow-ingress-phases', reportCount=0, invalidReports=0,
+                  cases=[dict(testOrdinal=i, stages=[], lastStage=None) for i in range(1, 4)])
+    if type(raw) is not str or len(raw.encode('utf-8')) > MAX_BYTES:
+        return dict(report, reason='output-limit')
+    starts, completed = {}, set()
+    events = 0
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        events += 1
+        if events > MAX_EVENTS:
+            return dict(report, reason='event-limit')
+        try:
+            event = strict_json(line)
+        except (ValueError, RecursionError):
+            continue  # The original whole-stream accounting still owns acceptance.
+        if type(event) is not dict:
+            continue
+        kind, tid = event.get('type'), event.get('testID')
+        if kind == 'testStart' and type(event.get('test')) is dict:
+            test = event['test']
+            if type(test.get('id')) is int:
+                starts[test['id']] = (names.index(test.get('name')) + 1
+                                      if test.get('name') in names and test['id'] not in starts else None)
+        elif kind == 'testDone' and type(tid) is int:
+            completed.add(tid)
+        elif kind == 'print' and type(event.get('message')) is str and event['message'].startswith(PHASE_PREFIX):
+            report['reportCount'] += 1
+            ordinal = starts.get(tid) if type(tid) is int else None
+            try:
+                if ordinal is None or tid in completed or len(event['message']) > 256:
+                    raise ValueError('Invalid case-scoped phase.')
+                value = strict_json(event['message'][len(PHASE_PREFIX):])
+                if (type(value) is not dict or set(value) != {'caseOrdinal', 'stage'}
+                        or type(value['caseOrdinal']) is not int or value['caseOrdinal'] != ordinal
+                        or type(value['stage']) is not str or value['stage'] not in PHASE_STAGES
+                        or len(report['cases'][ordinal - 1]['stages']) >= 48):
+                    raise ValueError('Invalid finite phase.')
+                case = report['cases'][ordinal - 1]
+                case['stages'].append(value['stage'])
+                case['lastStage'] = value['stage']
+            except (ValueError, TypeError, RecursionError):
+                report['invalidReports'] += 1
+    return report
+
+
 def bounded_run(args, cwd=None, env=None, *, timeout=600, max_bytes=MAX_BYTES):
     """Linux-only in-memory capture, process-group stop, no raw log artifacts."""
     chunks = {'stdout': bytearray(), 'stderr': bytearray()}
@@ -322,6 +380,7 @@ def prove():
         if reason:
             observation['captureFailure'] = reason
         print(json.dumps(observation), flush=True)
+        print(json.dumps(phase_observation(result.stdout, suite['names'])), flush=True)
         evidence = dispatch_observation(result.stdout, suite['names'])
         print(json.dumps(evidence), flush=True)
         p.require(reason is None, 'Bounded Flutter capture did not complete.')

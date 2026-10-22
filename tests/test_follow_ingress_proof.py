@@ -239,6 +239,86 @@ class DispatchEvidenceTests(unittest.TestCase):
             self.assertEqual(c.dispatch_observation(raw(fixture()), NAMES)['reason'], 'event-limit')
 
 
+class PhaseObservationTests(unittest.TestCase):
+    def phases(self):
+        events = []
+        for ordinal, name in enumerate(NAMES, 1):
+            events.append(dict(type='testStart', test=dict(id=ordinal, name=name)))
+            for stage in ('create.before', 'create.after', 'firstMetadata.before'):
+                events.append(dict(type='print', testID=ordinal, message=c.PHASE_PREFIX +
+                                   json.dumps(dict(caseOrdinal=ordinal, stage=stage))))
+            events.append(dict(type='error', testID=ordinal, isFailure=False, error='TimeoutException: ' + SECRET))
+            events.append(dict(type='testDone', testID=ordinal, hidden=False, skipped=False, result='error'))
+        return events + [dict(type='done', success=False)]
+
+    def test_all_three_timeout_cases_retain_last_await_and_history(self):
+        report = c.phase_observation(raw(self.phases()), NAMES)
+        self.assertEqual(report['reportCount'], 9)
+        self.assertEqual(report['invalidReports'], 0)
+        self.assertEqual([case['lastStage'] for case in report['cases']], ['firstMetadata.before'] * 3)
+        self.assertEqual([case['testOrdinal'] for case in report['cases']], [1, 2, 3])
+        self.assertTrue(all(case['stages'] == ['create.before', 'create.after', 'firstMetadata.before']
+                            for case in report['cases']))
+        self.assertNotIn(SECRET, json.dumps(report))
+
+    def test_empty_and_malformed_output_still_show_all_three_missing_cases(self):
+        for text in ['', SECRET, '[]', '{"type":"print","type":"start"}']:
+            report = c.phase_observation(text, NAMES)
+            self.assertEqual(report['cases'], [dict(testOrdinal=i, stages=[], lastStage=None) for i in range(1, 4)])
+            self.assertNotIn(SECRET, json.dumps(report))
+
+    def test_unknown_extra_nonfinite_and_oversized_records_never_leak(self):
+        bad = [dict(caseOrdinal=1, stage=SECRET), dict(caseOrdinal=1, stage='create.before', secret=SECRET),
+               dict(caseOrdinal=True, stage='create.before'), dict(caseOrdinal=2, stage='create.before'),
+               dict(caseOrdinal=1, stage=['create.before']), dict(caseOrdinal=1, stage='x' * 256)]
+        bodies = [json.dumps(item) for item in bad] + [SECRET, '[]', '{"stage":NaN}',
+                  '{"caseOrdinal":1,"stage":"create.before","stage":"create.after"}']
+        for body in bodies:
+            events = self.phases()
+            events[1]['message'] = c.PHASE_PREFIX + body
+            report = c.phase_observation(raw(events), NAMES)
+            self.assertEqual(report['invalidReports'], 1)
+            self.assertEqual(len(report['cases'][0]['stages']), 2)
+            self.assertNotIn(SECRET, json.dumps(report))
+
+    def test_emitter_binding_lifecycle_and_per_case_cap(self):
+        for tid in [True, 2, 50, None]:
+            events = self.phases()
+            events[1]['testID'] = tid
+            self.assertEqual(c.phase_observation(raw(events), NAMES)['invalidReports'], 1)
+        events = self.phases()
+        message = events.pop(1)
+        events.insert(-1, message)
+        self.assertEqual(c.phase_observation(raw(events), NAMES)['invalidReports'], 1)
+        events = self.phases()
+        events[2:2] = [dict(events[1])] * 50
+        report = c.phase_observation(raw(events), NAMES)
+        self.assertEqual(len(report['cases'][0]['stages']), 48)
+        self.assertEqual(report['invalidReports'], 5)
+        self.assertEqual([len(case['stages']) for case in report['cases'][1:]], [3, 3])
+
+    def test_diagnostic_limits_and_only_fixed_phase_enum(self):
+        self.assertEqual(len(c.PHASE_STAGES), 44)
+        with patch.object(c, 'MAX_BYTES', 10):
+            self.assertEqual(c.phase_observation(raw(self.phases()), NAMES)['reason'], 'output-limit')
+        with patch.object(c, 'MAX_EVENTS', 1):
+            self.assertEqual(c.phase_observation(raw(self.phases()), NAMES)['reason'], 'event-limit')
+
+    def test_phase_reports_print_before_expected_red_rejection(self):
+        result = subprocess.CompletedProcess([], 1, raw(self.phases()), '')
+        helper = ExecutionTests()
+        with contextlib.ExitStack() as stack:
+            output = stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            helper.proof_patches(stack, result=result)
+            with self.assertRaises(c.GreenVerificationError): c.prove()
+            reports = [json.loads(line) for line in output.getvalue().splitlines()]
+            self.assertEqual([report['stage'] for report in reports],
+                             ['fixed-flutter-observation', 'follow-ingress-phases', 'follow-ingress-native-order'])
+            self.assertEqual(len(reports[1]['cases']), 3)
+            self.assertEqual(reports[0]['errorCount'], 3)
+            self.assertNotIn(SECRET, output.getvalue())
+
+
 class InventoryTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
