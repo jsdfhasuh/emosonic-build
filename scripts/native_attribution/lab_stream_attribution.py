@@ -10,6 +10,7 @@ import argparse
 from contextlib import contextmanager
 import hashlib
 import inspect
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -32,6 +33,8 @@ BASELINE_HASHES = {
 }
 LAB_MAIN = 'tool/native_playback_mac/main.dart'
 LAB_DEBUG_MAIN_SHA256 = 'f8781ae5077924daebc0908500f79e57ee9a80af8e9d25d474468651563d2af0'
+TIMING_OBSERVED_LAB_SHA256 = '3b6c69c84c424656a3196a613caec7f9fe7de9486010ffade60032b92648215d'
+TIMING_BASELINE_LAB_SHA256 = '312fa1ed88ce070f5cf64bbf407e384bbdf7b22b8719623a45f0b6eca765ab9d'
 IMPORT = "import 'native_lab_scoped_api_client.dart';\n"
 ORIGINAL = '''SubsonicApiClient createAccountApiClient(Ref ref, AccountSession session) {
   session.requestContext.ensureCurrent();
@@ -280,7 +283,8 @@ def proof_environment():
     return env
 
 
-def prove_and_patch(repo):
+def prove_and_patch(repo, *, lab_timing_observation=False):
+    _verify_timing_observation(repo, enabled=lab_timing_observation)
     """Run unchanged and decorated production factory/resolver on hosted Flutter.
 
     Call after Flutter pub get/codegen on the disposable native checkout, not in
@@ -403,7 +407,35 @@ def verified_manifest(repo, *, native_applied=False):
     return manifest
 
 
-def apply_native_handoff(repo, *, expected_lab_before_sha256):
+def _verify_timing_observation(repo, *, enabled=False, observed=None):
+    if type(enabled) is not bool:
+        raise ValueError('Attribution timing observation mode refused')
+    if not enabled:
+        return
+    modules = {}
+    for name in ('native_seek_anchor_observation', 'native_follow_lifecycle'):
+        path = ROOT.parent / (name + '.py')
+        if not path.is_file() or any(part.is_symlink() for part in (path, *path.parents)):
+            raise ValueError('Attribution timing verifier path refused')
+        spec = importlib.util.spec_from_file_location('owned_' + name, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        modules[name] = module
+    timing = modules['native_seek_anchor_observation']
+    lifecycle = modules['native_follow_lifecycle']
+    if (timing.HARNESS_SHA != TIMING_BASELINE_LAB_SHA256
+            or timing.AFTER[LAB] != TIMING_OBSERVED_LAB_SHA256
+            or lifecycle.AFTER_HARNESS_SHA256 != TIMING_BASELINE_LAB_SHA256):
+        raise ValueError('Attribution timing fixed hash chain changed')
+    timing.verify_prepared(repo, require_harness=observed is None)
+    content = checked_file(repo, LAB).read_bytes() if observed is None else observed
+    if digest(content) != TIMING_OBSERVED_LAB_SHA256 or digest(timing.restore_harness(content)) != TIMING_BASELINE_LAB_SHA256:
+        raise ValueError('Attribution timing inverse changed')
+    lifecycle.verify_prepared(repo, require_harness=False)
+
+
+def apply_native_handoff(repo, *, expected_lab_before_sha256, lab_timing_observation=False):
+    _verify_timing_observation(repo, enabled=lab_timing_observation)
     manifest = verified_manifest(repo)
     lab = checked_file(repo, LAB)
     original = lab.read_bytes()
@@ -417,7 +449,7 @@ def apply_native_handoff(repo, *, expected_lab_before_sha256):
     return manifest
 
 
-def verify_applied(repo, *, expected_lab_before_sha256):
+def verify_applied(repo, *, expected_lab_before_sha256, lab_timing_observation=False):
     """Read-only gate for every later native build, Handoff and Follow phase.
 
     The mandatory expected hash independently pins the already-observed harness
@@ -444,6 +476,7 @@ def verify_applied(repo, *, expected_lab_before_sha256):
         raise ValueError('Native attribution before/after roundtrip failed')
     if expected_lab_before_sha256 != native['before']:
         raise ValueError('Native attribution observed harness pin changed')
+    _verify_timing_observation(repo, enabled=lab_timing_observation, observed=original)
     return manifest
 
 
@@ -453,17 +486,20 @@ def main():
     parser.add_argument('--repo', required=True, type=Path)
     parser.add_argument('--expected-lab-before-sha256')
     parser.add_argument('--lab-debug-observation', action='store_true')
+    parser.add_argument('--lab-timing-observation', action='store_true')
     args = parser.parse_args()
     if args.stage != 'proof' and (args.expected_lab_before_sha256 is None or
             re.fullmatch(r'[0-9a-f]{64}', args.expected_lab_before_sha256) is None):
         parser.error('native and verify require an independent expected lab before hash')
     with lab_debug_observation(args.repo, enabled=args.lab_debug_observation):
         if args.stage == 'proof':
-            prove_and_patch(args.repo)
+            prove_and_patch(args.repo, lab_timing_observation=args.lab_timing_observation)
         elif args.stage == 'native':
-            apply_native_handoff(args.repo, expected_lab_before_sha256=args.expected_lab_before_sha256)
+            apply_native_handoff(args.repo, expected_lab_before_sha256=args.expected_lab_before_sha256,
+                                 lab_timing_observation=args.lab_timing_observation)
         else:
-            verify_applied(args.repo, expected_lab_before_sha256=args.expected_lab_before_sha256)
+            verify_applied(args.repo, expected_lab_before_sha256=args.expected_lab_before_sha256,
+                           lab_timing_observation=args.lab_timing_observation)
 
 
 if __name__ == '__main__':

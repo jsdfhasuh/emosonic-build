@@ -159,9 +159,19 @@ def apply(source_repo):
     return manifest
 
 
-def _verify_source_prepared(source_repo):
+def _verify_source_prepared(source_repo, *, timing_observation=False):
     # The attribution gate independently verifies final run_lab bytes against
     # AFTER[LAB] after reversing its own exact transport-only additions.
+    if type(timing_observation) is not bool:
+        raise ValueError('Readiness timing observation mode refused')
+    expected_prepare = AFTER[PREPARE]
+    if timing_observation:
+        import native_seek_anchor_observation as timing
+        if timing.PREPARE_SHA != AFTER[PREPARE] or timing.EXPECTED != {
+                name: hashes['after'] for name, hashes in NATIVE_HASHES.items()}:
+            raise ValueError('Readiness timing baseline chain changed')
+        timing.verify_prepared(source_repo, require_harness=False)
+        expected_prepare = timing.AFTER[PREPARE]
     for name in PAYLOAD_HASHES: payload(name)
     manifest = json.loads(checked(source_repo, STATE).read_text())
     if (not isinstance(manifest, dict) or manifest != expected_manifest()
@@ -169,7 +179,8 @@ def _verify_source_prepared(source_repo):
                    ('productionRepositoryMutation', 'disposableOnly', 'nativeReadOnlyGetters', 'originalFixtureTestMethodsUnchanged'))):
         raise ValueError('Readiness preparation manifest changed')
     for name in (PREPARE, FIXTURE):
-        if digest(checked(source_repo, name).read_bytes()) != AFTER[name]:
+        expected_hash = expected_prepare if name == PREPARE else AFTER[name]
+        if digest(checked(source_repo, name).read_bytes()) != expected_hash:
             raise ValueError('Readiness prepared source changed')
     if digest(checked(source_repo, ORIGINAL_STATE).read_bytes()) != BASELINE[LAB]:
         raise ValueError('Readiness private baseline changed')
@@ -242,22 +253,27 @@ def verify_contract(source_repo):
         raise ValueError('Readiness deterministic contract runner failed') from None
 
 
-def verify_prepared(source_repo):
-    manifest = _verify_source_prepared(source_repo)
+def verify_prepared(source_repo, *, timing_observation=False):
+    manifest = _verify_source_prepared(source_repo, timing_observation=timing_observation)
     proof = json.loads(checked(source_repo, PROOF_STATE).read_text())
     if not isinstance(proof, dict) or proof != expected_proof() or type(proof.get('checks')) is not int:
         raise ValueError('Readiness contract proof manifest changed')
     return manifest
 
 
-def verify_compiled(source_repo):
-    verify_prepared(source_repo)
+def verify_compiled(source_repo, *, timing_observation=False):
+    verify_prepared(source_repo, timing_observation=timing_observation)
     manifest = json.loads(checked(source_repo, NATIVE_STATE).read_text())
     if (not isinstance(manifest, dict) or manifest != {'readOnly': True, 'files': NATIVE_HASHES}
             or type(manifest.get('readOnly')) is not bool):
         raise ValueError('Readiness native getter manifest changed')
+    expected_native = {name: hashes['after'] for name, hashes in NATIVE_HASHES.items()}
+    if timing_observation:
+        import native_seek_anchor_observation as timing
+        timing.verify_compiled(source_repo)
+        expected_native = timing.NATIVE_AFTER
     for name, hashes in NATIVE_HASHES.items():
-        if digest(checked(source_repo, NATIVE_PATHS[name]).read_bytes()) != hashes['after']:
+        if digest(checked(source_repo, NATIVE_PATHS[name]).read_bytes()) != expected_native[name]:
             raise ValueError('Readiness native getter source changed')
     return manifest
 
@@ -266,8 +282,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('stage', choices=('apply', 'proof', 'verify-prepared', 'verify-compiled'))
     parser.add_argument('--repo', required=True, type=Path)
+    parser.add_argument('--timing-observation', action='store_true')
     args = parser.parse_args()
-    {'apply': apply, 'proof': verify_contract, 'verify-prepared': verify_prepared, 'verify-compiled': verify_compiled}[args.stage](args.repo)
+    if args.timing_observation:
+        if args.stage not in ('verify-prepared', 'verify-compiled'):
+            parser.error('timing observation is verification-only')
+        {'verify-prepared': verify_prepared, 'verify-compiled': verify_compiled}[args.stage](args.repo, timing_observation=True)
+    else:
+        {'apply': apply, 'proof': verify_contract, 'verify-prepared': verify_prepared, 'verify-compiled': verify_compiled}[args.stage](args.repo)
 
 
 if __name__ == '__main__': main()

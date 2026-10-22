@@ -171,7 +171,16 @@ def apply(repo):
     return manifest
 
 
-def verify(repo, *, payload_only=False):
+def verify(repo, *, payload_only=False, timing_observation=False):
+    if type(timing_observation) is not bool:
+        raise ValueError('Lifecycle timing observation mode refused')
+    expected_harness = AFTER_HARNESS_SHA256
+    if timing_observation:
+        import native_seek_anchor_observation as timing
+        if timing.HARNESS_SHA != AFTER_HARNESS_SHA256:
+            raise ValueError('Lifecycle timing baseline chain changed')
+        timing.verify_prepared(repo, require_harness=not payload_only)
+        expected_harness = timing.AFTER[LAB]
     for name in PAYLOAD_HASHES:
         payload(name)
         if digest(checked(repo, 'tool/native_playback_mac/' + name).read_bytes()) != PAYLOAD_HASHES[name]:
@@ -186,26 +195,29 @@ def verify(repo, *, payload_only=False):
         raise ValueError('Lifecycle lab logging instrumentation changed')
     # After stream attribution, that helper checks the composed harness against
     # this independently pinned AFTER_HARNESS_SHA256. Do not derive a runtime pin.
-    if not payload_only and digest(checked(repo, LAB).read_bytes()) != AFTER_HARNESS_SHA256:
+    if not payload_only and digest(checked(repo, LAB).read_bytes()) != expected_harness:
         raise ValueError('Lifecycle prepared harness changed')
     return manifest
 
 
-def verify_prepared(source_repo, require_harness=True):
+def verify_prepared(source_repo, require_harness=True, *, timing_observation=False):
     if type(require_harness) is not bool:
         raise ValueError('Lifecycle verification mode refused')
-    return verify(source_repo, payload_only=not require_harness)
+    return verify(source_repo, payload_only=not require_harness, timing_observation=timing_observation)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('operation', choices=('apply', 'verify', 'verify-payload'))
     parser.add_argument('--repo', type=Path, required=True)
+    parser.add_argument('--timing-observation', action='store_true')
     args = parser.parse_args()
     if args.operation == 'apply':
+        if args.timing_observation:
+            parser.error('timing observation is verification-only')
         apply(args.repo)
     else:
-        verify(args.repo, payload_only=args.operation == 'verify-payload')
+        verify(args.repo, payload_only=args.operation == 'verify-payload', timing_observation=args.timing_observation)
 
 
 if __name__ == '__main__':
