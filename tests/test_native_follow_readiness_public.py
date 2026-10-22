@@ -27,15 +27,26 @@ class PublicReadinessTests(unittest.TestCase):
 
     def test_exact_pending_seek_predicate_and_private_identity(self):
         values = self.fixture.pair(0, paused=True, seek=True)
-        self.assertTrue(self.ns['native_follow_seek_readiness'](values[0], values[2], 1.5))
+        self.assertTrue(self.ns['native_follow_readiness_pending'](values[0], values[2], 1.5))
         identity = self.ns['follow_correction_identity'](values, 0, 'authority-context')
         self.assertIsInstance(identity, tuple)
+
+
+    def test_native_preroll_is_pending_not_ready_or_generic_pause(self):
+        values = self.fixture.waiting(0)
+        self.assertTrue(self.ns['native_follow_readiness_pending'](values[0], values[2], 1.5))
+        for mutate in (lambda n: n.update(playingIntent=False),
+                lambda n: n.update(playbackRate=0), lambda n: n.update(playbackRate=1.56),
+                lambda n: n.update(requestedRate=1), lambda n: n.update(avItemStatus=0),
+                lambda n: n.update(playbackState=4, playbackRate=0, avTimeControlStatus=0)):
+            values = self.fixture.waiting(0); mutate(values[2]['nativePlayers'][0])
+            self.assertFalse(self.ns['native_follow_readiness_pending'](values[0], values[2], 1.5))
 
     def test_manual_pause_and_unknown_flags_do_not_admit(self):
         for value in (False, None, 1, 'true'):
             values = self.fixture.pair(0, paused=True, seek=True)
             values[2]['nativePlayers'][0]['playingIntent'] = value
-            self.assertFalse(self.ns['native_follow_seek_readiness'](values[0], values[2], 1.5))
+            self.assertFalse(self.ns['native_follow_readiness_pending'](values[0], values[2], 1.5))
 
     def test_source_and_recovery_cursor_mismatch_fail(self):
         values = self.fixture.pair(0, paused=True, seek=True)
@@ -48,12 +59,23 @@ class PublicReadinessTests(unittest.TestCase):
     def test_packaged_payload_pins_and_exact_contract_count(self):
         for name in patcher.PAYLOAD_HASHES: patcher.payload(name)
         self.assertEqual(len(self.fixture.TEST_NAMES), patcher.CONTRACT_CHECKS)
-        self.assertEqual(patcher.CONTRACT_CHECKS, 11)
+        self.assertEqual(patcher.CONTRACT_CHECKS, 23)
         for mapping in (patcher.BASELINE, patcher.AFTER, patcher.PAYLOAD_HASHES):
             self.assertTrue(all(re.fullmatch(r'[0-9a-f]{64}', value) for value in mapping.values()))
 
     def test_unreviewed_harness_and_builder_are_refused(self):
         for transform in (patcher.patch_harness, patcher.patch_prepare):
             with self.assertRaises(ValueError): transform(b'synthetic unreviewed source')
+
+    def test_subtest_failure_emits_only_known_parent_ordinal(self):
+        class Synthetic(unittest.TestCase):
+            def test_allowed(self):
+                with self.subTest(private='synthetic-secret-do-not-export'):
+                    self.fail('synthetic assertion values stay private')
+        result = unittest.TestResult()
+        Synthetic('test_allowed').run(result)
+        self.assertEqual(len(result.failures), 1)
+        self.assertEqual(patcher._failed_contract_ordinals(result, ('test_allowed',)), [1])
+        self.assertEqual(patcher._failed_contract_ordinals(result, ('different_name',)), [])
 
 if __name__ == '__main__': unittest.main()

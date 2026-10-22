@@ -16,13 +16,15 @@ class FocusedFollowOrchestrationTests(unittest.TestCase):
         for value in (c.PARENT, c.MESSAGE, c.REQUEST_PATH, 'github.event.forced == false'):
             self.assertIn(value, workflow)
         self.assertIn(' native follow', workflow)
-        self.assertNotIn(' native handoff', workflow)
+        self.assertIn(' native handoff', workflow)
+        self.assertIn(c.SERVER_SHA, workflow)
+        self.assertLess(workflow.index('handoff_follow_lifecycle.py native handoff'), workflow.index('handoff_follow_lifecycle.py native follow'))
         self.assertNotIn('upload-artifact', workflow)
         self.assertLess(workflow.index(' native preflight'), workflow.index('subosito/flutter-action'))
         self.assertIn("steps.native-cleanup.outcome == 'success'", workflow)
 
     def test_forbidden_stages(self):
-        for args in [('source', 'publish'), ('source', 'android'), ('source', 'validate_source'), ('native', 'handoff'), ('native', 'unknown'), ('other', 'prepare')]:
+        for args in [('source', 'publish'), ('source', 'android'), ('source', 'validate_source'), ('native', 'unknown'), ('other', 'prepare')]:
             with patch.object(sys, 'argv', ['wrapper', *args]), patch.object(c.base, 'main') as run:
                 self.assertEqual(c.main(), 1)
                 run.assert_not_called()
@@ -39,7 +41,7 @@ class FocusedFollowOrchestrationTests(unittest.TestCase):
             apply.assert_not_called()
 
     def test_integrity_before_native_operations(self):
-        for stage in ('unit', 'attribution', 'build', 'follow'):
+        for stage in ('unit', 'attribution', 'build', 'handoff', 'follow'):
             calls = []
             def verify(repo, *, require_harness):
                 calls.append(('verify', require_harness))
@@ -60,8 +62,10 @@ class FocusedFollowOrchestrationTests(unittest.TestCase):
 
     def test_bounded_constants_reach_existing_context_then_restore(self):
         original = c.base.PARENT
+        original_server = c.base.request.SERVER_SHA
         def run():
             self.assertEqual(c.base.PARENT, c.PARENT)
+            self.assertEqual(c.base.request.SERVER_SHA, c.SERVER_SHA)
             self.assertEqual(c.base.REQUEST, c.REQUEST)
             self.assertEqual(c.base.WORKFLOW, c.WORKFLOW)
             self.assertEqual(c.base.OBSERVED_HARNESS_SHA256, c.lifecycle.AFTER_HARNESS_SHA256)
@@ -70,4 +74,5 @@ class FocusedFollowOrchestrationTests(unittest.TestCase):
         with patch.object(sys, 'argv', ['wrapper', 'source', 'prepare']), patch.object(c.base, 'main', side_effect=run):
             self.assertEqual(c.main(), 0)
         self.assertEqual(c.base.PARENT, original)
+        self.assertEqual(c.base.request.SERVER_SHA, original_server)
         self.assertEqual(c.base.ATTRIBUTION_EXTRA_ARGS, ())

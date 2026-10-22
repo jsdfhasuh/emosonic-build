@@ -34,7 +34,7 @@ def base_state(at, role, *, paused=False, offset=0, rate=1.5, native_error=0):
 def load(clock, *, patched):
     source = PATCHED if patched else BASELINE
     tree = ast.parse(source)
-    names = NAMES | {'follow_correction_identity', 'native_follow_seek_readiness'}
+    names = NAMES | {'follow_correction_identity', 'native_follow_readiness_pending'}
     selected = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name in names]
     namespace = {'math': math, 'json': json, 'time': clock}
     exec(compile(ast.Module(body=selected, type_ignores=[]), '<reviewed-harness>', 'exec'), namespace)
@@ -59,6 +59,14 @@ def state(at, role, **kw):
 
 
 def pair(at, **kw): return [state(at, 'a'), {}, state(at, 'f', **kw)]
+
+
+def waiting(at):
+    values = pair(at)
+    values[2]['processingState'] = 'buffering'
+    values[2]['nativePlayers'][0].update(playbackState=2, avTimeControlStatus=1,
+        playbackRate=1.5, requestedRate=1.5, seekInProgress=False, playingIntent=True)
+    return values
 
 class ReadinessTests(unittest.TestCase):
     def setup_matrix(self, *, patched=True, sample=None):
@@ -172,6 +180,175 @@ class ReadinessTests(unittest.TestCase):
         self.assertIs(result['seekInProgress'],True);self.assertIs(result['playingIntent'],True)
         self.assertNotIn('id',result);self.assertNotIn('sampledAtMs',result)
         row['seekInProgress']='private-string';self.assertNotIn('seekInProgress',ns['numeric_native_snapshot'](row))
+
+    def test_baseline_red_documented_native_waiting_interval(self):
+        def sample(at):
+            return pair(at, offset=-515) if at == 0 else waiting(at)
+        clock, ns, matrix, outcomes = self.setup_matrix(patched=False, sample=sample)
+        with self.assertRaises(AssertionError):
+            matrix.follow_alignment('authority-context', 0, 1.5, 0, 5)
+        self.assertEqual(clock.now, 0.2)
+        self.assertEqual(outcomes, [])
+
+    def test_preroll_paused_seek_then_preroll_then_two_playing_samples(self):
+        def sample(at):
+            if at < 0.2:
+                return pair(at, paused=True, seek=True)
+            if at < 0.6:
+                value = waiting(at)
+                value[2]['nativePlayers'][0]['seekInProgress'] = at < 0.4
+                return value
+            return pair(at)
+        clock, ns, matrix, outcomes = self.setup_matrix(sample=sample)
+        matrix.follow_alignment('authority-context', 0, 1.5, 0, 5)
+        self.assertEqual(clock.now, 0.8)
+        self.assertEqual(outcomes[-1][1]['consecutiveAlignedSamples'], 2)
+        self.assertEqual(matrix.rate_measurement['correctionReadinessPollCount'], 3)
+
+    def test_preroll_does_not_require_claiming_observed_seek(self):
+        clock, ns, matrix, outcomes = self.setup_matrix(sample=lambda at: waiting(at) if at < 0.4 else pair(at))
+        matrix.follow_alignment('authority-context', 0, 1.5, 0, 5)
+        self.assertEqual(clock.now, 0.6)
+        self.assertEqual(matrix.rate_measurement['correctionReadinessPollCount'], 2)
+
+    def test_preroll_alternating_ready_seek_wait_does_not_reset_deadline(self):
+        def sample(at):
+            mode = int(round(at / 0.2)) % 3
+            return pair(at) if mode == 0 else pair(at, paused=True, seek=True) if mode == 1 else waiting(at)
+        clock, ns, matrix, outcomes = self.setup_matrix(sample=sample)
+        with self.assertRaises(TimeoutError):
+            matrix.follow_alignment('authority-context', 0, 1.5, 0, 5)
+        self.assertEqual(clock.now, 5)
+        self.assertEqual(outcomes, [])
+        self.assertEqual(max(clock.sleeps), 0.2)
+
+    def test_preroll_persistent_preroll_and_persistent_seek_both_fail_at_original_deadline(self):
+        for sample in [waiting, lambda at: pair(at, paused=True, seek=True)]:
+            clock, ns, matrix, outcomes = self.setup_matrix(sample=sample)
+            with self.assertRaises(TimeoutError):
+                matrix.follow_alignment('authority-context', 0, 1.5, 0, 5)
+            self.assertEqual(clock.now, 5)
+            self.assertEqual(outcomes, [])
+            self.assertEqual(matrix.rate_measurement['correctionReadinessElapsedMs'], 5000)
+
+    def test_preroll_each_pending_state_resets_alignment_pair(self):
+        for pending in [waiting, lambda at: pair(at, paused=True, seek=True)]:
+            clock, ns, matrix, outcomes = self.setup_matrix(sample=lambda at: pending(at) if at == 0.2 else pair(at))
+            matrix.follow_alignment('authority-context', 0, 1.5, 0, 5)
+            self.assertEqual(clock.now, 0.6)
+            self.assertEqual(outcomes[-1][1]['consecutiveAlignedSamples'], 2)
+
+    def test_preroll_native_state_rate_and_play_intent_negatives_fail_immediately(self):
+        mutations = [
+            lambda s: s[2]['nativePlayers'][0].update(playbackRate=0),
+            lambda s: s[2]['nativePlayers'][0].update(playbackRate=1.56),
+            lambda s: s[2]['nativePlayers'][0].update(requestedRate=1),
+            lambda s: s[2]['nativePlayers'][0].update(requestedRate=float('nan')),
+            lambda s: s[2]['nativePlayers'][0].update(playbackRate=float('inf')),
+            lambda s: s[2]['nativePlayers'][0].update(playingIntent=False),
+            lambda s: s[2]['nativePlayers'][0].update(playingIntent=1),
+            lambda s: s[2]['nativePlayers'][0].pop('playingIntent'),
+            lambda s: s[2]['nativePlayers'][0].pop('seekInProgress'),
+            lambda s: s[2]['nativePlayers'][0].update(seekInProgress='unknown'),
+            lambda s: s[2]['nativePlayers'][0].update(avPlayerStatus=0),
+            lambda s: s[2]['nativePlayers'][0].update(avItemStatus=2),
+            lambda s: s[2]['nativePlayers'][0].update(avTimeControlStatus=0),
+            lambda s: s[2]['nativePlayers'][0].update(durationMs=0),
+            lambda s: s[2]['nativePlayers'][0].update(errorCode=1),
+            lambda s: s[2].update(processingState='ready'),
+            lambda s: s[2].update(processingState='loading'),
+            lambda s: s[0]['nativePlayers'][0].update(playbackRate=1),
+            lambda s: s[0]['nativePlayers'][0].update(playbackState=4, avTimeControlStatus=0, playbackRate=0),
+        ]
+        for ordinal, mutation in enumerate(mutations):
+            def sample(at):
+                value = waiting(at)
+                mutation(value)
+                return value
+            clock, ns, matrix, outcomes = self.setup_matrix(sample=sample)
+            with self.subTest(ordinal=ordinal), self.assertRaises((AssertionError, KeyError, TypeError)):
+                matrix.follow_alignment('authority-context', 0, 1.5, 0, 5)
+            self.assertEqual(clock.now, 0)
+            self.assertEqual(outcomes, [])
+
+    def test_preroll_generic_pause_and_stopped_unknown_loading_are_not_preroll(self):
+        for native_state in (0, 1, 4):
+            def sample(at):
+                value = waiting(at)
+                value[2]['nativePlayers'][0].update(playbackState=native_state, avTimeControlStatus=0, playbackRate=0, seekInProgress=False)
+                return value
+            clock, ns, matrix, outcomes = self.setup_matrix(sample=sample)
+            with self.subTest(native_state=native_state), self.assertRaises(AssertionError):
+                matrix.follow_alignment('authority-context', 0, 1.5, 0, 5)
+            self.assertEqual(clock.now, 0)
+
+    def test_preroll_task_identity_authority_cursors_and_recovery_changes_fail_immediately(self):
+        mutations = [
+            lambda s: s[2].update(runtimeMode='solo'),
+            lambda s: s[2].update(trackId='other'),
+            lambda s: s[2].update(queue=['other']),
+            lambda s: s[2].update(currentIndex=1),
+            lambda s: s[2].update(followSourceContextId='other'),
+            lambda s: s[2].update(clientId='other'),
+            lambda s: s[2].update(deviceSessionId='other'),
+            lambda s: s[2].update(pid=999),
+            lambda s: s[2].update(bundleId='other'),
+            lambda s: s[2].update(root='other'),
+            lambda s: s[2]['nativePlayers'][0].update(id='other'),
+            lambda s: s[2]['preflightDiagnostics'].update(connectionGeneration=3),
+            lambda s: s[2]['preflightDiagnostics'].update(followRecoveryGateActive=False),
+            lambda s: s[2]['preflightDiagnostics'].update(recoveryPhase='restoring'),
+            lambda s: s[2]['preflightDiagnostics'].update(recoveryControlVersion=6),
+            lambda s: s[2]['preflightDiagnostics'].update(recoveryAppliedControlVersion=6),
+            lambda s: s[2]['preflightDiagnostics'].update(queueHydrating=True),
+            lambda s: s[2]['preflightDiagnostics'].update(restoreInProgress=True),
+            lambda s: s[0]['contexts']['authority-context'].update(epoch=2),
+            lambda s: s[0]['contexts']['authority-context'].update(controlVersion=6),
+            lambda s: s[2]['contexts']['authority-context'].update(queueRevision=3),
+        ]
+        for ordinal, mutation in enumerate(mutations):
+            def sample(at):
+                value = waiting(at)
+                mutation(value)
+                return value
+            clock, ns, matrix, outcomes = self.setup_matrix(sample=sample)
+            with self.subTest(ordinal=ordinal), self.assertRaises(AssertionError):
+                matrix.follow_alignment('authority-context', 0, 1.5, 0, 5)
+            self.assertEqual(clock.now, 0)
+            self.assertEqual(outcomes, [])
+
+    def test_preroll_complete_three_second_window_follows_all_premeasurement_states(self):
+        def sample(at):
+            if at < 0.2:
+                return pair(at, paused=True, seek=True)
+            if at < 0.6:
+                return waiting(at)
+            return pair(at)
+        clock, ns, matrix, outcomes = self.setup_matrix(sample=sample)
+        matrix.rate(2, 1.5, 'full-window', follow_context='authority-context', authority_index=0)
+        self.assertEqual(outcomes[-1][0], 'full-window')
+        self.assertGreaterEqual(outcomes[-1][1]['elapsedSeconds'], 3)
+        self.assertGreaterEqual(clock.now, 3.9)
+
+    def test_preroll_pending_during_advancement_and_every_strict_window_interval_fails(self):
+        for pending in [waiting, lambda at: pair(at, paused=True, seek=True)]:
+            for start in (0.3, 0.5, 1.5, 3.1):
+                def sample(at):
+                    return pending(at) if at >= start else pair(at)
+                clock, ns, matrix, outcomes = self.setup_matrix(sample=sample)
+                with self.subTest(start=start), self.assertRaises(AssertionError):
+                    matrix.rate(2, 1.5, 'strict-window', follow_context='authority-context', authority_index=0)
+                self.assertNotIn('strict-window', [entry[0] for entry in outcomes])
+                self.assertLessEqual(clock.now, start + 0.2)
+
+    def test_preroll_total_alignment_and_advancement_budget_stays_shared(self):
+        def sample(at):
+            return waiting(at) if at < 4.8 else pair(at)
+        clock, ns, matrix, outcomes = self.setup_matrix(sample=sample)
+        with self.assertRaises(TimeoutError):
+            matrix.rate(2, 1.5, 'deadline', follow_context='authority-context', authority_index=0)
+        self.assertEqual(clock.now, 5)
+        self.assertEqual(outcomes, [])
 
 
 TEST_NAMES = tuple(sorted(name for name in ReadinessTests.__dict__ if name.startswith('test_')))

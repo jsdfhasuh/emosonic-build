@@ -1,4 +1,4 @@
-"""Disposable-only Follow seek readiness and read-only native observability."""
+"""Disposable-only Follow seek/preroll readiness and read-only native observability."""
 import argparse
 import ast
 import hashlib
@@ -14,18 +14,18 @@ FIXTURE = 'tool/native_playback_mac/test_follow_alignment.py'
 STATE = '.native_follow_readiness/manifest.json'
 ORIGINAL_STATE = '.native_follow_readiness/original-run_lab.py'
 PROOF_STATE = '.native_follow_readiness/contract-proof.json'
-CONTRACT_CHECKS = 11
+CONTRACT_CHECKS = 23
 NATIVE_STATE = '.native_mac_lab/seek-observability.json'
 NATIVE_ROOT = '.native_mac_lab/just_audio/darwin/just_audio/Sources/just_audio'
 NATIVE_PATHS = {'AudioPlayer.h': NATIVE_ROOT + '/include/just_audio/AudioPlayer.h',
                 'AudioPlayer.m': NATIVE_ROOT + '/AudioPlayer.m'}
-BASELINE = {LAB: 'd4334d816816b81e8fa9fa807fbfbdc1198300d66884db828c55037513709332',
+BASELINE = {LAB: '96dda56b6d8d4e674cb35c7426af69e5f67cee869f977bbc1e09cf95c4bfd1a6',
            PREPARE: '4dcb27fa7d93a74823d5727a271459ed6cd0901999bd33e5180afff0e363da0e',
            FIXTURE: 'f324d2f5106a26837aca41c4733e03f3a08c583b7d3cc1e12017bf34812bd8a5'}
 # Filled from independently reviewed exact transformations, not runtime source.
-AFTER = {'tool/native_playback_mac/run_lab.py': '136b931b361814a7698d4174a0103d624e57ee610fe760111a7611ecaf47dc16', 'tool/native_playback_mac/prepare_build.py': 'b116f59e617e3ba595d1fd20d8e9e80627bb214ce8c6992390edd831f9f41e0b', FIXTURE: 'fb1a6225d5e96e724930b9798cbed6e12c5d80fbf683de04b5e74853f7aaa4c4'}
+AFTER = {'tool/native_playback_mac/run_lab.py': 'dad22e364b950e8f0b500dac13a084b0ac722f6d91dd265cef77759d2e4029ad', 'tool/native_playback_mac/prepare_build.py': 'b116f59e617e3ba595d1fd20d8e9e80627bb214ce8c6992390edd831f9f41e0b', 'tool/native_playback_mac/test_follow_alignment.py': 'fb1a6225d5e96e724930b9798cbed6e12c5d80fbf683de04b5e74853f7aaa4c4'}
 NATIVE_HASHES = {'AudioPlayer.h': {'before': 'c8c6df3bc07f10677e0afbeb447c88da2a704b2c8323769247f78768c6a43138', 'after': '6b48fdf8e6bf67849126224151470cb8932d432f2dffd7e6fd8d09ef85796cb2'}, 'AudioPlayer.m': {'before': 'ce2f0661be34e093a2cab4f3db697128f6468236b5c30103d4979d20aef74b62', 'after': 'c7084b99c48ba10bb074effd1f9744859251cb904a55d7fd0247afd50f67108a'}}
-PAYLOAD_HASHES = {'alignment_fixture_compatibility.py': 'bef7836fed2c378a9d5d36797d6974d77147006367b97c921930ab7bf700d111', 'readiness_contract.py': '6ea5593d7d9c75281e6f515f42d31d087c9cfc8c118e48064c1ec6b50753b560', 'instrument_seek_observability.py': '730a11b21ae7cfd16706bff36fa121f249cd548236f9fa8ec4134014125662d3', 'follow_readiness_helpers.py': 'dc31f1502fd9b9f96818672742c3ad89f469923071a3b29f59ee6cd57c3ea300'}
+PAYLOAD_HASHES = {'alignment_fixture_compatibility.py': 'bef7836fed2c378a9d5d36797d6974d77147006367b97c921930ab7bf700d111', 'follow_readiness_helpers.py': 'a23c172a5d009e4271efbcfe939810d3c2ca5da756bca853e8cdf0b86c60edd7', 'instrument_seek_observability.py': '730a11b21ae7cfd16706bff36fa121f249cd548236f9fa8ec4134014125662d3', 'readiness_contract.py': '9ef564eaf9ba078343c1466baae870c3821a0a72b22eba7e0eed16a38d15dbe9'}
 
 
 def digest(data): return hashlib.sha256(data).hexdigest()
@@ -64,7 +64,7 @@ def patch_harness(original):
             states = self.states()
             authority, follower = states[authority_index], states[2]
             assert follow_correction_identity(states, authority_index, context) == correction_identity
-            if native_follow_seek_readiness(authority, follower, expected):
+            if native_follow_readiness_pending(authority, follower, expected):
                 elapsed_ms = (time.monotonic() - started) * 1000
                 self.rate_measurement.update({
                     'correctionReadinessPollCount': min(25, self.rate_measurement['correctionReadinessPollCount'] + 1),
@@ -185,6 +185,18 @@ class _ContractProofFailure(ValueError):
     pass
 
 
+def _failed_contract_ordinals(result, names):
+    # A unittest subtest owns parameters which must never reach public output.
+    # Use only its parent method's exact allowlisted ordinal, not id()/str().
+    ordinals = set()
+    for test, _ in result.errors + result.failures:
+        owner = getattr(test, 'test_case', test)
+        name = getattr(owner, '_testMethodName', None)
+        if type(name) is str and name in names:
+            ordinals.add(names.index(name) + 1)
+    return sorted(ordinals)[:CONTRACT_CHECKS]
+
+
 def _verify_contract(source_repo):
     _verify_source_prepared(source_repo)
     proof_path = checked(source_repo, PROOF_STATE, new=True)
@@ -204,8 +216,7 @@ def _verify_contract(source_repo):
     suite.run(result)
     if (result.testsRun != CONTRACT_CHECKS or result.errors or result.failures
             or result.skipped or result.expectedFailures or result.unexpectedSuccesses):
-        ordinals = sorted({names.index(test._testMethodName) + 1
-            for test, _ in result.errors + result.failures if test._testMethodName in names})
+        ordinals = _failed_contract_ordinals(result, names)
         print(json.dumps({'stage': 'native-follow-readiness-proof', 'status': 'failed',
             'checks': min(CONTRACT_CHECKS, max(0, result.testsRun)),
             'failedTestOrdinals': ordinals[:CONTRACT_CHECKS],

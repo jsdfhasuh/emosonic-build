@@ -1,8 +1,10 @@
-"""Read-only finite Follow evidence for the owned source019/server8e9 fixture.
+"""Read-only finite Follow evidence for the owned source019/server5adc fixture.
 
-Schema pinned to server 8e9a319002c0ffa6054cd98e06dd271070ed729b:
+Schema pinned to server 5adc23da173c5f20188d79aafe8fcc1e656eb38a:
 supysonic/db_layer/emo.py EmoFollowSafetyLease, EmoPlaybackContext,
 EmoDevicePlaybackState; follow_store.py source-fact checks and durable start ACK.
+Rate diagnostics retain the legacy default 1.0 for either absent rate field.
+Their equality is descriptive only, not the fixed server recovery predicate.
 Never returns private identifiers, fingerprints, nonces, raw ACK or timestamps.
 """
 import json
@@ -11,7 +13,7 @@ from pathlib import Path
 import sqlite3
 import time
 
-SERVER_SHA = '8e9a319002c0ffa6054cd98e06dd271070ed729b'
+SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 STATES = frozenset({'idle', 'playing', 'paused', 'stopped', 'buffering', 'loading'})
 PHASES = frozenset({'active', 'reconnectGrace', 'cleanupRequired'})
 REQUIRED = ('followerClientId', 'followerDeviceSessionId', 'sourceContextId',

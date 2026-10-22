@@ -2,8 +2,8 @@
   "source_repository": "jsdfhasuh/emosonic",
   "source_ref": "refs/heads/fix/handoff-play-initiation-20261022",
   "source_sha": "01967c853a4e6020097e9a2da61f9785b470ff7d",
-  "server_sha": "8e9a319002c0ffa6054cd98e06dd271070ed729b",
+  "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "native-follow-lifecycle-validation",
-  "attempt": 9
+  "attempt": 10
 }

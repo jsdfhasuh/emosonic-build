@@ -120,8 +120,8 @@ CLIENT_SCHEMA = {
     'handoffHistory': ('list', HANDOFF_SCHEMA, 8),
 }
 DIAGNOSTIC_SCHEMA = {
-    'checks': ('integer', 0, 11),
-    'failedTestOrdinals': ('list', ('integer', 1, 11), 11),
+    'checks': ('integer', 0, 23),
+    'failedTestOrdinals': ('list', ('integer', 1, 23), 23),
     'errorCategory': frozenset({'assertion', 'runner'}),
     'correctionReadinessPollCount': ('integer', 0, 25),
     'correctionReadinessElapsedMs': ('number', 0, 5000),

@@ -47,14 +47,26 @@ def follow_correction_identity(states, authority_index, context):
     return (context, tuple(queue), index, tuple(identities), versions)
 
 
-def native_follow_seek_readiness(authority, follower, expected):
-    """An observable in-flight native seek, never generic buffering or pause."""
+def native_follow_readiness_pending(authority, follower, expected):
+    """Known native seek/preroll states, never proof of a correction's cause.
+
+    Only the premeasurement alignment loop may wait here. Its original five-
+    second deadline, exact task identity and later continuous window stay fixed.
+    Native preroll can follow either seek completion or source preparation.
+    Generic paused playback without an actual in-flight seek is not pending.
+    """
     a, f = decoded(authority), decoded(follower)
-    return (a['playbackState'] == 3 and native_rate_matches(authority, expected)
-        and f['playbackState'] == 4 and f['playbackRate'] == 0
-        and f.get('seekInProgress') is True and f.get('playingIntent') is True
-        and f['avPlayerStatus'] == 1 and f['avItemStatus'] == 1
-        and f['avTimeControlStatus'] == 0 and f['durationMs'] > 0
-        and type(f.get('requestedRate')) in (int, float)
-        and math.isfinite(f['requestedRate']) and abs(f['requestedRate'] - expected) < 0.0001
+    common = (a['playbackState'] == 3 and native_rate_matches(authority, expected)
+        and f.get('playingIntent') is True and type(f.get('seekInProgress')) is bool
+        and f['avPlayerStatus'] == 1 and f['avItemStatus'] == 1 and f['durationMs'] > 0
+        and type(f.get('requestedRate')) in (int, float) and math.isfinite(f['requestedRate'])
+        and abs(f['requestedRate'] - expected) < 0.0001
         and follower.get('processingState') == 'buffering')
+    if not common:
+        return False
+    seeking = (f['playbackState'] == 4 and f['avTimeControlStatus'] == 0
+        and f['playbackRate'] == 0 and f['seekInProgress'] is True)
+    preroll = (f['playbackState'] == 2 and f['avTimeControlStatus'] == 1
+        and type(f.get('playbackRate')) in (int, float) and math.isfinite(f['playbackRate'])
+        and abs(f['playbackRate'] - expected) < 0.0001)
+    return seeking or preroll

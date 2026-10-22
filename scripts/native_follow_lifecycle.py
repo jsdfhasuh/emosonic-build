@@ -14,9 +14,9 @@ MAIN_AFTER_SHA256 = 'f8781ae5077924daebc0908500f79e57ee9a80af8e9d25d474468651563
 LOG_OLD = b'  await Logger.setLogLevel(LogLevel.warning);\n'
 LOG_NEW = b'  await Logger.setLogLevel(LogLevel.debug);\n'
 STATE = '.native_follow_lifecycle/manifest.json'
-BEFORE_SHA256 = '136b931b361814a7698d4174a0103d624e57ee610fe760111a7611ecaf47dc16'
-AFTER_HARNESS_SHA256 = '4979fcc7f8d948fe66e56c32e1f23e14cb8da8003b00cb5c6cd019e96c725fed'
-PAYLOAD_HASHES = {'follow_lifecycle_observation.py': '5f9f81bd8d0f912e061aa1d4ae56608dfdc64ddded033bcc4a198de5332629fe', 'follow_server_observation.py': 'e4a617e5be6f5a2656443daad2b9e78f1c744fafca79ae6995c81efc3f505707'}
+BEFORE_SHA256 = 'dad22e364b950e8f0b500dac13a084b0ac722f6d91dd265cef77759d2e4029ad'
+AFTER_HARNESS_SHA256 = '312fa1ed88ce070f5cf64bbf407e384bbdf7b22b8719623a45f0b6eca765ab9d'
+PAYLOAD_HASHES = {'follow_lifecycle_observation.py': '5f9f81bd8d0f912e061aa1d4ae56608dfdc64ddded033bcc4a198de5332629fe', 'follow_server_observation.py': '5426d798c3b65fe46652814f3433657bb6e315d0b4345c214555bc4e2479e4cc'}
 OBSERVER_CALLS = (
     'begin_follow_lifecycle(self, context, follower_original, native_follow_task_ready)',
     'observe_follow_command(self, _follow_response)',
