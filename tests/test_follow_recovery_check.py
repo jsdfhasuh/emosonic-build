@@ -192,3 +192,106 @@ class RecoveryTests(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+
+class FullDiagnosticTests(unittest.TestCase):
+    def test_analyzer_severity_codes_and_locations_are_finite(self):
+        source=Path('/owned/source');paths={'lib/private.dart','test/services/private_test.dart'}
+        raw='\n'.join(f'{level} • secret source text • lib/private.dart:{i}:2 • unused_import'
+                      for i,level in enumerate(('error','warning','info'),1))
+        raw+='\nwarning • secret • /outside/private.dart:7:8 • secret_code\nmalformed private output'
+        report=c.analyzer_observation(raw,'',paths,source,1)
+        self.assertEqual(report['severityCounts'],dict(error=1,warning=2,info=1))
+        self.assertEqual(report['findings'][0],dict(severity='error',code='unused_import',fileOrdinal=1,line=1,column=2))
+        self.assertEqual(report['findings'][-1],dict(severity='warning',code='other'))
+        self.assertNotIn('secret',json.dumps(report));self.assertNotIn('private',json.dumps(report))
+
+    def test_full_test_accounting_unknown_and_known_test_names(self):
+        source=Path('/owned/source');name='test/services/private_test.dart';paths={name}
+        events=[{'type':'suite','suite':{'id':5,'path':str(source/name)}},
+                {'type':'testStart','test':{'id':7,'suiteID':5,'name':'secret test'}},
+                {'type':'error','testID':7,'isFailure':True,'error':'Expected: true\nActual: <false>',
+                 'stackTrace':str(source/name)+' 17:3 secret'},
+                {'type':'testDone','testID':7,'result':'failure','hidden':False,'skipped':False},
+                {'type':'done','success':False}]
+        raw='\n'.join(json.dumps(e) for e in events)
+        report=c.full_test_observation(raw,'',paths,source,[dict(path=name,names=['secret test'])],1)
+        error=report['errors'][0]
+        self.assertEqual(error['fileOrdinal'],1);self.assertEqual(error['testOrdinal'],1)
+        self.assertEqual(error['locations'],[dict(line=17,column=3)])
+        self.assertEqual(report['results']['failure'],1);self.assertIs(report['terminalSuccess'],False)
+        self.assertNotIn('secret',json.dumps(report));self.assertNotIn('private',json.dumps(report))
+        report=c.full_test_observation(raw,'',paths,source,[],1)
+        self.assertNotIn('testOrdinal',report['errors'][0])
+        events.insert(1,dict(type='suite',suite=dict(id=5,path=str(source/name))))
+        report=c.full_test_observation('\n'.join(json.dumps(e) for e in events),'',paths,source,[],1)
+        self.assertNotIn('fileOrdinal',report['errors'][0])
+
+    def test_malformed_unknown_test_output_has_no_raw_leak(self):
+        raw='not JSON secret\n'+json.dumps({'type':'error','testID':True,'error':'secret','isFailure':False})
+        report=c.full_test_observation(raw,'secret',{'test/private_test.dart'},Path('/owned'),[],1)
+        self.assertEqual(report['malformedEvents'],1)
+        self.assertEqual(report['errors'],[dict(isFailure=False,category='other')])
+        self.assertNotIn('secret',json.dumps(report))
+
+    def test_exact_commands_and_exit_criteria_retained(self):
+        for command in (c.ANALYZE_COMMAND,c.FULL_TEST_COMMAND):
+            for exitcode in (0,1):
+                source=Path('/owned');paths={'test/private_test.dart'}
+                result=subprocess.CompletedProcess(command,exitcode,b'private output',b'private stderr')
+                original_quiet=c.request.p.quiet
+                original_fingerprint=c.request.p.source_fingerprint
+                def run_base():
+                    self.assertEqual(c.request.p.source_fingerprint(source,'a'*40,{}),('digest',paths))
+                    return c.request.p.quiet(list(command),source,{})
+                with self.subTest(command=command,exitcode=exitcode),patch.object(c.request,'main',side_effect=run_base),patch.object(c.request.p,'source_fingerprint',return_value=('digest',paths)),patch.object(c,'inventory',return_value=[]),patch.object(c.subprocess,'run',return_value=result) as process,contextlib.redirect_stdout(io.StringIO()) as output:
+                    if exitcode:
+                        with self.assertRaises(c.request.p.GateError):c.validate_full()
+                    else:self.assertEqual(c.validate_full(),'private output')
+                    self.assertEqual(process.call_args.args[0],list(command))
+                    self.assertEqual(process.call_args.kwargs,dict(cwd=source,env={},stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=False))
+                    self.assertNotIn('private',output.getvalue())
+                self.assertIs(c.request.p.quiet,original_quiet)
+                self.assertIs(c.request.p.source_fingerprint,original_fingerprint)
+
+    def test_nonmatching_commands_delegate_without_capture(self):
+        command=['flutter','analyze','--no-pub']
+        with patch.object(c.request,'main',side_effect=lambda:c.request.p.quiet(command,Path('/owned'),{})),patch.object(c.request.p,'quiet',return_value='original') as quiet,patch.object(c.subprocess,'run') as process:
+            self.assertEqual(c.validate_full(),'original');quiet.assert_called_once_with(command,Path('/owned'),{});process.assert_not_called()
+
+    def test_workflow_full_validation_precedes_focused_without_omission(self):
+        workflow=(Path(__file__).resolve().parents[1]/'.github/workflows/follow-recovery-check.yml').read_text()
+        self.assertLess(workflow.index('source validate_source'),workflow.index('source focused'))
+        self.assertEqual(workflow.count('source focused'),1)
+        self.assertIn('if: always()',workflow)
+
+    def test_original_full_parser_still_rejects_malformed_success_exit(self):
+        source=Path('/owned');sha='a'*40
+        paths={'test/services/native_start_dependency_contract_test.dart','tool/native_start/verify_vendored_source.py'}
+        results=[subprocess.CompletedProcess([],0,b'',b''),subprocess.CompletedProcess([],0,b'private invalid JSON',b'')]
+        with patch.object(c.request,'main',side_effect=c.request.p.validate_source),patch.object(c.request.p,'source_context',return_value=(source,None,sha,None)),patch.object(c.request.p,'build_env',return_value={}),patch.object(c.request.p,'source_fingerprint',return_value=('digest',paths)) as fingerprint,patch.object(c.request.p,'codegen'),patch.object(c.request.p,'quiet',return_value=''),patch.object(c,'inventory',return_value=[]),patch.object(c.subprocess,'run',side_effect=results),contextlib.redirect_stdout(io.StringIO()) as output:
+            with self.assertRaises(c.request.p.GateError):c.validate_full()
+            self.assertEqual(fingerprint.call_count,2)
+            self.assertNotIn('private',output.getvalue())
+
+    def test_diagnostic_cap_does_not_truncate_original_full_report(self):
+        source=Path('/owned');raw='x'*(16777216+1)
+        result=subprocess.CompletedProcess([],0,raw.encode(),b'')
+        def base():
+            c.request.p.source_fingerprint(source,'a'*40,{})
+            return c.request.p.quiet(list(c.FULL_TEST_COMMAND),source,{})
+        with patch.object(c.request,'main',side_effect=base),patch.object(c.request.p,'source_fingerprint',return_value=('digest',set())),patch.object(c,'inventory',return_value=[]),patch.object(c.subprocess,'run',return_value=result),contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(c.validate_full(),raw)
+            self.assertEqual(json.loads(output.getvalue())['malformedEvents'],1)
+            self.assertNotIn('reason',json.loads(output.getvalue()))
+
+    def test_flow_control_lint_has_fixed_code_and_tracked_location(self):
+        report=c.analyzer_observation('info • private text • lib/private.dart:12:3 • curly_braces_in_flow_control_structures','',{'lib/private.dart'},Path('/owned'),1)
+        self.assertEqual(report['findings'],[dict(severity='info',code='curly_braces_in_flow_control_structures',fileOrdinal=1,line=12,column=3)])
+        self.assertEqual(report['exitCode'],1)
+
+    def test_full_diagnostics_requests_explicit_larger_budget(self):
+        with patch.object(c,'observe_green',return_value={'reason':'output-limit','errors':[]}) as observe:
+            report=c.full_test_observation('', '', set(), Path('/owned'), [], 0)
+            self.assertEqual(report['reason'],'output-limit')
+            self.assertEqual(observe.call_args.kwargs['diagnostic_max_bytes'],128*1024*1024)
+            self.assertEqual(observe.call_args.kwargs['diagnostic_max_events'],1000000)

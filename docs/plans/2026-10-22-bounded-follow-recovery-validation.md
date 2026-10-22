@@ -16,3 +16,7 @@ Run39759437302 reached actual tests but failed; its first-error-only diagnostic 
 ## Controlled fixture event delivery
 
 Client15bdc56b8a93db62bba2b5549073e1e09a8a88ff is a three-file test/plan/inventory-only descendant of94c859a4. Production bytes are unchanged. Run39760886626 proved original13 and provenance6 green, while11 boundary cases failed the host scheduling prerequisite at line1215. The new test-only synchronous fake-native stream and bounded microtask drains remove artificial event-loop delay; all45 names and5s/50ms/4% assertions remain. This gate reruns all64 and complete source validation, with no native or package stages.
+
+## Full-source diagnostics
+
+Run39763027778 proved all64 focused tests green and vendor integrity passed, but fatal full analysis failed before full tests. This same immutable15bdc iteration adds only finite severity/rule/file-ordinal/line observations around the exact existing analyzer and full-test commands. No messages or private paths are printed. The original pipeline retains return-code, reporter and fingerprint acceptance; diagnostic output limits do not truncate its full raw input. Full validation now precedes focused tests to surface analyzer issues first. All stages remain required before later native testing.

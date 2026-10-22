@@ -173,12 +173,17 @@ def verify_green(raw, returncode, *, expected_names, fixture_basename, stderr=''
     return dict(stage='fixed-flutter-green', status='passed', **counts)
 
 
-def observe_green(raw, returncode, *, expected_names, fixture_basename, stderr=''):
+def observe_green(raw, returncode, *, expected_names, fixture_basename, stderr='',
+                  diagnostic_max_bytes=MAX_BYTES, diagnostic_max_events=MAX_EVENTS):
     """Finite whole-stream diagnostics only. Never substitutes for verify_green."""
     report = {'stage': 'fixed-flutter-observation', 'events': 0, 'malformedEvents': 0,
               'completedTests': 0, 'visibleTests': 0, 'hiddenTests': 0,
               'skippedTests': 0, 'results': {'success': 0, 'failure': 0, 'error': 0},
               'terminalCount': 0, 'terminalSuccess': None, 'errorCount': 0, 'errors': []}
+    if (type(diagnostic_max_bytes) is not int or not 1 <= diagnostic_max_bytes <= 128 * 1024 * 1024
+            or type(diagnostic_max_events) is not int or not 1 <= diagnostic_max_events <= 1000000):
+        report['reason'] = 'invalid-diagnostic-budget'
+        return report
     if type(returncode) is int:
         report['exitCode'] = max(-1000, min(returncode, 1000))
     if (type(expected_names) not in (tuple, list) or not 1 <= len(expected_names) <= MAX_TESTS
@@ -192,7 +197,7 @@ def observe_green(raw, returncode, *, expected_names, fixture_basename, stderr='
         report['reason'] = 'invalid-output'
         return report
     try:
-        if len(raw.encode('utf-8')) + len(stderr.encode('utf-8')) > MAX_BYTES:
+        if len(raw.encode('utf-8')) + len(stderr.encode('utf-8')) > diagnostic_max_bytes:
             report['reason'] = 'output-limit'
             return report
     except UnicodeError:
@@ -222,7 +227,7 @@ def observe_green(raw, returncode, *, expected_names, fixture_basename, stderr='
     for line in raw.splitlines():
         if not line.strip():
             continue
-        if report['events'] >= MAX_EVENTS:
+        if report['events'] >= diagnostic_max_events:
             report['reason'] = 'event-limit'
             break
         report['events'] += 1

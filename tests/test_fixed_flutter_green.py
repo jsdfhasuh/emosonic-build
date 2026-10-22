@@ -229,3 +229,28 @@ class ObservationTests(unittest.TestCase):
         self.assertNotIn('private',json.dumps(report))
         with self.assertRaises(v.GreenVerificationError):
             v.verify_green(raw,0,expected_names=NAMES,fixture_basename=BASE)
+
+
+class DiagnosticBudgetTests(unittest.TestCase):
+    def test_explicit_budget_boundaries_and_invalid_values(self):
+        raw=json.dumps({'type':'done','success':True})
+        args=dict(expected_names=NAMES,fixture_basename=BASE)
+        self.assertNotIn('reason',v.observe_green(raw,0,**args,diagnostic_max_bytes=len(raw),diagnostic_max_events=1))
+        self.assertEqual(v.observe_green(raw,0,**args,diagnostic_max_bytes=len(raw)-1)['reason'],'output-limit')
+        self.assertEqual(v.observe_green(raw+'\n'+raw,0,**args,diagnostic_max_events=1)['reason'],'event-limit')
+        for key,value in (('diagnostic_max_bytes',True),('diagnostic_max_bytes',0),
+                          ('diagnostic_max_bytes',128*1024*1024+1),
+                          ('diagnostic_max_events',1000001),('diagnostic_max_events',False)):
+            self.assertEqual(v.observe_green(raw,0,**args,**{key:value})['reason'],'invalid-diagnostic-budget')
+
+    def test_focused_defaults_and_acceptance_limit_remain_unchanged(self):
+        raw=' '* (16*1024*1024+1)
+        args=dict(expected_names=NAMES,fixture_basename=BASE)
+        self.assertEqual(v.observe_green(raw,0,**args)['reason'],'output-limit')
+        self.assertNotIn('reason',v.observe_green(raw,0,**args,diagnostic_max_bytes=128*1024*1024,diagnostic_max_events=1000000))
+        with self.assertRaises(v.GreenVerificationError) as caught:
+            v.verify_green(raw,0,**args)
+        self.assertEqual(caught.exception.report['reason'],'output-limit')
+        raw='{"type":"print"}\n'*100001
+        self.assertEqual(v.observe_green(raw,0,**args)['reason'],'event-limit')
+        self.assertNotIn('reason',v.observe_green(raw,0,**args,diagnostic_max_events=1000000))

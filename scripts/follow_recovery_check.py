@@ -10,8 +10,8 @@ import current_source_check as request
 import handoff_repair_check as regression
 from fixed_flutter_green import verify_green, observe_green, GreenVerificationError
 
-PARENT = '3b93097b80ad1fd69b19737edbd8028780d46ca2'
-MESSAGE = 'test: validate controlled recovery event delivery 20261022'
+PARENT = '496885572b30447b5503d446208513a5a573e171'
+MESSAGE = 'test: diagnose complete recovery source validation 20261022'
 WORKFLOW = 'follow-recovery-check.yml'
 REQUEST_PATH = 'requests/follow-recovery-check-20261022.json'
 SOURCE_REF = 'refs/heads/test/follow-recovery-sync-fixture-20261022'
@@ -20,7 +20,7 @@ SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 INVENTORY_PATH = 'tool/follow_recovery/test_inventory.json'
 INVENTORY_SHA256 = '33b9ae0c51b6c60913a88367f3fa5fc5d8e2a7f1c46cc07dced3c0e0f85296c4'
 REQUEST = dict(request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               server_sha=SERVER_SHA, mode='bounded-follow-recovery-validation', attempt=22)
+               server_sha=SERVER_SHA, mode='bounded-follow-recovery-validation', attempt=24)
 STAGE = 'entry'
 
 
@@ -116,6 +116,139 @@ def focused():
             raise p.GateError('Frozen source bytes changed.')
 
 
+ANALYZE_COMMAND=('flutter','analyze','--no-pub','--fatal-infos','--fatal-warnings')
+FULL_TEST_COMMAND=('flutter','test','--no-pub','--reporter=json')
+ANALYZER_CODES=frozenset(('curly_braces_in_flow_control_structures','unused_import','unused_local_variable','unused_field','unused_element',
+    'dead_code','unnecessary_import','unnecessary_null_comparison','unnecessary_non_null_assertion',
+    'unnecessary_cast','unnecessary_await_in_return','invalid_assignment','argument_type_not_assignable',
+    'undefined_identifier','undefined_method','undefined_getter','undefined_named_parameter',
+    'missing_required_argument','not_enough_positional_arguments','extra_positional_arguments',
+    'return_of_invalid_type','body_might_complete_normally','non_bool_condition','await_only_futures',
+    'prefer_const_constructors','prefer_const_declarations','avoid_print','deprecated_member_use',
+    'deprecated_member_use_from_same_package','invalid_use_of_visible_for_testing_member',
+    'invalid_use_of_protected_member','unused_result','discarded_futures','unawaited_futures',
+    'unnecessary_type_check','unused_catch_clause','avoid_void_async','cancel_subscriptions'))
+
+
+def analyzer_observation(raw, stderr, paths, source, returncode):
+    report={'stage':'full-analysis-observation','exitCode':max(-1000,min(returncode,1000)),
+            'severityCounts':{'error':0,'warning':0,'info':0},'unrecognizedLines':0,'findings':[]}
+    ordinals={name:i for i,name in enumerate(sorted(paths),1)}
+    if len(raw.encode('utf-8'))+len(stderr.encode('utf-8'))>16777216:
+        return dict(report,reason='output-limit')
+    for text in (raw,stderr):
+        for line in text.splitlines():
+            if not line.strip():continue
+            parts=line.strip().split(' • ')
+            if len(parts)!=4 or parts[0] not in report['severityCounts']:
+                report['unrecognizedLines']=min(100000,report['unrecognizedLines']+1);continue
+            severity,_,location,code=parts
+            match=re.fullmatch(r'(.+):([0-9]{1,6}):([0-9]{1,6})',location)
+            report['severityCounts'][severity]=min(100000,report['severityCounts'][severity]+1)
+            finding={'severity':severity,'code':code if code in ANALYZER_CODES else 'other'}
+            if match:
+                name=match.group(1)
+                prefix=str(source)+'/'
+                if name.startswith(prefix):name=name[len(prefix):]
+                if name in ordinals:
+                    finding.update(fileOrdinal=ordinals[name],line=int(match.group(2)),column=int(match.group(3)))
+            if len(report['findings'])<100:report['findings'].append(finding)
+    return report
+
+
+def full_test_observation(raw, stderr, paths, source, suites, returncode):
+    # Reuse bounded whole-stream accounting; no source-derived names are exported.
+    observation=observe_green(raw,returncode,expected_names=['__diagnostic_count_only__'],
+                              fixture_basename='diagnostic_count_only_test.dart',stderr=stderr,
+                              diagnostic_max_bytes=128 * 1024 * 1024, diagnostic_max_events=1000000)
+    observation['stage']='full-tests-observation'
+    observation['errors']=[]
+    observation.pop('compileLocations',None);observation.pop('fixture',None)
+    if observation.get('reason') in ('output-limit','invalid-output','event-limit'):return observation
+    ordinals={name:i for i,name in enumerate(sorted(paths),1)}
+    inventory={s['path']:s['names'] for s in suites}
+    suite_paths={};tests={};ambiguous_suites=set();ambiguous_tests=set();errors=[]
+    def pairs(items):
+        result={}
+        for key,value in items:
+            if key in result:raise ValueError('duplicate')
+            result[key]=value
+        return result
+    def floating(value):
+        number=float(value)
+        if not (-1.7976931348623157e308<=number<=1.7976931348623157e308):raise ValueError('nonfinite')
+        return number
+    for line in raw.splitlines():
+        try:event=json.loads(line,object_pairs_hook=pairs,parse_float=floating,parse_constant=lambda _: (_ for _ in ()).throw(ValueError('nonfinite')))
+        except (ValueError,RecursionError):continue
+        if type(event) is not dict:continue
+        if event.get('type')=='suite':
+            suite=event.get('suite')
+            if type(suite) is not dict or type(suite.get('id')) is not int:continue
+            sid=suite['id']
+            if sid in suite_paths:ambiguous_suites.add(sid)
+            name=suite.get('path');prefix=str(source)+'/'
+            if type(name) is str and name.startswith(prefix):name=name[len(prefix):]
+            suite_paths[sid]=name if type(name) is str and name in ordinals else None
+        elif event.get('type')=='testStart':
+            test=event.get('test')
+            if type(test) is not dict or type(test.get('id')) is not int:continue
+            if test['id'] in tests:ambiguous_tests.add(test['id'])
+            tests[test['id']]=test
+        elif event.get('type')=='error' and len(errors)<20:errors.append(event)
+    for error in errors:
+        tid=error.get('testID');test=tests.get(tid,{}) if type(tid) is int and tid not in ambiguous_tests else {}
+        sid=test.get('suiteID');name=suite_paths.get(sid) if type(sid) is int and sid not in ambiguous_suites else None
+        if name is not None:
+            names=inventory.get(name,['__diagnostic_count_only__'])
+            start={'type':'testStart','test':{'id':0,'name':test.get('name')}}
+            sample=dict(error,testID=0)
+            details=observe_green(json.dumps(start)+'\n'+json.dumps(sample),returncode,
+                                  expected_names=names,fixture_basename=Path(name).name)['errors'][0]
+            details.pop('fixture',None)
+            details['fileOrdinal']=ordinals[name]
+            observation['errors'].append(details)
+        else:
+            details=observe_green(json.dumps(error),returncode,expected_names=['__diagnostic_count_only__'],
+                                  fixture_basename='diagnostic_count_only_test.dart')['errors'][0]
+            details.pop('testOrdinal',None);details.pop('fixture',None);details.pop('locations',None)
+            observation['errors'].append(details)
+    return observation
+
+
+def validate_full():
+    """Only add finite observations; the original pipeline owns all acceptance."""
+    global STAGE
+    p=request.p
+    original_quiet=p.quiet;original_fingerprint=p.source_fingerprint
+    tracked=None;suites=None;source_root=None
+    def fingerprint(source,sha,env):
+        nonlocal tracked,suites,source_root
+        result=original_fingerprint(source,sha,env)
+        if tracked is None:
+            tracked=result[1];source_root=source;suites=inventory(source)
+        return result
+    def quiet(args,cwd=None,env=None):
+        global STAGE
+        if tuple(args) not in (ANALYZE_COMMAND,FULL_TEST_COMMAND):return original_quiet(args,cwd,env)
+        p.require(tracked is not None and cwd==source_root,'Frozen diagnostic source unavailable.')
+        STAGE='full-analysis' if tuple(args)==ANALYZE_COMMAND else 'full-tests'
+        try:
+            result=subprocess.run(args,cwd=cwd,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=False)
+        except OSError:
+            raise p.GateError('Required tool is unavailable.') from None
+        raw=result.stdout.decode('utf-8',errors='replace');stderr=result.stderr.decode('utf-8',errors='replace')
+        if tuple(args)==ANALYZE_COMMAND:
+            report=analyzer_observation(raw,stderr,tracked,source_root,result.returncode)
+        else:
+            report=full_test_observation(raw,stderr,tracked,source_root,suites,result.returncode)
+        print(json.dumps(report),flush=True)
+        p.require(result.returncode==0,'Full validation command failed; private details suppressed.')
+        return raw
+    with patch.object(p,'quiet',quiet),patch.object(p,'source_fingerprint',fingerprint):
+        return request.main()
+
+
 def main():
     global STAGE
     try:
@@ -128,7 +261,8 @@ def main():
                             SOURCE_SHA=SOURCE_SHA,SERVER_SHA=SERVER_SHA):
             STAGE=stage
             if stage=='focused': focused();return 0
-            with patch.object(sys,'argv',[sys.argv[0],stage]):return request.main()
+            with patch.object(sys,'argv',[sys.argv[0],stage]):
+                return validate_full() if stage=='validate_source' else request.main()
     except Exception as exc:
         known=('GateError','GreenVerificationError','TimeoutExpired','ValueError','TypeError','KeyError','JSONDecodeError')
         print(json.dumps({'stage':'follow-recovery-validation-failure','failedStage':STAGE,

@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '3b93097b80ad1fd69b19737edbd8028780d46ca2' &&
-      github.event.head_commit.message == 'test: validate controlled recovery event delivery 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '496885572b30447b5503d446208513a5a573e171' &&
+      github.event.head_commit.message == 'test: diagnose complete recovery source validation 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -71,10 +71,10 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
         run: python3 scripts/follow_recovery_check.py source fetch
-      - name: Validate exact recovery, provenance and original regression inventories
-        run: python3 scripts/follow_recovery_check.py source focused
       - name: Validate complete source analysis, tests, provenance and byte integrity without user Secrets
         run: python3 scripts/follow_recovery_check.py source validate_source
+      - name: Validate exact recovery, provenance and original regression inventories
+        run: python3 scripts/follow_recovery_check.py source focused
       - name: Remove private source and generated validation outputs
         if: always()
         run: python3 scripts/follow_recovery_check.py source cleanup
