@@ -1,0 +1,307 @@
+name: Current source build-only check
+
+on:
+  push:
+    branches: [main]
+    paths: [requests/current-source-20261022.json]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emosonic-current-source-20261022
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: 'c381e75f32a084068e803c847e9887497e1cec37'
+  BUILD_VERSION: '1.0.10+27'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    if: >-
+      github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' && github.event.before == '9ac5235b312f0427e3a33e78388bf641c34d0741' &&
+      github.event.head_commit.message == 'test: rebuild current client for isolated server tests 20261022' && github.event.forced == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: android-build
+    outputs:
+      source_sha: ${{ steps.prepare.outputs.source_sha }}
+      version: ${{ steps.prepare.outputs.version }}
+      apk_name: ${{ steps.prepare.outputs.apk_name }}
+      installer_name: ${{ steps.prepare.outputs.installer_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Test public pipeline logic
+        run: python3 -m unittest discover -s tests -v
+      - name: Verify fixed source for build-only same-version rebuild
+        id: prepare
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_REF: refs/heads/codex/fix-discovery-cache-banners-20261022
+        run: python3 scripts/current_source_check.py prepare
+
+  validate-source:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: android-build
+    env:
+      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+      BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.41.2'
+          channel: stable
+          cache: false
+      - name: Fetch the exact frozen source without retaining credentials
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        run: python3 scripts/current_source_check.py fetch
+      - name: Validate complete source analysis, tests, provenance and byte integrity without user Secrets
+        run: python3 scripts/current_source_check.py validate_source
+      - name: Remove private source and generated validation outputs
+        if: always()
+        run: python3 scripts/current_source_check.py cleanup
+
+  build:
+    needs: [prepare, validate-source]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: android-build
+    env:
+      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+      BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Fail before source access if signing configuration is incomplete
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          DEFAULT_SERVER_URL: ${{ secrets.DEFAULT_SERVER_URL }}
+        run: |
+          python3 -c 'import os,sys; names=["ANDROID_KEYSTORE_BASE64","ANDROID_STORE_PASSWORD","ANDROID_KEY_PASSWORD","ANDROID_KEY_ALIAS","DEFAULT_SERVER_URL"]; sys.exit(0 if all(os.environ.get(n) for n in names) else "Required signing/configuration Secret is missing.")'
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.41.2'
+          channel: stable
+          cache: false
+      - name: Ensure Android inspection tools
+        run: python3 scripts/current_source_check.py android_tools
+      - name: Fetch private source without logging content or retaining credentials
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        run: python3 scripts/current_source_check.py fetch
+      - name: Execute native contracts, compile Android and validate signed release APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          DEFAULT_SERVER_URL: ${{ secrets.DEFAULT_SERVER_URL }}
+        run: python3 scripts/current_source_check.py build
+      - name: Upload only the three allowlisted release files
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            dist/${{ needs.prepare.outputs.apk_name }}
+            dist/${{ needs.prepare.outputs.apk_name }}.sha256
+            dist/android-manifest.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          include-hidden-files: false
+      - name: Remove private source and transient signing files
+        if: always()
+        run: python3 scripts/current_source_check.py cleanup
+
+  verify:
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      apk_sha256: ${{ steps.verify.outputs.apk_sha256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Ensure Android inspection tools
+        run: python3 scripts/current_source_check.py android_tools
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: android-${{ github.run_id }}-${{ github.run_attempt }}
+          path: incoming
+      - name: Independently inspect APK on a fresh runner with no user Secrets
+        id: verify
+        env:
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+        run: python3 scripts/current_source_check.py verify
+
+  build-windows:
+    needs: [prepare, validate-source]
+    runs-on: windows-2022
+    timeout-minutes: 90
+    environment: windows-build
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+      BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require Windows build configuration
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+          DEFAULT_SERVER_URL: ${{ secrets.DEFAULT_SERVER_URL }}
+        run: python -c 'import os,sys; sys.exit(0 if all(os.environ.get(n) for n in ["SOURCE_READ_TOKEN","DEFAULT_SERVER_URL"]) else "Required Windows build Secret is missing.")'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.41.2'
+          channel: stable
+          cache: false
+      - name: Prepare pinned Inno compiler and unpacker without running their installers
+        env:
+          INSTALL_COMPILER: 'true'
+        run: python scripts/current_source_check.py windows_tools
+      - name: Fetch the same private source SHA without persisted credentials
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        run: python scripts/current_source_check.py fetch
+      - name: Build and inspect the original Windows installer
+        env:
+          DEFAULT_SERVER_URL: ${{ secrets.DEFAULT_SERVER_URL }}
+        run: python scripts/current_source_check.py build_windows
+      - name: Upload only the three allowlisted Windows files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            dist/${{ needs.prepare.outputs.installer_name }}
+            dist/${{ needs.prepare.outputs.installer_name }}.sha256
+            dist/windows-manifest.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          include-hidden-files: false
+      - name: Remove private source
+        if: always()
+        run: python scripts/current_source_check.py cleanup
+
+  verify-windows:
+    needs: [prepare, build-windows]
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      installer_sha256: ${{ steps.verify.outputs.installer_sha256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Prepare pinned unpacker without user Secrets
+        run: python scripts/current_source_check.py windows_tools
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: windows-${{ github.run_id }}-${{ github.run_attempt }}
+          path: incoming
+      - name: Independently check installer and embedded app without executing either
+        id: verify
+        env:
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+        run: python scripts/current_source_check.py verify_windows
+
+  native-macos-server:
+    needs: [prepare, validate-source]
+    runs-on: macos-26
+    timeout-minutes: 55
+    environment: android-build
+    env:
+      CI: 'true'
+      BOT: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      # Explicit user approval for only these disposable test app entitlements.
+      EMOSONIC_MAC_LAB_NETWORK_APPROVED: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Fetch fixed private client without retained credentials
+        env:
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        run: python3 scripts/current_source_check.py fetch
+      - name: Checkout fixed public isolated server
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: jsdfhasuh/Emosonic-Server
+          ref: 8e9a319002c0ffa6054cd98e06dd271070ed729b
+          path: .native-server
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Adapt only the disposable harness server guard
+        run: python3 scripts/current_native_check.py prepare
+      - name: Install real isolated server dependencies without logging private output
+        run: python3 scripts/current_native_check.py dependencies
+      - name: Validate native measurement boundaries
+        run: python3 scripts/current_native_check.py unit
+      - name: Preflight actual HTTP media and strict registration before compilation
+        run: python3 scripts/current_native_check.py preflight
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.41.2'
+          channel: stable
+          cache: false
+      - name: Compile three sandboxed same-source native test clients
+        run: python3 scripts/current_native_check.py build
+      - name: Measure actual Handoff delayed preparation and cancellation
+        run: python3 scripts/current_native_check.py handoff
+      - name: Measure actual follower transfer and restoration
+        run: python3 scripts/current_native_check.py follow
+      - name: Verify native processes stopped and remove owned test bundles and server
+        id: native-cleanup
+        if: always()
+        run: python3 scripts/current_native_check.py cleanup
+      - name: Remove private source and build diagnostics after verified native teardown
+        if: ${{ always() && steps.native-cleanup.outcome == 'success' }}
+        run: python3 scripts/current_source_check.py cleanup
+      # No native test bundles, private profiles, raw logs or source artifacts uploaded.
