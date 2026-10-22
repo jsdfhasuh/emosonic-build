@@ -7,15 +7,15 @@ import handoff_follow_readiness as base
 import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 
-PARENT = '4a099e5ecc1aa6e997dd1f776994590e57da774e'
-MESSAGE = 'test: observe native seek and anchor timing 20261022'
+PARENT = 'e3b181c40054f9cc4892deeb6f2eadd308920f1d'
+MESSAGE = 'test: validate recovered native Handoff and Follow 20261022'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
-SOURCE_SHA = '1efc826b85c305bd60210aa705444114c1a0d5e2'
-SOURCE_REF = 'refs/heads/fix/darwin-position-anchor-20261022'
+SOURCE_SHA = '466f56d9935afb299724a212d680a743a11c723f'
+SOURCE_REF = 'refs/heads/fix/follow-recovery-lints-20261022'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=18, proof_run_id=39745934922)
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=26, proof_run_id=39745934922, validation_run_id=39767536382)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
 
@@ -40,6 +40,51 @@ def require_causal_proof():
         p.require(len(found)==1 and found[0].get('conclusion')=='success','Causal proof and cleanup must succeed.')
 
 
+
+VALIDATION_RUN = 39767536382
+VALIDATION_HEAD = 'e3b181c40054f9cc4892deeb6f2eadd308920f1d'
+VALIDATION_STEPS = {
+    'validate-source': (
+        'Validate exact recovery, provenance and original regression inventories',
+        'Validate complete source analysis, tests, provenance and byte integrity without user Secrets',
+        'Remove private source and generated validation outputs',
+    ),
+    'observer-bool-proof': (
+        'Prove exact Foundation BOOL serialization and strict mismatch rejection',
+    ),
+}
+
+
+def require_recovery_validation():
+    p=base.request.p
+    endpoint=f'/repos/jsdfhasuh/emosonic-build/actions/runs/{VALIDATION_RUN}'
+    run=p.api(endpoint)
+    p.require(type(run) is dict and type(run.get('id')) is int and run['id']==VALIDATION_RUN
+              and run.get('head_sha')==VALIDATION_HEAD
+              and run.get('path')=='.github/workflows/follow-recovery-check.yml'
+              and run.get('event')=='push' and run.get('head_branch')=='main'
+              and type(run.get('run_attempt')) is int and run['run_attempt']==1
+              and run.get('status')=='completed' and run.get('conclusion')=='success',
+              'Exact recovery validation must complete successfully before native testing.')
+    jobs=p.api(endpoint+'/jobs?per_page=100')
+    p.require(type(jobs) is dict and type(jobs.get('jobs')) is list
+              and type(jobs.get('total_count')) is int
+              and jobs['total_count']==len(jobs['jobs'])<=100,
+              'Complete recovery validation jobs unavailable.')
+    for job_name, names in VALIDATION_STEPS.items():
+        matches=[j for j in jobs['jobs'] if type(j) is dict and j.get('name')==job_name]
+        p.require(len(matches)==1, 'Exact recovery validation job missing or duplicated.')
+        job=matches[0]
+        p.require(job.get('run_id')==VALIDATION_RUN and job.get('head_sha')==VALIDATION_HEAD
+                  and job.get('status')=='completed' and job.get('conclusion')=='success'
+                  and type(job.get('steps')) is list, 'Recovery validation job must succeed.')
+        for name in names:
+            steps=[s for s in job['steps'] if type(s) is dict and s.get('name')==name]
+            p.require(len(steps)==1 and steps[0].get('status')=='completed'
+                      and steps[0].get('conclusion')=='success',
+                      'Recovery tests, full validation, BOOL proof and cleanup must succeed.')
+
+
 def main():
     stage = 'entry'
     try:
@@ -51,7 +96,9 @@ def main():
                 raise ValueError('Package and publishing stages forbidden')
         elif category != 'native' or stage not in NATIVE_STAGES:
             raise ValueError('Unknown native timing validation stage')
-        if category=='source' and stage=='prepare': require_causal_proof()
+        if category=='source' and stage=='prepare':
+            require_causal_proof()
+            require_recovery_validation()
         source = base.request.p.ROOT / 'source'
         with ExitStack() as stack:
             stack.enter_context(patch.multiple(base, PARENT=PARENT,MESSAGE=MESSAGE,

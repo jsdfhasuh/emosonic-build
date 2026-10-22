@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '1efc826b85c305bd60210aa705444114c1a0d5e2'
+  SOURCE_SHA: '466f56d9935afb299724a212d680a743a11c723f'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '4a099e5ecc1aa6e997dd1f776994590e57da774e' &&
-      github.event.head_commit.message == 'test: observe native seek and anchor timing 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'e3b181c40054f9cc4892deeb6f2eadd308920f1d' &&
+      github.event.head_commit.message == 'test: validate recovered native Handoff and Follow 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/darwin-position-anchor-20261022
+          SOURCE_REF: refs/heads/fix/follow-recovery-lints-20261022
         run: python3 scripts/handoff_follow_timing.py source prepare
 
   native-macos-server:

@@ -74,3 +74,65 @@ class TimingWrapperTests(unittest.TestCase):
     def test_timing_schema_ignores_unknown_private_content(self):
         value=c.base.native.diagnostic_value({'private':'secret','authority':{'private':'secret'},'follower':{'private':'secret'}},{'authority':c.timing.SCHEMA,'follower':c.timing.SCHEMA})
         self.assertNotIn('secret',json.dumps(value));self.assertNotIn('private',json.dumps(value))
+
+class RecoveryValidationGateTests(unittest.TestCase):
+    def evidence(self):
+        run={'id':c.VALIDATION_RUN,'head_sha':c.VALIDATION_HEAD,
+             'path':'.github/workflows/follow-recovery-check.yml','event':'push',
+             'head_branch':'main','run_attempt':1,'status':'completed','conclusion':'success'}
+        jobs={'jobs':[{'name':name,'run_id':c.VALIDATION_RUN,'head_sha':c.VALIDATION_HEAD,
+                       'status':'completed','conclusion':'success',
+                       'steps':[{'name':step,'status':'completed','conclusion':'success'} for step in steps]}
+                      for name,steps in c.VALIDATION_STEPS.items()]}
+        jobs['total_count']=len(jobs['jobs'])
+        return run,jobs
+
+    def test_complete_exact_evidence(self):
+        with patch.object(c.base.request.p,'api',side_effect=self.evidence()) as api:
+            c.require_recovery_validation()
+        self.assertEqual(api.call_args_list[0].args[0],'/repos/jsdfhasuh/emosonic-build/actions/runs/39767536382')
+        self.assertEqual(c.SOURCE_SHA,c.timing.SOURCE_SHA)
+
+    def test_pending_failed_wrong_run_head_workflow_and_attempt_refused(self):
+        for key,value in [('id',39763027779),('head_sha','0'*40),('path','other'),
+                          ('event','workflow_dispatch'),('head_branch','other'),
+                          ('status','in_progress'),('conclusion','failure'),
+                          ('run_attempt',2),('run_attempt',True)]:
+            run,jobs=self.evidence();run[key]=value
+            with self.subTest(key=key),patch.object(c.base.request.p,'api',side_effect=[run,jobs]),self.assertRaises(c.base.request.p.GateError):
+                c.require_recovery_validation()
+
+    def test_missing_failed_duplicate_or_partial_jobs_refused(self):
+        for mode in ('missing','duplicate','failed','wrong-head','wrong-run','pending','truncated'):
+            run,jobs=self.evidence();job=jobs['jobs'][0]
+            if mode=='missing':jobs['jobs'].pop()
+            elif mode=='duplicate':jobs['jobs'].append(dict(job))
+            elif mode=='failed':job['conclusion']='failure'
+            elif mode=='wrong-head':job['head_sha']='0'*40
+            elif mode=='wrong-run':job['run_id']=0
+            elif mode=='pending':job['status']='in_progress'
+            if mode!='truncated':jobs['total_count']=len(jobs['jobs'])
+            else:jobs['total_count']=101
+            with self.subTest(mode=mode),patch.object(c.base.request.p,'api',side_effect=[run,jobs]),self.assertRaises(c.base.request.p.GateError):
+                c.require_recovery_validation()
+
+    def test_every_required_test_proof_and_cleanup_step_must_succeed(self):
+        for index, names in enumerate(c.VALIDATION_STEPS.values()):
+            for ordinal in range(len(names)):
+                for mode in ('absent','duplicate','failed','skipped','pending'):
+                    run,jobs=self.evidence();steps=jobs['jobs'][index]['steps']
+                    if mode=='absent':steps.pop(ordinal)
+                    elif mode=='duplicate':steps.append(dict(steps[ordinal]))
+                    elif mode=='pending':steps[ordinal]['status']='in_progress'
+                    else:steps[ordinal]['conclusion']='failure' if mode=='failed' else 'skipped'
+                    with self.subTest(index=index,ordinal=ordinal,mode=mode),patch.object(c.base.request.p,'api',side_effect=[run,jobs]),self.assertRaises(c.base.request.p.GateError):
+                        c.require_recovery_validation()
+
+    def test_prepare_gates_both_before_any_source_action(self):
+        calls=[]
+        with patch.object(sys,'argv',['helper','source','prepare']),patch.object(c,'require_causal_proof',side_effect=lambda:calls.append('causal')),patch.object(c,'require_recovery_validation',side_effect=lambda:calls.append('recovery')),patch.object(c.base,'main',side_effect=lambda:calls.append('source') or 0):
+            self.assertEqual(c.main(),0)
+        self.assertEqual(calls,['causal','recovery','source'])
+        with patch.object(sys,'argv',['helper','source','prepare']),patch.object(c,'require_causal_proof'),patch.object(c,'require_recovery_validation',side_effect=c.base.request.p.GateError('not complete')),patch.object(c.base,'main') as base:
+            self.assertEqual(c.main(),1)
+            base.assert_not_called()
