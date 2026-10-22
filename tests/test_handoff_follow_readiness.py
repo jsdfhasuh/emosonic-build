@@ -33,6 +33,18 @@ class FollowReadinessOrchestrationTests(unittest.TestCase):
             self.assertEqual(c.main(), 0)
         self.assertEqual(calls, ['context', 'fingerprint', 'server-pin', 'observations', 'readiness', 'red-green'])
 
+    def test_native_unit_requires_prepared_fixture_integrity(self):
+        calls = []
+        with patch.object(sys, 'argv', ['wrapper', 'native', 'unit']), patch.object(c, 'checked_native_context', side_effect=lambda: calls.append('context')), patch.object(c.readiness, 'verify_prepared', side_effect=lambda *a: calls.append('prepared')), patch.object(c.native, 'main', side_effect=lambda: calls.append('unit') or 0), patch.object(c.native, 'execute') as attribution:
+            self.assertEqual(c.main(), 0)
+            attribution.assert_not_called()
+        self.assertEqual(calls, ['context', 'prepared', 'unit'])
+
+    def test_changed_fixture_prevents_unit_execution(self):
+        with patch.object(sys, 'argv', ['wrapper', 'native', 'unit']), patch.object(c, 'checked_native_context'), patch.object(c.readiness, 'verify_prepared', side_effect=ValueError('wrong fixture')), patch.object(c.native, 'main') as run:
+            self.assertEqual(c.main(), 1)
+            run.assert_not_called()
+
     def test_attribution_order(self):
         calls = []
         with patch.object(sys, 'argv', ['wrapper', 'native', 'attribution']), patch.object(c, 'checked_native_context', side_effect=lambda: calls.append('context')), patch.object(c.readiness, 'verify_prepared', side_effect=lambda *a: calls.append('prepared')), patch.object(c.request.p, 'source_context', side_effect=lambda **a: calls.append('sdk')), patch.object(c.request.p, 'codegen', side_effect=lambda *a: calls.append('codegen')), patch.object(c.native, 'native_env', return_value={}), patch.object(c.native, 'execute', side_effect=lambda command, label, report: calls.append(command[2])):

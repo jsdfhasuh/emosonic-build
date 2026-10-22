@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '65e67e9bff6baa208a776c4043908bc974dfab38' &&
-      github.event.head_commit.message == 'test: validate seek-aware native follow readiness 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '0a765ad777010d2097248e7bf97f39b692c9a550' &&
+      github.event.head_commit.message == 'test: verify complete follow fixtures and native matrix 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build

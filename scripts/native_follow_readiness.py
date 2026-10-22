@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 LAB = 'tool/native_playback_mac/run_lab.py'
 PREPARE = 'tool/native_playback_mac/prepare_build.py'
+FIXTURE = 'tool/native_playback_mac/test_follow_alignment.py'
 STATE = '.native_follow_readiness/manifest.json'
 ORIGINAL_STATE = '.native_follow_readiness/original-run_lab.py'
 PROOF_STATE = '.native_follow_readiness/contract-proof.json'
@@ -19,11 +20,12 @@ NATIVE_ROOT = '.native_mac_lab/just_audio/darwin/just_audio/Sources/just_audio'
 NATIVE_PATHS = {'AudioPlayer.h': NATIVE_ROOT + '/include/just_audio/AudioPlayer.h',
                 'AudioPlayer.m': NATIVE_ROOT + '/AudioPlayer.m'}
 BASELINE = {LAB: 'd4334d816816b81e8fa9fa807fbfbdc1198300d66884db828c55037513709332',
-           PREPARE: '4dcb27fa7d93a74823d5727a271459ed6cd0901999bd33e5180afff0e363da0e'}
+           PREPARE: '4dcb27fa7d93a74823d5727a271459ed6cd0901999bd33e5180afff0e363da0e',
+           FIXTURE: 'f324d2f5106a26837aca41c4733e03f3a08c583b7d3cc1e12017bf34812bd8a5'}
 # Filled from independently reviewed exact transformations, not runtime source.
-AFTER = {'tool/native_playback_mac/run_lab.py': '136b931b361814a7698d4174a0103d624e57ee610fe760111a7611ecaf47dc16', 'tool/native_playback_mac/prepare_build.py': 'b116f59e617e3ba595d1fd20d8e9e80627bb214ce8c6992390edd831f9f41e0b'}
+AFTER = {'tool/native_playback_mac/run_lab.py': '136b931b361814a7698d4174a0103d624e57ee610fe760111a7611ecaf47dc16', 'tool/native_playback_mac/prepare_build.py': 'b116f59e617e3ba595d1fd20d8e9e80627bb214ce8c6992390edd831f9f41e0b', FIXTURE: 'fb1a6225d5e96e724930b9798cbed6e12c5d80fbf683de04b5e74853f7aaa4c4'}
 NATIVE_HASHES = {'AudioPlayer.h': {'before': 'c8c6df3bc07f10677e0afbeb447c88da2a704b2c8323769247f78768c6a43138', 'after': '6b48fdf8e6bf67849126224151470cb8932d432f2dffd7e6fd8d09ef85796cb2'}, 'AudioPlayer.m': {'before': 'ce2f0661be34e093a2cab4f3db697128f6468236b5c30103d4979d20aef74b62', 'after': 'c7084b99c48ba10bb074effd1f9744859251cb904a55d7fd0247afd50f67108a'}}
-PAYLOAD_HASHES = {'readiness_contract.py': '6ea5593d7d9c75281e6f515f42d31d087c9cfc8c118e48064c1ec6b50753b560', 'instrument_seek_observability.py': '730a11b21ae7cfd16706bff36fa121f249cd548236f9fa8ec4134014125662d3', 'follow_readiness_helpers.py': 'dc31f1502fd9b9f96818672742c3ad89f469923071a3b29f59ee6cd57c3ea300'}
+PAYLOAD_HASHES = {'alignment_fixture_compatibility.py': 'bef7836fed2c378a9d5d36797d6974d77147006367b97c921930ab7bf700d111', 'readiness_contract.py': '6ea5593d7d9c75281e6f515f42d31d087c9cfc8c118e48064c1ec6b50753b560', 'instrument_seek_observability.py': '730a11b21ae7cfd16706bff36fa121f249cd548236f9fa8ec4134014125662d3', 'follow_readiness_helpers.py': 'dc31f1502fd9b9f96818672742c3ad89f469923071a3b29f59ee6cd57c3ea300'}
 
 
 def digest(data): return hashlib.sha256(data).hexdigest()
@@ -112,6 +114,12 @@ def patch_prepare(original):
     return text.encode('utf-8')
 
 
+def patch_fixture(original):
+    namespace = {}
+    exec(compile(payload('alignment_fixture_compatibility.py'), '<owned-fixture-compatibility>', 'exec'), namespace)
+    return namespace['transform'](original)
+
+
 def checked(repo, relative, *, new=False):
     repo = Path(repo)
     path = repo / relative
@@ -129,7 +137,7 @@ def checked(repo, relative, *, new=False):
 
 def expected_manifest():
     return {'status': 'prepared', 'productionRepositoryMutation': False,
-            'disposableOnly': True, 'nativeReadOnlyGetters': True,
+            'disposableOnly': True, 'nativeReadOnlyGetters': True, 'originalFixtureTestMethodsUnchanged': True,
             'files': {name: {'before': BASELINE[name], 'after': AFTER[name]} for name in BASELINE},
             'payloads': PAYLOAD_HASHES}
 
@@ -139,7 +147,8 @@ def apply(source_repo):
     state_root = checked(source_repo, '.native_follow_readiness', new=True)
     manifest_path = state_root / 'manifest.json'
     originals = {name: path.read_bytes() for name, path in files.items()}
-    updates = {LAB: patch_harness(originals[LAB]), PREPARE: patch_prepare(originals[PREPARE])}
+    updates = {LAB: patch_harness(originals[LAB]), PREPARE: patch_prepare(originals[PREPARE]),
+               FIXTURE: patch_fixture(originals[FIXTURE])}
     if any(digest(data) != AFTER[name] for name, data in updates.items()):
         raise ValueError('Readiness packaged transformation hash changed')
     state_root.mkdir()
@@ -157,10 +166,11 @@ def _verify_source_prepared(source_repo):
     manifest = json.loads(checked(source_repo, STATE).read_text())
     if (not isinstance(manifest, dict) or manifest != expected_manifest()
             or any(type(manifest.get(key)) is not bool for key in
-                   ('productionRepositoryMutation', 'disposableOnly', 'nativeReadOnlyGetters'))):
+                   ('productionRepositoryMutation', 'disposableOnly', 'nativeReadOnlyGetters', 'originalFixtureTestMethodsUnchanged'))):
         raise ValueError('Readiness preparation manifest changed')
-    if digest(checked(source_repo, PREPARE).read_bytes()) != AFTER[PREPARE]:
-        raise ValueError('Readiness native builder changed')
+    for name in (PREPARE, FIXTURE):
+        if digest(checked(source_repo, name).read_bytes()) != AFTER[name]:
+            raise ValueError('Readiness prepared source changed')
     if digest(checked(source_repo, ORIGINAL_STATE).read_bytes()) != BASELINE[LAB]:
         raise ValueError('Readiness private baseline changed')
     return manifest

@@ -7,15 +7,15 @@ import current_native_check as native
 from native_consistency_observation import apply_observations
 import native_follow_readiness as readiness
 
-PARENT = '65e67e9bff6baa208a776c4043908bc974dfab38'
-MESSAGE = 'test: validate seek-aware native follow readiness 20261022'
+PARENT = '0a765ad777010d2097248e7bf97f39b692c9a550'
+MESSAGE = 'test: verify complete follow fixtures and native matrix 20261022'
 WORKFLOW = 'handoff-follow-readiness.yml'
 REQUEST_PATH = 'requests/handoff-follow-readiness-20261022.json'
 OBSERVED_HARNESS_SHA256 = '136b931b361814a7698d4174a0103d624e57ee610fe760111a7611ecaf47dc16'
 SOURCE_REF = 'refs/heads/fix/handoff-play-initiation-20261022'
 SOURCE_SHA = '01967c853a4e6020097e9a2da61f9785b470ff7d'
 REQUEST = dict(request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               mode='native-seek-readiness-validation', attempt=7)
+               mode='native-seek-readiness-validation', attempt=8)
 
 
 def checked_native_context():
@@ -53,6 +53,9 @@ def main():
                     native.execute([sys.executable, str(helper), 'proof', '--repo', str(source)], 'scoped-attribution-proof', True)
                     native.execute([sys.executable, str(helper), 'native', '--repo', str(source), '--expected-lab-before-sha256', OBSERVED_HARNESS_SHA256], 'scoped-attribution-native-handoff', True)
                     return 0
+            if category == 'native' and stage == 'unit':
+                checked_native_context()
+                readiness.verify_prepared(request.p.ROOT / 'source')
             if category == 'native' and stage in ('build', 'handoff', 'follow'):
                 checked_native_context()
                 readiness.verify_prepared(request.p.ROOT / 'source')
