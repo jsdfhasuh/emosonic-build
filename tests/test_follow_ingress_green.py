@@ -17,8 +17,8 @@ class GreenAdapterTest(unittest.TestCase):
     def test_combines_exact_original_and_ingress_inventories(self):
         old=self.suites(); new=dict(path='test/services/ingress_test.dart',names=['a','b','c'])
         lifecycle=dict(path=gate.LIFECYCLE_PATH,names=['life'])
-        with patch.object(gate,'RECOVERY_INVENTORY',return_value=old),patch.object(gate.ingress,'inventory',return_value=new),patch.object(gate,'lifecycle_inventory',return_value=lifecycle):
-            self.assertEqual(gate.inventory(Path('/owned')),old+[new,lifecycle])
+        with patch.object(gate,'RECOVERY_INVENTORY',return_value=old),patch.object(gate.ingress,'inventory',return_value=new),patch.object(gate,'lifecycle_inventory',return_value=lifecycle),patch.object(gate,'storage_inventory',return_value={'path':gate.STORAGE_PATH,'names':['x','y','z']}):
+            self.assertEqual(gate.inventory(Path('/owned')),[{'path':gate.STORAGE_PATH,'names':['x','y','z']}]+old+[new,lifecycle])
 
     def test_rejects_missing_original_case(self):
         old=self.suites();old[0]['names'].pop()
@@ -34,7 +34,7 @@ class GreenAdapterTest(unittest.TestCase):
         original={'exitCode':1,'errorCount':1}
         out=io.StringIO()
         with patch.object(gate,'ORIGINAL_OBSERVER',return_value=original),patch.object(gate.ingress,'phase_observation',return_value={'stage':'phase'}),patch.object(gate.ingress,'dispatch_observation',return_value={'stage':'native'}),contextlib.redirect_stdout(out):
-            self.assertIs(gate.focused_observation('private',1,expected_names=['a','b','c']),original)
+            self.assertIs(gate.focused_observation('private',1,expected_names=['a','b','c'],fixture_basename='emo_follow_ingress_pending_apply_test.dart'),original)
         self.assertEqual([json.loads(x)['stage'] for x in out.getvalue().splitlines()],['phase','native'])
         self.assertNotIn('private',out.getvalue())
 

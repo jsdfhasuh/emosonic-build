@@ -223,6 +223,7 @@ def observe_green(raw, returncode, *, expected_names, fixture_basename, stderr='
 
     inventory = {name: i for i, name in enumerate(expected_names, 1)}
     starts, ambiguous, errors = {}, set(), []
+    completions = {}
     terminal = []
     for line in raw.splitlines():
         if not line.strip():
@@ -248,6 +249,8 @@ def observe_green(raw, returncode, *, expected_names, fixture_basename, stderr='
                 name = test.get('name')
                 starts[tid] = inventory.get(name) if type(name) is str else None
         elif kind == 'testDone':
+            if type(event.get('testID')) is int:
+                completions.setdefault(event['testID'], []).append(event)
             report['completedTests'] += 1
             if event.get('hidden') is True:
                 report['hiddenTests'] += 1
@@ -268,7 +271,9 @@ def observe_green(raw, returncode, *, expected_names, fixture_basename, stderr='
     if len(terminal) == 1:
         report['terminalSuccess'] = terminal[0]
     categories = ('TimeoutException', 'StateError', 'RangeError', 'LateInitializationError',
-                  'NoSuchMethodError', 'MissingPluginException', 'TestFailure', 'AssertionError')
+                  'NoSuchMethodError', 'MissingPluginException', 'TestFailure', 'AssertionError',
+                  'FlutterError', 'ProcessException', 'SocketException', 'FileSystemException',
+                  'DatabaseException', 'SqliteException', 'PlatformException', 'FormatException')
     location = (r'(?<![A-Za-z0-9_])' + re.escape(fixture_basename)
                 + r'(?::|[ \t]+)([0-9]{1,6}):([0-9]{1,6})(?![0-9])')
     scalar = r'(true|false|null|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)'
@@ -279,11 +284,25 @@ def observe_green(raw, returncode, *, expected_names, fixture_basename, stderr='
             error['testOrdinal'] = starts[tid]
         if type(event.get('isFailure')) is bool:
             error['isFailure'] = event['isFailure']
+        completed = completions.get(tid, []) if type(tid) is int else []
+        if len(completed) == 1:
+            if type(completed[0].get('hidden')) is bool:
+                error['hidden'] = completed[0]['hidden']
+            if completed[0].get('result') in ('success', 'failure', 'error'):
+                error['result'] = completed[0]['result']
         body = event.get('error') if type(event.get('error')) is str else ''
         stack = event.get('stackTrace') if type(event.get('stackTrace')) is str else ''
         error['category'] = next((name for name in categories if re.search(
             r'(?<![A-Za-z0-9_])' + name + r'(?![A-Za-z0-9_])', body)),
             'assertion' if event.get('isFailure') is True else 'other')
+        if error['category'] == 'other':
+            for literal, reason in (('A Timer is still pending', 'pending-timer'),
+                                    ('Shell subprocess crashed', 'shell-crash'),
+                                    ('Test timed out after', 'test-timeout'),
+                                    ('Failed to load ', 'test-load-failed')):
+                if literal in body:
+                    error['category'] = reason
+                    break
         locations = sorted({(int(m.group(1)), int(m.group(2)))
                             for m in re.finditer(location, body + '\n' + stack)})[:5]
         if locations:

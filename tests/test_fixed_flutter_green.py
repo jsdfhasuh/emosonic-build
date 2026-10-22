@@ -188,7 +188,7 @@ class ObservationTests(unittest.TestCase):
         self.assertIs(report['terminalSuccess'],False)
         self.assertEqual(report['errorCount'],2)
         self.assertEqual(report['errors'][0],dict(testOrdinal=1,isFailure=True,category='assertion',
-            fixture=BASE,locations=[dict(line=123,column=45)],expected=True,actual=False))
+            fixture=BASE,locations=[dict(line=123,column=45)],expected=True,actual=False,hidden=False,result="failure"))
         self.assertEqual(report['errors'][1]['category'],'StateError')
         self.assertNotIn('private',json.dumps(report))
         with self.assertRaises(v.GreenVerificationError):

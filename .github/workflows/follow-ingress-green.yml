@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == 'c794d1609a23a28658cbb74027aa79589d797103' &&
-      github.event.head_commit.message == 'test: validate lifecycle-compatible ingress repair 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'f4e189f7e8d0ba269f7ca4fe19b8af7b93431cba' &&
+      github.event.head_commit.message == 'test: verify storage widget and complete ingress suite 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -71,7 +71,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
         run: python3 scripts/follow_ingress_green.py source fetch
-      - name: Validate all 101 exact ingress recovery and lifecycle cases
+      - name: Validate 3 storage widget cases then all 101 ingress recovery and lifecycle cases
         run: python3 scripts/follow_ingress_green.py source focused
       - name: Validate complete source analysis, tests, provenance and byte integrity without user Secrets
         run: python3 scripts/follow_ingress_green.py source validate_source

@@ -1,4 +1,4 @@
-"""One fixed 101-case/full-source green gate; historical expected-red is untouched."""
+"""One fixed 104-case/full-source green gate; historical expected-red is untouched."""
 import hashlib
 import json
 import re
@@ -8,8 +8,8 @@ from unittest.mock import patch
 import follow_ingress_proof as ingress
 import follow_recovery_check as recovery
 
-PARENT = 'c794d1609a23a28658cbb74027aa79589d797103'
-MESSAGE = 'test: validate lifecycle-compatible ingress repair 20261022'
+PARENT = 'f4e189f7e8d0ba269f7ca4fe19b8af7b93431cba'
+MESSAGE = 'test: verify storage widget and complete ingress suite 20261022'
 WORKFLOW = 'follow-ingress-green.yml'
 REQUEST_PATH = 'requests/follow-ingress-green-20261022.json'
 SOURCE_REF = 'refs/heads/test/follow-lifecycle-dispatch-capability-20261022'
@@ -18,7 +18,7 @@ SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 RECOVERY_INVENTORY_SHA256 = '2c882b974b4a49478ca9d5df5cb9aff094a309a7e8f1e42a1fd20403f841c69b'
 INGRESS_INVENTORY_SHA256 = 'fde163ba2e25f529e2ef152523ba5f8df31ff7b1718a3e7398800bb89cfae71e'
 REQUEST = dict(recovery.request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               server_sha=SERVER_SHA, mode='follow-ingress-full-green-validation', attempt=36)
+               server_sha=SERVER_SHA, mode='follow-ingress-full-green-validation', attempt=38)
 RECOVERY_INVENTORY = recovery.inventory
 ORIGINAL_OBSERVER = recovery.observe_green
 ORIGINAL_FULL_OBSERVER = recovery.full_test_observation
@@ -27,6 +27,20 @@ LIFECYCLE_INVENTORY_SHA256 = "5ab6e70f6628cc7f5768c13cd06b71725a8df0d589e1c40d64
 LIFECYCLE_PATH = "test/services/emo_follow_recovery_lifecycle_test.dart"
 DISPATCH_PATH = "test/services/audio_remote_dispatch_position_test.dart"
 DISPATCH_SHA256 = "855ca0fbaa775b06409667d6ba9969179a191d0868f8a7749eaf85ec555cb5ae"
+
+
+STORAGE_PATH = 'test/ui/offline_storage_panel_test.dart'
+STORAGE_SHA256 = '896ee5950d01c12d6e88c10e7c9c02432521db6aa518dbc9e22d4d624c6f4a7c'
+
+
+def storage_inventory(source):
+    data = recovery.owned_file(source, STORAGE_PATH).read_bytes()
+    require = recovery.request.p.require
+    require(hashlib.sha256(data).hexdigest() == STORAGE_SHA256, 'Storage fixture changed.')
+    names = re.findall(r"testWidgets\(\s*'([^'\n]*)'\s*,", data.decode('utf-8'))
+    require(len(names) == 3 and len(set(names)) == 3 and all('$' not in n for n in names),
+            'Storage literal names invalid.')
+    return dict(path=STORAGE_PATH, sha256=STORAGE_SHA256, names=names)
 
 
 def lifecycle_inventory(source):
@@ -59,14 +73,14 @@ def inventory(source):
     lifecycle = lifecycle_inventory(source)
     recovery.request.p.require(lifecycle['path'] not in {s['path'] for s in suites + [suite]},
                                'Lifecycle fixture must be additional.')
-    return suites + [suite, lifecycle]
+    return [storage_inventory(source)] + suites + [suite, lifecycle]
 
 
 def focused_observation(raw, returncode, **kwargs):
     report = ORIGINAL_OBSERVER(raw, returncode, **kwargs)
     # The three original suites have 45/13/6 pinned cases; only ingress has 3.
     names = kwargs['expected_names']
-    if len(names) == 3:
+    if len(names) == 3 and kwargs.get('fixture_basename') == 'emo_follow_ingress_pending_apply_test.dart':
         print(json.dumps(ingress.phase_observation(raw, names)), flush=True)
         print(json.dumps(ingress.dispatch_observation(raw, names)), flush=True)
     return report

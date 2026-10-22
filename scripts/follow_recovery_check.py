@@ -167,7 +167,7 @@ def full_test_observation(raw, stderr, paths, source, suites, returncode):
     if observation.get('reason') in ('output-limit','invalid-output','event-limit'):return observation
     ordinals={name:i for i,name in enumerate(sorted(paths),1)}
     inventory={s['path']:s['names'] for s in suites}
-    suite_paths={};tests={};ambiguous_suites=set();ambiguous_tests=set();errors=[]
+    suite_paths={};tests={};ambiguous_suites=set();ambiguous_tests=set();errors=[];completions={}
     def pairs(items):
         result={}
         for key,value in items:
@@ -195,6 +195,8 @@ def full_test_observation(raw, stderr, paths, source, suites, returncode):
             if type(test) is not dict or type(test.get('id')) is not int:continue
             if test['id'] in tests:ambiguous_tests.add(test['id'])
             tests[test['id']]=test
+        elif event.get('type')=='testDone' and type(event.get('testID')) is int:
+            completions.setdefault(event['testID'], []).append(event)
         elif event.get('type')=='error' and len(errors)<20:errors.append(event)
     for error in errors:
         tid=error.get('testID');test=tests.get(tid,{}) if type(tid) is int and tid not in ambiguous_tests else {}
@@ -203,7 +205,8 @@ def full_test_observation(raw, stderr, paths, source, suites, returncode):
             names=inventory.get(name,['__diagnostic_count_only__'])
             start={'type':'testStart','test':{'id':0,'name':test.get('name')}}
             sample=dict(error,testID=0)
-            details=observe_green(json.dumps(start)+'\n'+json.dumps(sample),returncode,
+            details=observe_green('\n'.join(json.dumps(e) for e in [start,sample]+
+                                  [dict(done,testID=0) for done in completions.get(tid,[])]),returncode,
                                   expected_names=names,fixture_basename=Path(name).name)['errors'][0]
             details.pop('fixture',None)
             details['fileOrdinal']=ordinals[name]
