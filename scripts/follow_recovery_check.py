@@ -10,17 +10,17 @@ import current_source_check as request
 import handoff_repair_check as regression
 from fixed_flutter_green import verify_green, observe_green, GreenVerificationError
 
-PARENT = '496885572b30447b5503d446208513a5a573e171'
-MESSAGE = 'test: diagnose complete recovery source validation 20261022'
+PARENT = '591551d1ce30921ad7a1aaf2cfdb576ab22cf1aa'
+MESSAGE = 'test: validate lint-clean follow recovery 20261022'
 WORKFLOW = 'follow-recovery-check.yml'
 REQUEST_PATH = 'requests/follow-recovery-check-20261022.json'
-SOURCE_REF = 'refs/heads/test/follow-recovery-sync-fixture-20261022'
-SOURCE_SHA = '15bdc56b8a93db62bba2b5549073e1e09a8a88ff'
+SOURCE_REF = 'refs/heads/fix/follow-recovery-lints-20261022'
+SOURCE_SHA = '466f56d9935afb299724a212d680a743a11c723f'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 INVENTORY_PATH = 'tool/follow_recovery/test_inventory.json'
-INVENTORY_SHA256 = '33b9ae0c51b6c60913a88367f3fa5fc5d8e2a7f1c46cc07dced3c0e0f85296c4'
+INVENTORY_SHA256 = '2c882b974b4a49478ca9d5df5cb9aff094a309a7e8f1e42a1fd20403f841c69b'
 REQUEST = dict(request.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               server_sha=SERVER_SHA, mode='bounded-follow-recovery-validation', attempt=24)
+               server_sha=SERVER_SHA, mode='bounded-follow-recovery-validation', attempt=25)
 STAGE = 'entry'
 
 

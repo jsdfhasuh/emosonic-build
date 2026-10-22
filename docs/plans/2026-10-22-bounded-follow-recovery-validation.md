@@ -20,3 +20,7 @@ Client15bdc56b8a93db62bba2b5549073e1e09a8a88ff is a three-file test/plan/invento
 ## Full-source diagnostics
 
 Run39763027778 proved all64 focused tests green and vendor integrity passed, but fatal full analysis failed before full tests. This same immutable15bdc iteration adds only finite severity/rule/file-ordinal/line observations around the exact existing analyzer and full-test commands. No messages or private paths are printed. The original pipeline retains return-code, reporter and fingerprint acceptance; diagnostic output limits do not truncate its full raw input. Full validation now precedes focused tests to surface analyzer issues first. All stages remain required before later native testing.
+
+## Lint-only correction
+
+Client466f56d9935afb299724a212d680a743a11c723f corrects the eight fatal lint findings from run39765231890. Six controller braces and equivalent test constructor/controller declarations preserve behavior; the private inventory is re-pinned with the same45/13/6 names. This request changes only immutable pins and transition metadata, and repeats full analysis/tests plus all64 focused cases. No native run or packages are authorized by this workflow.

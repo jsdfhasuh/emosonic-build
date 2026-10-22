@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '15bdc56b8a93db62bba2b5549073e1e09a8a88ff'
+  SOURCE_SHA: '466f56d9935afb299724a212d680a743a11c723f'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '496885572b30447b5503d446208513a5a573e171' &&
-      github.event.head_commit.message == 'test: diagnose complete recovery source validation 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '591551d1ce30921ad7a1aaf2cfdb576ab22cf1aa' &&
+      github.event.head_commit.message == 'test: validate lint-clean follow recovery 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/test/follow-recovery-sync-fixture-20261022
+          SOURCE_REF: refs/heads/fix/follow-recovery-lints-20261022
         run: python3 scripts/follow_recovery_check.py source prepare
 
   validate-source:

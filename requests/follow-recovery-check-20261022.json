@@ -1,9 +1,9 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/test/follow-recovery-sync-fixture-20261022",
-  "source_sha": "15bdc56b8a93db62bba2b5549073e1e09a8a88ff",
+  "source_ref": "refs/heads/fix/follow-recovery-lints-20261022",
+  "source_sha": "466f56d9935afb299724a212d680a743a11c723f",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "bounded-follow-recovery-validation",
-  "attempt": 24
+  "attempt": 25
 }
