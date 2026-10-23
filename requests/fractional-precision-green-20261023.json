@@ -1,0 +1,9 @@
+{
+  "source_repository": "jsdfhasuh/emosonic",
+  "source_ref": "refs/heads/fix/follow-fractional-precision-20261023",
+  "source_sha": "c7301a107fd1474ec0d22bb609426a435bc52584",
+  "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
+  "version": "1.0.10+27",
+  "mode": "fractional-precision-full-green-validation",
+  "attempt": 86
+}
