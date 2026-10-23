@@ -134,15 +134,16 @@ class RecoveryValidationGateTests(unittest.TestCase):
         with patch.object(sys,'argv',['helper','source','prepare']),patch.object(c,'require_causal_proof',side_effect=lambda:calls.append('causal')),patch.object(c,'require_recovery_validation',side_effect=lambda:calls.append('recovery')),patch.object(c,'require_ingress_validation',side_effect=lambda:calls.append('ingress')),patch.object(c.base,'main',side_effect=lambda:calls.append('source') or 0):
             self.assertEqual(c.main(),0)
         self.assertEqual(calls,['causal','recovery','ingress','source'])
-        with patch.object(sys,'argv',['helper','source','prepare']),patch.object(c,'require_causal_proof'),patch.object(c,'require_recovery_validation',side_effect=c.base.request.p.GateError('not complete')),patch.object(c.base,'main') as base:
-            self.assertEqual(c.main(),1)
-            base.assert_not_called()
+        for blocked in ('require_recovery_validation','require_ingress_validation'):
+            with self.subTest(blocked=blocked),patch.object(sys,'argv',['helper','source','prepare']),patch.object(c,'require_causal_proof'),patch.object(c,'require_recovery_validation'),patch.object(c,'require_ingress_validation'),patch.object(c,blocked,side_effect=c.base.request.p.GateError('not complete')),patch.object(c.base,'main') as base:
+                self.assertEqual(c.main(),1)
+                base.assert_not_called()
 
 
 class IngressValidationGateTests(unittest.TestCase):
     def evidence(self):
         run={'id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
-             'path':'.github/workflows/authority-rate-feedback-green.yml','event':'push',
+             'path':'.github/workflows/fractional-precision-green.yml','event':'push',
              'head_branch':'main','run_attempt':1,'status':'completed','conclusion':'success'}
         jobs={'jobs':[{'name':name,'run_id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
                        'status':'completed','conclusion':'success',
@@ -152,14 +153,14 @@ class IngressValidationGateTests(unittest.TestCase):
         return run,jobs
 
     def test_exact_directional_successor_pins_and_both_matrix_stages(self):
-        self.assertEqual(c.SOURCE_SHA,'28fc26149f5e4175fe952219b3cc5f9d18519c50')
-        self.assertEqual(c.SOURCE_REF,'refs/heads/test/negative-nominal-print-lint-20261023')
-        self.assertEqual(c.PARENT,'8c12b38695e0d36117a9d7de9a1c65dea4874feb')
-        self.assertEqual(c.REQUEST['attempt'],81)
-        self.assertEqual(c.INGRESS_RUN,39914745500)
+        self.assertEqual(c.SOURCE_SHA,'c7301a107fd1474ec0d22bb609426a435bc52584')
+        self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-fractional-precision-20261023')
+        self.assertEqual(c.PARENT,'c0b5d5fea7662af646a145c2699eb7ea7d99a2cc')
+        self.assertEqual(c.REQUEST['attempt'],87)
+        self.assertEqual(c.INGRESS_RUN,39930329614)
         self.assertEqual(c.INGRESS_HEAD,c.PARENT)
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)
-        self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate all prior and guarded rate feedback focused cases')
+        self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate all prior and guarded fractional precision focused cases')
         self.assertIn('follow',c.NATIVE_STAGES);self.assertIn('handoff',c.NATIVE_STAGES)
 
     def test_exact_current_candidate_green_required(self):

@@ -56,7 +56,7 @@ CORRECTION_REASONS = ('settled', 'hard_drift', 'transport_paused', 'transport_re
     'start_context_follow', 'stop_follow', 'stop_context_follow', 'restore_context_follow',
     'complete_context_follow_stop', 'source_idle', 'strict_source_rate_changed',
     'drift_within_tolerance', 'hard_seek', 'apply_follow', 'timer', 'dispose',
-    'socket_disconnect', 'disconnect', 'soft_seek', 'reset_follow_sync')
+    'socket_disconnect', 'disconnect', 'soft_seek', 'reset_follow_sync', 'native_receipts_closed')
 CORRECTION_EVENTS = ('action_decision', 'seek_recovery_cancelled', 'seek_recovery_exhausted',
     'seek_recovery_restore_failed', 'speed_correction_apply', 'speed_correction_restore',
     'speed_correction_restore_failed', 'speed_setting_invocation')

@@ -16,7 +16,7 @@ LOG_NEW = b'  await Logger.setLogLevel(LogLevel.debug);\n'
 STATE = '.native_follow_lifecycle/manifest.json'
 BEFORE_SHA256 = '6eb44ffc54f90dab0df7bd320c68e39f0c764c1af126c05fa29e64da22acdc36'
 AFTER_HARNESS_SHA256 = '55ba43b3d08fe525677c544f2dc583cb5aef05699b23ee63a98f01a18aacbb0f'
-PAYLOAD_HASHES = {'follow_lifecycle_observation.py': 'e195a4180c2c3630614bd6fe9078ddc57e917cca5b00cf368dc439b3a4df7132', 'follow_server_observation.py': '5426d798c3b65fe46652814f3433657bb6e315d0b4345c214555bc4e2479e4cc'}
+PAYLOAD_HASHES = {'follow_lifecycle_observation.py': 'a06e04badad64efc0ff05e7cdf0e4562ed9518e5a0e15353dae2748adfe6640b', 'follow_server_observation.py': '5426d798c3b65fe46652814f3433657bb6e315d0b4345c214555bc4e2479e4cc'}
 OBSERVER_CALLS = (
     'begin_follow_lifecycle(self, context, follower_original, native_follow_task_ready)',
     'observe_follow_command(self, _follow_response)',
