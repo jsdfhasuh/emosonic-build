@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '3093662be2bcc31fefde455baf5d6f68e51784dc'
+  SOURCE_SHA: '54844e610f5d5c6e935431be087f1fae64fe96d6'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '3e642b5f50d8d854af8369f6fd91a6fb95dfb3f1' &&
-      github.event.head_commit.message == 'test: measure native effective rate transitions 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'ade37001f495cf48be38f0f13b5bb3161b096eff' &&
+      github.event.head_commit.message == 'test: validate clock-fixed native precision matrix 20261022' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/follow-post-restore-verification-20261022
+          SOURCE_REF: refs/heads/test/follow-expiry-native-oracle-20261022
         run: python3 scripts/handoff_follow_timing.py source prepare
 
   native-macos-server:

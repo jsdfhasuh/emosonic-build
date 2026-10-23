@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parent
-SOURCE_SHA = '3093662be2bcc31fefde455baf5d6f68e51784dc'
+SOURCE_SHA = '54844e610f5d5c6e935431be087f1fae64fe96d6'
 EXPECTED = {
     'AudioPlayer.h': '6b48fdf8e6bf67849126224151470cb8932d432f2dffd7e6fd8d09ef85796cb2',
     'AudioPlayer.m': 'dfc408d533c30fe95b8d0a9ad2284f2266fdbaba3377da2bde372fcaad4441c7',
