@@ -1,12 +1,12 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/test/follow-directional-post-restore-compat-20261023",
-  "source_sha": "dca06e757b9d71663e3ffc7d8841775910fefe41",
+  "source_ref": "refs/heads/test/broadcast-native-cache-compat-20261023",
+  "source_sha": "c5a62f48839f79ea1000853ac106e96d301645c5",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "native-follow-timing-observation",
-  "attempt": 68,
+  "attempt": 72,
   "proof_run_id": 39745934922,
   "validation_run_id": 39767536382,
-  "ingress_validation_run_id": 39888714248
+  "ingress_validation_run_id": 39896357069
 }

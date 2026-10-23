@@ -7,15 +7,15 @@ import handoff_follow_readiness as base
 import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 
-PARENT = '9897308320495a511f1865de441ff0ddb124c37d'
-MESSAGE = 'test: validate direction-aware native precision matrix 20261023'
+PARENT = 'b29441d2e6aeedab3965c092aecc8006cd4695c5'
+MESSAGE = 'test: validate broadcast-compatible native precision matrix 20261023'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
-SOURCE_SHA = 'dca06e757b9d71663e3ffc7d8841775910fefe41'
-SOURCE_REF = 'refs/heads/test/follow-directional-post-restore-compat-20261023'
+SOURCE_SHA = 'c5a62f48839f79ea1000853ac106e96d301645c5'
+SOURCE_REF = 'refs/heads/test/broadcast-native-cache-compat-20261023'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=68, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39888714248)
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=72, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39896357069)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
 
@@ -85,10 +85,10 @@ def require_recovery_validation():
                       'Recovery tests, full validation, BOOL proof and cleanup must succeed.')
 
 
-INGRESS_RUN = 39888714248
-INGRESS_HEAD = '9897308320495a511f1865de441ff0ddb124c37d'
+INGRESS_RUN = 39896357069
+INGRESS_HEAD = 'b29441d2e6aeedab3965c092aecc8006cd4695c5'
 INGRESS_STEPS = {'validate-source': (
-    'Validate all189 focused cases and natural directional boundaries',
+    'Validate targeted compatibility and all prior focused cases',
     'Validate complete source analysis, tests, provenance and byte integrity without user Secrets',
     'Remove private source and generated validation outputs',
 )}
@@ -100,7 +100,7 @@ def require_ingress_validation():
     run=p.api(endpoint)
     p.require(type(run) is dict and type(run.get('id')) is int and run['id']==INGRESS_RUN
               and run.get('head_sha')==INGRESS_HEAD
-              and run.get('path')=='.github/workflows/follow-directional-settle-green.yml'
+              and run.get('path')=='.github/workflows/follow-broadcast-compat-green.yml'
               and run.get('event')=='push' and run.get('head_branch')=='main'
               and type(run.get('run_attempt')) is int and run['run_attempt']==1
               and run.get('status')=='completed' and run.get('conclusion')=='success',
