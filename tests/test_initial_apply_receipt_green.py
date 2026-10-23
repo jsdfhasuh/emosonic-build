@@ -20,7 +20,7 @@ class InitialApplyReceiptGreenTests(unittest.TestCase):
         # Fixed reviewed baseline and boundary counts.
         return patch.multiple(c, SOURCE_SHA='a'*40, SOURCE_REF='refs/heads/fix/synthetic',
             INVENTORY_PATH='tool/synthetic_initial_apply/green_inventory.json',
-            INVENTORY_SHA256='b'*64, EXPECTED_COUNTS=(3, 6),
+            INVENTORY_SHA256='b'*64, EXPECTED_COUNTS=(3, 8),
             REQUEST=dict(c.REQUEST, source_sha='a'*40, source_ref='refs/heads/fix/synthetic'))
 
     def prior(self):
@@ -43,26 +43,26 @@ class InitialApplyReceiptGreenTests(unittest.TestCase):
                 self.assertEqual(c.main(),1); delegated.assert_not_called()
 
     def test_all243_retained_in_exact_order_then_both_new_suites(self):
-        prior=self.prior(); extra=suites((3,6),'extra'); before=json.dumps(prior)
+        prior=self.prior(); extra=suites((3,8),'extra'); before=json.dumps(prior)
         with self.pins(), patch.object(c,'ORIGINAL_INVENTORY',return_value=prior), \
                 patch.object(c.TIMING,'component_inventory',return_value=extra) as load:
             actual=c.inventory(Path('/synthetic'))
-            load.assert_called_once_with(Path('/synthetic'),c.INVENTORY_PATH,'b'*64,(3,6))
+            load.assert_called_once_with(Path('/synthetic'),c.INVENTORY_PATH,'b'*64,(3,8))
         self.assertEqual(actual,prior+extra); self.assertEqual(actual[:31],prior)
         self.assertIs(actual[0],prior[0])  # Broadcast-first prefix is never reordered.
-        self.assertEqual(len(actual),33); self.assertEqual(sum(len(s['names']) for s in actual),252)
+        self.assertEqual(len(actual),33); self.assertEqual(sum(len(s['names']) for s in actual),254)
         self.assertEqual(json.dumps(prior),before)
 
     def test_missing_changed_duplicate_cases_fail(self):
-        for prior, extra in [(self.prior()[:-1],suites((3,6),'extra')),
+        for prior, extra in [(self.prior()[:-1],suites((3,8),'extra')),
                             (self.prior(),suites((3,3),'extra')),
                             (self.prior(),suites((5,),'extra')),
-                            (self.prior(),suites((3,6),'prior')),
-                            (self.prior()[:-1]+[self.prior()[20]],suites((3,6),'extra')),
-                            (self.prior(),suites((3,6),'extra')[:1]),
+                            (self.prior(),suites((3,8),'prior')),
+                            (self.prior()[:-1]+[self.prior()[20]],suites((3,8),'extra')),
+                            (self.prior(),suites((3,8),'extra')[:1]),
                             (self.prior(),suites((2,3),'extra')),
-                            (self.prior(),[dict(s,path='test/services/duplicate_test.dart') for s in suites((3,6),'extra')]),
-                            (self.prior(),[dict(s,names=[s['names'][0]]*len(s['names'])) for s in suites((3,6),'extra')])]:
+                            (self.prior(),[dict(s,path='test/services/duplicate_test.dart') for s in suites((3,8),'extra')]),
+                            (self.prior(),[dict(s,names=[s['names'][0]]*len(s['names'])) for s in suites((3,8),'extra')])]:
             with self.pins(), patch.object(c,'ORIGINAL_INVENTORY',return_value=prior), \
                     patch.object(c.TIMING,'component_inventory',return_value=extra):
                 with self.assertRaises(c.TIMING.previous.recovery.request.p.GateError): c.inventory(Path('/synthetic'))
@@ -114,19 +114,19 @@ class InitialApplyReceiptGreenTests(unittest.TestCase):
                 self.assertEqual([getattr(module,name) for module,name in tracked],original)
 
     def test_fixed_baseline_and_reviewed_contract(self):
-        self.assertEqual(c.PARENT,'bd51fdc6472d5a6bc42f0b38d442dcbd8659c676')
+        self.assertEqual(c.PARENT,'dc19031fe5057d554471c242a932d23c91daf713')
         self.assertEqual(c.SERVER_SHA,'5adc23da173c5f20188d79aafe8fcc1e656eb38a')
-        self.assertEqual(c.REQUEST['attempt'],92)
-        self.assertEqual((c.SOURCE_SHA,c.SOURCE_REF),('fd0deab86014c0f0cee0b1c525893e493f426b9c', 'refs/heads/fix/follow-initial-apply-receipt-20261023'))
-        self.assertEqual(c.INVENTORY_SHA256,'c7d556fc1e024fbf09236ff9ae20260537a5d298adbf13966c96e49f24b5a139')
+        self.assertEqual(c.REQUEST['attempt'],93)
+        self.assertEqual((c.SOURCE_SHA,c.SOURCE_REF),('1be8ac17a0a52bc01d551bc009ce9ee83b88d1d3', 'refs/heads/fix/follow-prepared-observation-20261023'))
+        self.assertEqual(c.INVENTORY_SHA256,'3360b8762d5d9ba1017524f6ba857157e50c2b0c522c98831351b955259d39c5')
         self.assertEqual(c.INVENTORY_PATH,'tool/follow_initial_apply_receipt/green_inventory.json')
-        self.assertEqual(c.EXPECTED_COUNTS,(3,6))
+        self.assertEqual(c.EXPECTED_COUNTS,(3,8))
         with patch.object(c,'SOURCE_SHA','PENDING'), patch.object(c.previous,'main') as delegated, contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(c.main(),1); delegated.assert_not_called()
         for first in (1,2,4,True):
-            with self.pins(), patch.object(c,'EXPECTED_COUNTS',(first,6)):
+            with self.pins(), patch.object(c,'EXPECTED_COUNTS',(first,8)):
                 with self.assertRaises(c.TIMING.previous.recovery.request.p.GateError): c.require_counts()
-        for second in (1,2,3,4,5,7,128):
+        for second in (1,2,3,4,5,6,7,9,128):
             with self.pins(), patch.object(c,'EXPECTED_COUNTS',(3,second)):
                 with self.assertRaises(c.TIMING.previous.recovery.request.p.GateError): c.require_counts()
 

@@ -4,18 +4,18 @@ import sys
 from unittest.mock import patch
 import fractional_precision_green as previous
 
-PARENT = 'bd51fdc6472d5a6bc42f0b38d442dcbd8659c676'
-MESSAGE = 'test: validate initial apply native receipt repair 20261023'
+PARENT = 'dc19031fe5057d554471c242a932d23c91daf713'
+MESSAGE = 'test: validate initial apply receipt arming repair 20261023'
 WORKFLOW = 'initial-apply-receipt-green.yml'
 REQUEST_PATH = 'requests/initial-apply-receipt-green-20261023.json'
-SOURCE_REF = 'refs/heads/fix/follow-initial-apply-receipt-20261023'
-SOURCE_SHA = 'fd0deab86014c0f0cee0b1c525893e493f426b9c'
+SOURCE_REF = 'refs/heads/fix/follow-prepared-observation-20261023'
+SOURCE_SHA = '1be8ac17a0a52bc01d551bc009ce9ee83b88d1d3'
 SERVER_SHA = previous.SERVER_SHA
 REQUEST = dict(previous.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               mode='initial-apply-receipt-full-green-validation', attempt=92)
+               mode='initial-apply-receipt-full-green-validation', attempt=93)
 INVENTORY_PATH = 'tool/follow_initial_apply_receipt/green_inventory.json'
-INVENTORY_SHA256 = 'c7d556fc1e024fbf09236ff9ae20260537a5d298adbf13966c96e49f24b5a139'
-EXPECTED_COUNTS = (3, 6)
+INVENTORY_SHA256 = '3360b8762d5d9ba1017524f6ba857157e50c2b0c522c98831351b955259d39c5'
+EXPECTED_COUNTS = (3, 8)
 ORIGINAL_INVENTORY = previous.inventory
 TIMING = previous.TIMING
 
@@ -24,7 +24,7 @@ def require_counts():
     TIMING.previous.recovery.request.p.require(
         type(EXPECTED_COUNTS) is tuple and len(EXPECTED_COUNTS) == 2
         and all(type(n) is int and 1 <= n <= 128 for n in EXPECTED_COUNTS)
-        and EXPECTED_COUNTS == (3, 6),
+        and EXPECTED_COUNTS == (3, 8),
         'Frozen initial apply receipt baseline and reviewed boundary count are required.')
 
 
@@ -51,10 +51,10 @@ def inventory(source):
     require(len(additional) == 2 and tuple(len(s['names']) for s in additional) == EXPECTED_COUNTS,
             'Both complete frozen initial apply receipt suites are required.')
     suites = [*suites, *additional]
-    require(len(suites) == 33 and sum(len(s['names']) for s in suites) == 252
+    require(len(suites) == 33 and sum(len(s['names']) for s in suites) == 254
             and len({s['path'] for s in suites}) == 33
             and all(len(set(s['names'])) == len(s['names']) for s in suites),
-            'All 252 cases across 33 unique suites are required.')
+            'All 254 cases across 33 unique suites are required.')
     return suites
 
 
