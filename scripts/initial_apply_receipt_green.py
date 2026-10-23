@@ -4,17 +4,17 @@ import sys
 from unittest.mock import patch
 import fractional_precision_green as previous
 
-PARENT = 'dc19031fe5057d554471c242a932d23c91daf713'
-MESSAGE = 'test: validate initial apply receipt arming repair 20261023'
+PARENT = '5d603037a6710f1041383eea020be5f2ca48d187'
+MESSAGE = 'test: validate initial apply receipt fixture boundaries 20261023'
 WORKFLOW = 'initial-apply-receipt-green.yml'
 REQUEST_PATH = 'requests/initial-apply-receipt-green-20261023.json'
-SOURCE_REF = 'refs/heads/fix/follow-prepared-observation-20261023'
-SOURCE_SHA = '1be8ac17a0a52bc01d551bc009ce9ee83b88d1d3'
+SOURCE_REF = 'refs/heads/test/follow-prepared-boundary-compat-20261023'
+SOURCE_SHA = '88e505d162d50975c6b0bfded6abb835ec3c896e'
 SERVER_SHA = previous.SERVER_SHA
 REQUEST = dict(previous.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               mode='initial-apply-receipt-full-green-validation', attempt=93)
+               mode='initial-apply-receipt-full-green-validation', attempt=94)
 INVENTORY_PATH = 'tool/follow_initial_apply_receipt/green_inventory.json'
-INVENTORY_SHA256 = '3360b8762d5d9ba1017524f6ba857157e50c2b0c522c98831351b955259d39c5'
+INVENTORY_SHA256 = '5628a0ea2f6781ad78ed816f5e17f96157f0da9fb3a663be14f8b634d90b2306'
 EXPECTED_COUNTS = (3, 8)
 ORIGINAL_INVENTORY = previous.inventory
 TIMING = previous.TIMING

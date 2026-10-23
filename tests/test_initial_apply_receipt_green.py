@@ -114,11 +114,11 @@ class InitialApplyReceiptGreenTests(unittest.TestCase):
                 self.assertEqual([getattr(module,name) for module,name in tracked],original)
 
     def test_fixed_baseline_and_reviewed_contract(self):
-        self.assertEqual(c.PARENT,'dc19031fe5057d554471c242a932d23c91daf713')
+        self.assertEqual(c.PARENT,'5d603037a6710f1041383eea020be5f2ca48d187')
         self.assertEqual(c.SERVER_SHA,'5adc23da173c5f20188d79aafe8fcc1e656eb38a')
-        self.assertEqual(c.REQUEST['attempt'],93)
-        self.assertEqual((c.SOURCE_SHA,c.SOURCE_REF),('1be8ac17a0a52bc01d551bc009ce9ee83b88d1d3', 'refs/heads/fix/follow-prepared-observation-20261023'))
-        self.assertEqual(c.INVENTORY_SHA256,'3360b8762d5d9ba1017524f6ba857157e50c2b0c522c98831351b955259d39c5')
+        self.assertEqual(c.REQUEST['attempt'],94)
+        self.assertEqual((c.SOURCE_SHA,c.SOURCE_REF),('88e505d162d50975c6b0bfded6abb835ec3c896e', 'refs/heads/test/follow-prepared-boundary-compat-20261023'))
+        self.assertEqual(c.INVENTORY_SHA256,'5628a0ea2f6781ad78ed816f5e17f96157f0da9fb3a663be14f8b634d90b2306')
         self.assertEqual(c.INVENTORY_PATH,'tool/follow_initial_apply_receipt/green_inventory.json')
         self.assertEqual(c.EXPECTED_COUNTS,(3,8))
         with patch.object(c,'SOURCE_SHA','PENDING'), patch.object(c.previous,'main') as delegated, contextlib.redirect_stderr(io.StringIO()):

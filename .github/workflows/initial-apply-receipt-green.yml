@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '1be8ac17a0a52bc01d551bc009ce9ee83b88d1d3'
+  SOURCE_SHA: '88e505d162d50975c6b0bfded6abb835ec3c896e'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == 'dc19031fe5057d554471c242a932d23c91daf713' &&
-      github.event.head_commit.message == 'test: validate initial apply receipt arming repair 20261023' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '5d603037a6710f1041383eea020be5f2ca48d187' &&
+      github.event.head_commit.message == 'test: validate initial apply receipt fixture boundaries 20261023' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/follow-prepared-observation-20261023
+          SOURCE_REF: refs/heads/test/follow-prepared-boundary-compat-20261023
         run: python3 scripts/initial_apply_receipt_green.py source prepare
 
   validate-source:
