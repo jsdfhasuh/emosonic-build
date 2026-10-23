@@ -155,8 +155,8 @@ class IngressValidationGateTests(unittest.TestCase):
     def test_exact_directional_successor_pins_and_both_matrix_stages(self):
         self.assertEqual(c.SOURCE_SHA,'f6251a2a0e6441f174d05b488bc0fb1b41d52e39')
         self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-initial-apply-flow-lint-20261023')
-        self.assertEqual(c.PARENT,'d03a90db5341ceed03eb2d200eae0b270804f0fc')
-        self.assertEqual(c.REQUEST['attempt'],96)
+        self.assertEqual(c.PARENT,'7a3f82c6ff26634da74fbea25d2fe4360c9df628')
+        self.assertEqual(c.REQUEST['attempt'],97)
         self.assertEqual(c.INGRESS_RUN,39966140487)
         self.assertEqual(c.INGRESS_HEAD,'d03a90db5341ceed03eb2d200eae0b270804f0fc')
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)
@@ -198,7 +198,7 @@ class FixedNativeUnitAdapterTests(unittest.TestCase):
     command = [sys.executable, '-m', 'unittest', 'discover', '-s',
                'tool/native_playback_mac', '-p', 'test_*.py']
     result = {'stage': 'native-follow-unit-layers', 'status': 'passed',
-              'priorProvenanceChecks': 70, 'finalCompatibleChecks': 63, 'finalPrecisionChecks': 35}
+              'priorProvenanceChecks': 70, 'finalCompatibleChecks': 63, 'finalPrecisionChecks': 40}
 
     def run_unit(self, action, *, result=None, error=None):
         original = c.base.native.execute
@@ -243,7 +243,7 @@ class FixedNativeUnitAdapterTests(unittest.TestCase):
 
     def test_exact_unit_report_requires_all_counts_status_and_no_extra_keys(self):
         for key, value in [('priorProvenanceChecks', 69), ('finalCompatibleChecks', 62),
-                           ('finalPrecisionChecks', 34), ('priorProvenanceChecks', 70.0),
+                           ('finalPrecisionChecks', 39), ('priorProvenanceChecks', 70.0),
                            ('finalPrecisionChecks', True), ('status', 'failed'),
                            ('stage', 'other'), ('extra', True)]:
             report = dict(self.result, **{key: value})

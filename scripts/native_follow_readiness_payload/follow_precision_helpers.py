@@ -102,12 +102,75 @@ def begin_follow_precision_transition(matrix, states, context, kind, expected, o
         'queue': queue, 'index': index, 'track': queue[index],
         'oldAuthority': old_authority, 'oldCursors': old_cursors,
         'newAuthority': new_authority,
+        'handoffId': None, 'targetBindingGeneration': None,
+        'previousHandoffIds': tuple((state.get('handoff') or {}).get('id') for state in states[:2]),
         'newCursors': old_cursors if kind == 'rate_change' else None,
         'followerContext': follower['contextId'],
         'oldRate': native_requested_rate(authority), 'identity': old_identity if kind == 'rate_change' else None,
         'candidate': None, 'lastStates': None, 'lastObservedAt': None, 'lastPair': None, 'previousPair': None,
         'measurement': {},
     }
+
+
+def _follow_handoff_matches(transition, state, role):
+    record = state.get('handoff') or {}
+    allowed = ('starting', 'preparing', 'ready', 'committing', 'completed') if role == 'source' else ('preparing', 'ready', 'committing', 'completed')
+    control = transition['oldCursors'][1]
+    expected_control = control + (1 if record.get('status') in ('committing', 'completed') else 0)
+    return (type(record.get('controlVersion')) is int and record['controlVersion'] == expected_control
+        and type(record.get('canonicalControlVersion')) is int and record['canonicalControlVersion'] == control
+        and isinstance(record.get('id'), str) and bool(record['id'])
+        and record['id'] == transition['handoffId'] and record.get('role') == role
+        and record.get('status') in allowed and record.get('contextId') == transition['context']
+        and record.get('sourceClientId') == transition['oldAuthority'][0]
+        and record.get('targetClientId') == transition['newAuthority'][0]
+        and record.get('targetDeviceSessionId') == transition['newAuthority'][1]
+        and (record.get('sourceDeviceSessionId') == transition['oldAuthority'][1]
+             if role == 'target' else record.get('sourceDeviceSessionId') in (None, transition['oldAuthority'][1])))
+
+
+def pin_follow_transfer_command(matrix, response):
+    """Use the existing command response, not an additional state read or ACK claim."""
+    transition = matrix.follow_precision_transition
+    try:
+        assert transition['kind'] == 'transfer' and transition['handoffId'] is None
+        assert type(response) is dict and response.get('ok') is True
+        state = response['state']
+        assert _follow_process_identity(state) == transition['processes'][0]
+        identifier = (state.get('handoff') or {}).get('id')
+        assert isinstance(identifier, str) and identifier and identifier not in transition['previousHandoffIds']
+        candidate = dict(transition, handoffId=identifier)
+        assert _follow_handoff_matches(candidate, state, 'source')
+        transition['handoffId'] = identifier
+    except (AssertionError, KeyError, TypeError, ValueError):
+        raise FollowPrecisionUnsafe('Follow transfer command identity changed') from None
+
+
+def _follow_owned_provisional_target(transition, states):
+    """Protocol-owned preparation is pending only, never a precision witness."""
+    if transition['kind'] != 'transfer' or transition['newCursors'] is not None:
+        return False
+    target = states[1]
+    binding = target.get('binding') or {}
+    if not (binding.get('role') == 'handoffTarget' and binding.get('phase') == 'provisional'
+            and binding.get('contextId') == transition['context']
+            and type(binding.get('generation')) is int and binding['generation'] > 0
+            and _follow_handoff_matches(transition, states[0], 'source')
+            and _follow_handoff_matches(transition, target, 'target')
+            and (target.get('handoff') or {}).get('prepared') is True):
+        return False
+    generation = transition['targetBindingGeneration']
+    if generation is not None and binding['generation'] != generation:
+        return False
+    if target.get('contextId') not in (None, transition['oldTargetTask'][0], transition['context']):
+        return False
+    physical = (tuple(target.get('queue') or []), target.get('currentIndex'), target.get('trackId'))
+    expected = (transition['queue'], transition['index'], transition['track'])
+    status = target['handoff']['status']
+    if physical != expected and not (status == 'preparing' and physical == transition['oldTargetTask'][1:]):
+        return False
+    transition['targetBindingGeneration'] = binding['generation']
+    return True
 
 
 def _follow_transition_ownership(transition, states):
@@ -131,7 +194,18 @@ def _follow_transition_ownership(transition, states):
         assert (context, tuple(follower.get('queue') or []), follower.get('currentIndex'), follower.get('trackId')) == task
         target_task = (states[1].get('contextId'), tuple(states[1].get('queue') or []),
                        states[1].get('currentIndex'), states[1].get('trackId'))
-        assert target_task in (transition['oldTargetTask'], task)
+        pending_target = _follow_owned_provisional_target(transition, states)
+        binding = states[1].get('binding') or {}
+        if binding.get('phase') == 'provisional':
+            assert pending_target
+        elif binding.get('role') == 'handoffTarget':
+            assert binding.get('phase') == 'confirmed' and binding.get('contextId') == context
+            assert type(binding.get('generation')) is int and binding['generation'] > 0
+            generation = transition['targetBindingGeneration']
+            assert generation is None or binding['generation'] == generation
+            assert target_task == task
+            transition['targetBindingGeneration'] = binding['generation']
+        assert target_task in (transition['oldTargetTask'], task) or pending_target
         for i in (1, 2):
             value = states[i]
             canonical = (value.get('contexts') or {}).get(context)
@@ -143,6 +217,7 @@ def _follow_transition_ownership(transition, states):
                 assert cursors == transition['oldCursors']
             elif transition['newCursors'] is not None:
                 assert cursors == transition['newCursors']
+        return pending_target
     except (AssertionError, KeyError, TypeError, ValueError):
         raise FollowPrecisionUnsafe('Follow transition owned identity changed') from None
 
@@ -152,10 +227,13 @@ def observe_follow_precision_transition(matrix, states):
     transition = getattr(matrix, 'follow_precision_transition', None)
     if transition is None:
         return
-    _follow_transition_ownership(transition, states)
+    pending_target = _follow_transition_ownership(transition, states)
     now = time.monotonic()
     if not transition['settled'] and now >= transition['deadline']:
         raise FollowPrecisionDeadline('Owned Follow transition exceeded command-origin five seconds')
+    if pending_target:
+        transition['candidate'] = None
+        return
     if transition['lastStates'] is states:
         return
     context, expected = transition['context'], transition['expected']
@@ -166,7 +244,8 @@ def observe_follow_precision_transition(matrix, states):
             and playing(authority) and stopped(states[0]) and playing(follower))
         if not completed:
             return
-        if not (handoff.get('contextId') == context
+        if not (handoff.get('id') == transition['handoffId'] and transition['handoffId'] is not None
+                and handoff.get('contextId') == context
                 and (handoff.get('sourceClientId'), handoff.get('sourceDeviceSessionId')) == transition['oldAuthority']
                 and (handoff.get('targetClientId'), handoff.get('targetDeviceSessionId')) == transition['newAuthority']):
             raise FollowPrecisionUnsafe('Completed transfer does not match the owned command')

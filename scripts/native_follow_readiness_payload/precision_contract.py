@@ -28,7 +28,8 @@ def load(clock, final):
     names = fixture.NAMES | {'native_requested_rate', 'follow_correction_identity',
         'native_follow_readiness_pending', 'follow_nominal_precision_ready', 'follow_precision_sample',
         'FollowPrecisionUnsafe', 'FollowPrecisionDeadline', '_follow_process_identity', '_follow_canonical_identity',
-        '_follow_transition_ownership', 'begin_follow_precision_transition', 'observe_follow_precision_transition'}
+        '_follow_transition_ownership', 'begin_follow_precision_transition', 'observe_follow_precision_transition',
+        '_follow_handoff_matches', 'pin_follow_transfer_command', '_follow_owned_provisional_target'}
     tree = ast.parse(FINAL if final else PRIOR)
     selected = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name in names]
     ns = {'math':math, 'time':clock, 'FOLLOW_CONDITIONS': {'steady_sample_precision', 'native_evidence', 'safe_follow_task', 'authority_rate', 'follower_rate', 'hard_drift_limit', 'lab_five_second_settling', 'native_35s_progression', 'rate_change', 'restoration'}, 'summarize_state':lambda *a,**kw: {},
@@ -260,10 +261,20 @@ def transition_states(at, *, complete=False, propagated=True, rate=1.5):
                    'epoch':2,'controlVersion':5,'queueRevision':2}
         target['contexts']['authority-context']=dict(canonical)
         if propagated:values[2]['contexts']['authority-context']=dict(canonical)
-        target['handoff']={'status':'completed','contextId':'authority-context',
+        target['binding']={'contextId':'authority-context','role':'handoffTarget','phase':'confirmed','generation':2}
+        target['handoff']={'controlVersion':5,'canonicalControlVersion':4,'id':'owned-command','role':'target','status':'completed','contextId':'authority-context',
             'sourceClientId':values[0]['clientId'],'sourceDeviceSessionId':values[0]['deviceSessionId'],
             'targetClientId':target['clientId'],'targetDeviceSessionId':target['deviceSessionId']}
     return values
+
+
+def command_record(states, role='target', status='preparing'):
+    return {'id': 'owned-command', 'role': role, 'status': status, 'contextId': 'authority-context',
+            'sourceClientId': states[0]['clientId'],
+            'sourceDeviceSessionId': states[0]['deviceSessionId'] if role == 'target' else None,
+            'targetClientId': states[1]['clientId'], 'targetDeviceSessionId': states[1]['deviceSessionId'],
+            'controlVersion': 5 if status in ('committing','completed') else 4,
+            'canonicalControlVersion': 4, 'prepared': True}
 
 
 class TransitionTests(PrecisionTests):
@@ -273,6 +284,9 @@ class TransitionTests(PrecisionTests):
         before=transition_states(0,complete=kind=='rate_change')
         matrix.last=before
         ns['begin_follow_precision_transition'](matrix,before,'authority-context',kind,.8 if kind=='rate_change' else 1.5,0)
+        if kind == 'transfer':
+            command = copy.deepcopy(before[0]); command['handoff'] = command_record(before, 'source')
+            ns['pin_follow_transfer_command'](matrix, {'ok': True, 'state': command})
         return clock,ns,matrix
 
     def consume(self,clock,ns,matrix,at,**kwargs):
@@ -460,6 +474,112 @@ class TransitionTests(PrecisionTests):
         self.assertEqual(m.follow_precision_transition['deadline'],5)
         s=transition_states(8.4,complete=True);s[2]['nativePlayers'][0]['requestedRate']=1.56;c.now=8.4
         with self.assertRaises(AssertionError):n['observe_follow_precision_transition'](m,s)
+
+
+    def pending_transition(self):
+        clock=fixture.Clock();ns=load(clock,True);matrix=ns['Matrix']()
+        before=transition_states(0)
+        before[1].update(queue=[],currentIndex=-1,trackId=None,nativePlayers=[],
+                         binding={'contextId':'target-original','role':'localAuthority','phase':'confirmed','generation':1})
+        matrix.last=before
+        ns['begin_follow_precision_transition'](matrix,before,'authority-context','transfer',1.5,0)
+        response=copy.deepcopy(before[0]);response['handoff']=command_record(before,'source')
+        ns['pin_follow_transfer_command'](matrix,{'ok':True,'state':response})
+        return clock,ns,matrix,before
+
+    def pending_state(self,before,at,status='preparing',prepared=False,context=None):
+        states=transition_states(at)
+        target=states[1]
+        target.update(contextId=context,queue=list(before[1]['queue']),currentIndex=before[1]['currentIndex'],
+                      trackId=before[1]['trackId'],nativePlayers=[],
+                      binding={'contextId':'authority-context','role':'handoffTarget','phase':'provisional','generation':2})
+        target['contexts'].pop('authority-context',None)
+        if prepared:
+            target.update(queue=list(states[0]['queue']),currentIndex=0,trackId=states[0]['trackId'])
+        states[0]['handoff']=command_record(states,'source',status)
+        target['handoff']=command_record(states,'target',status)
+        return states
+
+    def test_36_owned_empty_target_and_full_protocol_pending_sequence(self):
+        c,n,m,before=self.pending_transition()
+        for at,status,prepared,context in ((.1,'preparing',False,None),(.2,'preparing',False,'target-original'),
+                (.4,'preparing',True,None),(.6,'ready',True,None),(.8,'committing',True,None),
+                (1.0,'completed',True,None)):
+            c.now=at;s=self.pending_state(before,at,status,prepared,context)
+            n['observe_follow_precision_transition'](m,s)
+            self.assertFalse(m.follow_precision_transition['settled'])
+            self.assertIsNone(m.follow_precision_transition['candidate'])
+            self.assertIsNone(m.follow_precision_transition['newCursors'])
+            self.assertEqual(m.follow_precision_transition['deadline'],5)
+        self.consume(c,n,m,1.2,complete=True);self.consume(c,n,m,1.4,complete=True)
+        self.assertTrue(m.follow_precision_transition['settled'])
+        self.assertEqual(m.follow_precision_transition['settledAt'],1.4)
+        self.assertEqual(m.follow_precision_transition['targetBindingGeneration'],2)
+
+    def test_37_foreign_and_stale_handoff_command_or_pending_metadata_rejected(self):
+        for role,key,value in ((0,'id','foreign'),(1,'id','foreign'),(1,'contextId','third'),
+                (1,'sourceClientId','third'),(1,'sourceDeviceSessionId','third'),
+                (1,'targetClientId','third'),(1,'targetDeviceSessionId','third'),
+                (1,'status','failed'),(1,'status','unknown'),(1,'role','source'),
+                (0,'controlVersion',99),(1,'controlVersion',99),(1,'controlVersion',True),
+                (0,'canonicalControlVersion',99),(1,'canonicalControlVersion',99)):
+            c,n,m,before=self.pending_transition();s=self.pending_state(before,.1);s[role]['handoff'][key]=value
+            with self.subTest(role=role,key=key),self.assertRaises(n['FollowPrecisionUnsafe']):n['observe_follow_precision_transition'](m,s)
+        for status in ('preparing','completed'):
+            c=fixture.Clock();n=load(c,True);m=n['Matrix']();before=transition_states(0)
+            before[0]['handoff']=dict(command_record(before,'source'),id='stale')
+            n['begin_follow_precision_transition'](m,before,'authority-context','transfer',1.5,0)
+            response=copy.deepcopy(before[0]);response['handoff'].update(status=status, controlVersion=5 if status=='completed' else 4)
+            with self.assertRaises(n['FollowPrecisionUnsafe']):n['pin_follow_transfer_command'](m,{'ok':True,'state':response})
+            response['handoff']['id']='fresh-command'
+            n['pin_follow_transfer_command'](m,{'ok':True,'state':response})
+            self.assertEqual(m.follow_precision_transition['handoffId'],'fresh-command')
+
+    def test_38_pending_participant_binding_and_physical_task_fences(self):
+        for key,value in (('deviceSessionId','changed'),('pid',999),('root','changed'),('bundleId','changed')):
+            c,n,m,before=self.pending_transition();s=self.pending_state(before,.1);s[1][key]=value
+            with self.subTest(key=key),self.assertRaises(n['FollowPrecisionUnsafe']):n['observe_follow_precision_transition'](m,s)
+        for key,value in (('contextId','third'),('role','localAuthority'),('phase','confirmed'),('generation',False)):
+            c,n,m,before=self.pending_transition();s=self.pending_state(before,.1);s[1]['binding'][key]=value
+            with self.subTest(binding=key),self.assertRaises(n['FollowPrecisionUnsafe']):n['observe_follow_precision_transition'](m,s)
+        for change in ('third_context','third_queue','generation','ready_old','committing_old','completed_old'):
+            c,n,m,before=self.pending_transition();s=self.pending_state(before,.1)
+            n['observe_follow_precision_transition'](m,s);s=self.pending_state(before,.2)
+            if change=='third_context':s[1]['contextId']='third'
+            elif change=='third_queue':s[1].update(queue=['third'],currentIndex=0,trackId='third')
+            elif change=='generation':s[1]['binding']['generation']=3
+            else:
+                status=change.split('_')[0]
+                for state in s[:2]:state['handoff'].update(status=status,controlVersion=5 if status in ('committing','completed') else 4)
+            with self.subTest(change=change),self.assertRaises(n['FollowPrecisionUnsafe']):n['observe_follow_precision_transition'](m,s)
+
+    def test_39_owned_pending_wait_expires_at_original_command_deadline(self):
+        c,n,m,before=self.pending_transition();n.update(observe_follow_wait=lambda *a:None,URLError=OSError)
+        c.now=4.9;reads=[]
+        def read():
+            reads.append(c.now);m.last=self.pending_state(before,c.now);return m.last
+        m.states=read
+        with self.assertRaises(n['FollowPrecisionDeadline']):m.wait('handoff-native-completion',lambda states:False,timeout=45)
+        self.assertLessEqual(c.now,5.100001);self.assertEqual(len(reads),2)
+        self.assertEqual(m.follow_precision_transition['deadline'],5)
+        self.assertFalse(m.follow_precision_transition['settled'])
+
+    def test_40_pending_completion_cannot_skip_final_nominal_progress_or_expiry(self):
+        c,n,m,before=self.pending_transition();c.now=4.3
+        n['observe_follow_precision_transition'](m,self.pending_state(before,4.3,'completed',True))
+        bad=transition_states(4.4,complete=True);bad[2]['nativePlayers'][0].update(playbackRate=1.56,requestedRate=1.56)
+        c.now=4.4;n['observe_follow_precision_transition'](m,bad)
+        self.assertFalse(m.follow_precision_transition['settled']);self.assertIsNone(m.follow_precision_transition['candidate'])
+        self.consume(c,n,m,4.6,complete=True);self.consume(c,n,m,4.8,complete=True)
+        self.assertTrue(m.follow_precision_transition['settled']);self.assertEqual(m.follow_precision_transition['settledAt'],4.8)
+        for late in ('no_canonical','one_nominal_pair','stale_final_id'):
+            c,n,m,before=self.pending_transition();c.now=4.9
+            if late=='one_nominal_pair':self.consume(c,n,m,4.9,complete=True)
+            else:n['observe_follow_precision_transition'](m,self.pending_state(before,4.9,'completed',True))
+            c.now=5.0;s=transition_states(5,complete=True)
+            if late=='stale_final_id':s[1]['handoff']['id']='foreign'
+            with self.subTest(late=late),self.assertRaises((n['FollowPrecisionDeadline'],n['FollowPrecisionUnsafe'])):n['observe_follow_precision_transition'](m,s)
+
 
 
 TEST_NAMES=tuple(sorted([name for name in PrecisionTests.__dict__ if name.startswith('test_')] +

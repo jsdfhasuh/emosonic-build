@@ -8,15 +8,15 @@ import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 import native_recovery_check_observation as recovery_observation
 
-PARENT = 'd03a90db5341ceed03eb2d200eae0b270804f0fc'
-MESSAGE = 'test: validate initial apply strict native precision 20261023'
+PARENT = '7a3f82c6ff26634da74fbea25d2fe4360c9df628'
+MESSAGE = 'test: validate owned provisional Follow transfer 20261023'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
 SOURCE_SHA = 'f6251a2a0e6441f174d05b488bc0fb1b41d52e39'
 SOURCE_REF = 'refs/heads/fix/follow-initial-apply-flow-lint-20261023'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=96, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39966140487,
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=97, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39966140487,
                auxiliary_observer_sha=recovery_observation.AUX_SHA, auxiliary_observer_ref=recovery_observation.AUX_REF)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
@@ -180,7 +180,7 @@ def main():
                     with patch.dict(base.native.os.environ, base.native.native_env(), clear=True):
                         result = base.readiness.verify_units(source)
                     expected_result = {'stage': 'native-follow-unit-layers', 'status': 'passed',
-                        'priorProvenanceChecks': 70, 'finalCompatibleChecks': 63, 'finalPrecisionChecks': 35}
+                        'priorProvenanceChecks': 70, 'finalCompatibleChecks': 63, 'finalPrecisionChecks': 40}
                     base.request.p.require(type(result) is dict and result == expected_result
                         and all(type(result[key]) is type(value) for key, value in expected_result.items()),
                         'Exact native unit layers must all pass.')
