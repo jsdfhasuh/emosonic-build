@@ -8,15 +8,15 @@ import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 import native_recovery_check_observation as recovery_observation
 
-PARENT = '751558cf2d6e6f998401051cebfe47cb735470ef'
-MESSAGE = 'test: retain bounded native bootstrap evidence 20261023'
+PARENT = 'fdb853174dc19b4a52012a4959c1f9ab2afb9994'
+MESSAGE = 'test: measure bounded recovery admission 20261023'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
 SOURCE_SHA = 'f6251a2a0e6441f174d05b488bc0fb1b41d52e39'
 SOURCE_REF = 'refs/heads/fix/follow-initial-apply-flow-lint-20261023'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=100, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39966140487,
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=101, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39966140487,
                auxiliary_observer_sha=recovery_observation.AUX_SHA, auxiliary_observer_ref=recovery_observation.AUX_REF)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 

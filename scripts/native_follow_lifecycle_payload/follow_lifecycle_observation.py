@@ -869,6 +869,73 @@ def add_bootstrap_observation(result, lines, offset, size, data):
         result['bootstrap'] = {'byteCoverage': 'unavailable', 'launchCoverage': 'unknown'}
 
 
+ADMISSION_REASONS = ('payload_not_playing', 'existing_attempt_owner',
+    'rate_or_not_playing', 'prepared_not_allowed_or_unsupported',
+    'prepared_owner_missing', 'prepared_owner_threw', 'cache_not_ready_or_stale', 'admitted')
+ADMISSION_PATHS = ('unknown', 'cache', 'prepared')
+ADMISSION_PREPARED_REASONS = ('unsupported_or_unhydrated_or_not_ready',
+    'native_anchor_missing', 'native_anchor_not_ready_or_stale', 'owner_rejected', 'owner_accepted')
+
+
+def _admission_snapshot(value):
+    """Validate a retained endpoint without reads or acceptance side effects.
+
+    Ordinals identify begin-attempt invocations, not recovery/native owners or
+    callers. Complete covers summaries of attempts through this snapshot only;
+    routes that bypass begin are outside its scope. Admission is not proof of a
+    seek's execution, completion, or settled playback. No timing is inferred.
+    """
+    if value is None: return {'status': 'unavailable'}
+    try:
+        keys = {'schemaVersion', 'attemptCount', 'overflow', 'droppedCount',
+            'droppedCountSaturated', 'summaries'}
+        if type(value) is not dict or set(value) != keys:
+            raise ValueError('Admission snapshot fields changed')
+        if type(value['schemaVersion']) is not int or value['schemaVersion'] != 1:
+            raise ValueError('Admission schema changed')
+        for key, maximum in (('attemptCount', 5), ('droppedCount', MAX_COUNT)):
+            if type(value[key]) is not int or not 0 <= value[key] <= maximum:
+                raise ValueError('Admission counter changed')
+        if type(value['overflow']) is not bool or type(value['droppedCountSaturated']) is not bool:
+            raise ValueError('Admission flag changed')
+        if value['overflow'] != (value['attemptCount'] == 5):
+            raise ValueError('Admission overflow changed')
+        if value['droppedCountSaturated'] and value['droppedCount'] != MAX_COUNT:
+            raise ValueError('Admission saturation changed')
+        if type(value['summaries']) is not list or len(value['summaries']) > 4:
+            raise ValueError('Admission summary bound changed')
+        summaries, ordinals = [], []
+        for row in value['summaries']:
+            if type(row) is not dict or set(row) != {'invocationOrdinal', 'reason', 'path', 'preparedReason'}:
+                raise ValueError('Admission summary fields changed')
+            ordinal = row['invocationOrdinal']
+            if type(ordinal) is not int or not 1 <= ordinal <= min(4, value['attemptCount']):
+                raise ValueError('Admission invocation changed')
+            for key, allowed in (('reason', ADMISSION_REASONS), ('path', ADMISSION_PATHS)):
+                if type(row[key]) is not str or row[key] not in allowed:
+                    raise ValueError('Admission enum changed')
+            prepared = row['preparedReason']
+            if prepared is not None and (type(prepared) is not str or prepared not in ADMISSION_PREPARED_REASONS):
+                raise ValueError('Admission prepared reason changed')
+            summaries.append({key: item for key, item in row.items() if item is not None})
+            ordinals.append(ordinal)
+        if ordinals != sorted(set(ordinals)):
+            raise ValueError('Admission invocation ordering changed')
+        complete = (not value['overflow'] and value['droppedCount'] == 0
+            and not value['droppedCountSaturated']
+            and ordinals == list(range(1, value['attemptCount'] + 1)))
+        return {'status': 'observed', 'coverage': 'complete' if complete else 'incomplete',
+            'snapshotBasis': 'existing_state_endpoint_not_alignment_sample',
+            'ordinalBasis': 'begin_invocation_not_recovery_or_native_owner',
+            'scope': 'begin_attempts_not_all_policy_routes', 'callerAttribution': 'unverified',
+            'measurementMeaning': 'admission_not_seek_completion_or_readiness',
+            'nullFields': 'omitted_unavailable',
+            **{key: value[key] for key in ('schemaVersion', 'attemptCount', 'overflow',
+                'droppedCount', 'droppedCountSaturated')}, 'summaries': summaries}
+    except (ValueError, TypeError, OverflowError, RecursionError):
+        return {'status': 'invalid'}
+
+
 def _endpoint_timing(states):
     if type(states) is not list or not 1 <= len(states) <= 3:
         return {'status': 'unavailable'}
@@ -888,6 +955,8 @@ def _endpoint_timing(states):
             row['recoveryChecks'] = _recovery_check_snapshot(state['followRecoveryCheckDiagnostics'])
         if 'playPolicyDiagnostics' in state:
             row['playPolicy'] = _play_policy_snapshot(state['playPolicyDiagnostics'])
+        if 'recoveryAdmissionDiagnostics' in state:
+            row['recoveryAdmission'] = _admission_snapshot(state['recoveryAdmissionDiagnostics'])
         raw = state.get('followTimingDiagnostics')
         if type(raw) is dict:
             for name, low, high in fields:

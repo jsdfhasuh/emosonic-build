@@ -55,14 +55,14 @@ class RecoveryAuxiliaryTests(unittest.TestCase):
         return invoke
 
     def test_exact_fixed_auxiliary_contract(self):
-        self.assertEqual(c.AUX_SHA,'e19bf7da3bdee9bb202728a30ad7db38c883d29e')
-        self.assertEqual(c.AUX_TREE,'cdc936920eface1f30d8718da6e8a6d1e179f4c2')
+        self.assertEqual(c.AUX_SHA,'5da1905945d819762dce740872d12a1186695711')
+        self.assertEqual(c.AUX_TREE,'c75b239c7102f0bdb81ebf82896ac905ff0496d7')
         self.assertEqual(c.SOURCE_SHA,wrapper.SOURCE_SHA)
-        self.assertEqual(set(c.FILES),{'transform.py','schema.json','play_policy_schema.json','README.md','test_transform.py'})
+        self.assertEqual(set(c.FILES),{'transform.py','schema.json','play_policy_schema.json','admission_schema.json','README.md','test_transform.py'})
         self.assertEqual(c.FILES['schema.json'][0], '530496ee1d92ce2238ec7fc8769633bcb41aae36c4008920d63c7b026a0bf808')
         self.assertEqual(wrapper.REQUEST['auxiliary_observer_sha'],c.AUX_SHA)
         self.assertEqual(wrapper.REQUEST['auxiliary_observer_ref'],c.AUX_REF)
-        self.assertEqual(wrapper.REQUEST['attempt'],100)
+        self.assertEqual(wrapper.REQUEST['attempt'],101)
         self.assertEqual(wrapper.INGRESS_RUN,39966140487)
 
     def test_exact_three_file_manifest_and_policy_bounds(self):
@@ -70,8 +70,11 @@ class RecoveryAuxiliaryTests(unittest.TestCase):
         self.assertEqual(set(c.BASE),{c.CONTROLLER,c.SERVICE,c.MAIN})
         self.assertEqual(set(c.AFTER),set(c.BASE))
         self.assertEqual(value['schemaVersion'],2)
-        self.assertEqual((value['controllerOperationCount'],value['serviceOperationCount'],value['labMainOperationCount']),(32,15,2))
+        self.assertEqual((value['controllerOperationCount'],value['serviceOperationCount'],value['labMainOperationCount']),(41,20,3))
         self.assertEqual((value['recordLimit'],value['policyRecordLimit'],value['policyTruncationRecordLimit']),(128,32,1))
+        self.assertEqual((value['admissionSummaryLimit'],value['admissionAttemptCountLimit']),(4,5))
+        admission=Path(__file__).resolve().parent/'fixtures/recovery_admission_schema.json'
+        self.assertEqual(c.digest(admission.read_bytes()),c.FILES['admission_schema.json'][0])
         contract=Path(__file__).resolve().parent/'fixtures/play_policy_schema.json'
         self.assertEqual(c.digest(contract.read_bytes()),c.FILES['play_policy_schema.json'][0])
         for key,path in (('controller',c.CONTROLLER),('audioService',c.SERVICE),('labMain',c.MAIN)):
@@ -133,7 +136,7 @@ class RecoveryAuxiliaryTests(unittest.TestCase):
     def test_fetch_exact_parent_tree_allowlist_and_subprocess_only_credentials(self):
         with self.fixture(False) as (source,root,_,__,payloads),patch.dict(c.os.environ,{'SOURCE_READ_TOKEN':'SYNTHETIC_TOKEN'},clear=True):
             p,seen=self.fetch_api(source,payloads);c.fetch(source,p);c.package(source)
-            self.assertEqual(len(list(root.iterdir())),6)
+            self.assertEqual(len(list(root.iterdir())),7)
             for args,env in seen:
                 self.assertNotIn('SYNTHETIC_TOKEN',' '.join(args));self.assertNotIn('SOURCE_READ_TOKEN',env)
                 self.assertEqual('GIT_CONFIG_VALUE_0' in env,args[1] in ('ls-remote','fetch'))

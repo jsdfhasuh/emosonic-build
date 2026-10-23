@@ -142,6 +142,28 @@ PLAY_POLICY_SCHEMA = {
             'sampleAfterPlayRequest', 'receiptProgress')},
     }, 33),
 }
+ADMISSION_REASONS = ('payload_not_playing', 'existing_attempt_owner',
+    'rate_or_not_playing', 'prepared_not_allowed_or_unsupported',
+    'prepared_owner_missing', 'prepared_owner_threw', 'cache_not_ready_or_stale', 'admitted')
+ADMISSION_PATHS = ('unknown', 'cache', 'prepared')
+ADMISSION_PREPARED_REASONS = ('unsupported_or_unhydrated_or_not_ready',
+    'native_anchor_missing', 'native_anchor_not_ready_or_stale', 'owner_rejected', 'owner_accepted')
+ADMISSION_SCHEMA = {
+    'status': frozenset({'unavailable', 'invalid', 'observed'}),
+    'coverage': frozenset({'complete', 'incomplete'}),
+    'snapshotBasis': frozenset({'existing_state_endpoint_not_alignment_sample'}),
+    'ordinalBasis': frozenset({'begin_invocation_not_recovery_or_native_owner'}),
+    'scope': frozenset({'begin_attempts_not_all_policy_routes'}),
+    'callerAttribution': frozenset({'unverified'}),
+    'measurementMeaning': frozenset({'admission_not_seek_completion_or_readiness'}),
+    'nullFields': frozenset({'omitted_unavailable'}),
+    'schemaVersion': ('integer', 1, 1), 'attemptCount': ('integer', 0, 5),
+    'overflow': bool, 'droppedCount': COUNT, 'droppedCountSaturated': bool,
+    'summaries': ('list', {
+        'invocationOrdinal': ('integer', 1, 4), 'reason': frozenset(ADMISSION_REASONS),
+        'path': frozenset(ADMISSION_PATHS), 'preparedReason': frozenset(ADMISSION_PREPARED_REASONS),
+    }, 4),
+}
 ENDPOINT_TIMING_SCHEMA = {
     'status': frozenset({'observed', 'unavailable'}),
     'meaning': frozenset({'latest_stored_fact_not_controller_decision'}),
@@ -149,6 +171,7 @@ ENDPOINT_TIMING_SCHEMA = {
         'clientOrdinal': ('integer', 0, 2),
         'recoveryChecks': RECOVERY_CHECK_SCHEMA,
         'playPolicy': PLAY_POLICY_SCHEMA,
+        'recoveryAdmission': ADMISSION_SCHEMA,
         **{name: ('number', 0, 60000) for name in ('runtimeAdaptiveDelayMs', 'configuredMinDelayMs',
             'configuredMaxDelayMs', 'observedProjectionDelayMs')},
         **{name: ('number', -86400000, 86400000) for name in ('lastObservedControllerDriftMs',

@@ -185,13 +185,22 @@ class PlayPolicyObservationTests(unittest.TestCase):
         with patch.dict(public.RATE_SCHEMA,{'nativeTiming':rate['nativeTiming']}):
             for value in (success,failure):
                 self.assertEqual(public.report_line(json.dumps(value)),value)
-                self.assertLess(len(json.dumps(value)),512*1024)
+                encoded=json.dumps(value,separators=(',', ':'),allow_nan=False)
+                self.assertEqual(json.loads(encoded),value)
+                self.assertLess(len(encoded.encode('utf-8')),512*1024)
                 clients=value['followLifecycle']['endpointTiming']['clients']
                 self.assertEqual(len(clients),3)
                 self.assertTrue(all(len(row['playPolicy']['records'])==33 for row in clients))
 
     def test_exact_inverse_preserves_every_original_observer_byte(self):
         text=Path(observer.__file__).read_text()
+        begin=text.index('ADMISSION_REASONS =')
+        end=text.index('def _endpoint_timing(states):',begin)
+        text=text[:begin]+text[end:]
+        admission_hook=("        if 'recoveryAdmissionDiagnostics' in state:\n"
+            "            row['recoveryAdmission'] = _admission_snapshot(state['recoveryAdmissionDiagnostics'])\n")
+        self.assertEqual(text.count(admission_hook),1)
+        text=text.replace(admission_hook,'',1)
         begin=text.index('\nPLAY_POLICY_PHASES =')
         end=text.index('def _endpoint_timing(states):',begin)
         restored=text[:begin]+text[end:]

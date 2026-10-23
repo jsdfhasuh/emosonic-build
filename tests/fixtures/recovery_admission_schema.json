@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Disposable bounded recovery admission summaries",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "attemptCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "overflow": {
+      "type": "boolean"
+    },
+    "droppedCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "droppedCountSaturated": {
+      "type": "boolean"
+    },
+    "summaries": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "invocationOrdinal": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4
+          },
+          "reason": {
+            "enum": [
+              "payload_not_playing",
+              "existing_attempt_owner",
+              "rate_or_not_playing",
+              "prepared_not_allowed_or_unsupported",
+              "prepared_owner_missing",
+              "prepared_owner_threw",
+              "cache_not_ready_or_stale",
+              "admitted"
+            ]
+          },
+          "path": {
+            "enum": [
+              "unknown",
+              "cache",
+              "prepared"
+            ]
+          },
+          "preparedReason": {
+            "enum": [
+              null,
+              "unsupported_or_unhydrated_or_not_ready",
+              "native_anchor_missing",
+              "native_anchor_not_ready_or_stale",
+              "owner_rejected",
+              "owner_accepted"
+            ]
+          }
+        },
+        "required": [
+          "invocationOrdinal",
+          "reason",
+          "path",
+          "preparedReason"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "attemptCount",
+    "overflow",
+    "droppedCount",
+    "droppedCountSaturated",
+    "summaries"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "attemptCount": {
+            "const": 5
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "overflow": {
+            "const": true
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "overflow": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "droppedCountSaturated": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "droppedCount": {
+            "const": 1000000
+          }
+        }
+      }
+    }
+  ]
+}

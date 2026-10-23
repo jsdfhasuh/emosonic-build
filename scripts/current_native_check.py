@@ -415,7 +415,7 @@ def execute(command, label, report=False):
         for line in log.read_text(errors='replace').splitlines():
             safe = report_line(line)
             if safe:
-                print(json.dumps(safe), flush=True)
+                print(json.dumps(safe, separators=(',', ':'), allow_nan=False), flush=True)
     print(json.dumps({'stage': label, 'status': 'passed' if result.returncode == 0 else 'failed', 'exitCode': result.returncode}), flush=True)
     p.require(result.returncode == 0, 'Native stage failed; private output is not uploaded.')
 

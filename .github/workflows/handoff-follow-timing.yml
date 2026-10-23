@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '751558cf2d6e6f998401051cebfe47cb735470ef' &&
-      github.event.head_commit.message == 'test: retain bounded native bootstrap evidence 20261023' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'fdb853174dc19b4a52012a4959c1f9ab2afb9994' &&
+      github.event.head_commit.message == 'test: measure bounded recovery admission 20261023' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
