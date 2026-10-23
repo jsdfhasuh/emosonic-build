@@ -114,10 +114,10 @@ class InitialApplyReceiptGreenTests(unittest.TestCase):
                 self.assertEqual([getattr(module,name) for module,name in tracked],original)
 
     def test_fixed_baseline_and_reviewed_contract(self):
-        self.assertEqual(c.PARENT,'5d603037a6710f1041383eea020be5f2ca48d187')
+        self.assertEqual(c.PARENT,'22f7bbc97c3766ebb2989fb1b7dda37b5061f748')
         self.assertEqual(c.SERVER_SHA,'5adc23da173c5f20188d79aafe8fcc1e656eb38a')
-        self.assertEqual(c.REQUEST['attempt'],94)
-        self.assertEqual((c.SOURCE_SHA,c.SOURCE_REF),('88e505d162d50975c6b0bfded6abb835ec3c896e', 'refs/heads/test/follow-prepared-boundary-compat-20261023'))
+        self.assertEqual(c.REQUEST['attempt'],95)
+        self.assertEqual((c.SOURCE_SHA,c.SOURCE_REF),('f6251a2a0e6441f174d05b488bc0fb1b41d52e39', 'refs/heads/fix/follow-initial-apply-flow-lint-20261023'))
         self.assertEqual(c.INVENTORY_SHA256,'5628a0ea2f6781ad78ed816f5e17f96157f0da9fb3a663be14f8b634d90b2306')
         self.assertEqual(c.INVENTORY_PATH,'tool/follow_initial_apply_receipt/green_inventory.json')
         self.assertEqual(c.EXPECTED_COUNTS,(3,8))

@@ -4,15 +4,15 @@ import sys
 from unittest.mock import patch
 import fractional_precision_green as previous
 
-PARENT = '5d603037a6710f1041383eea020be5f2ca48d187'
-MESSAGE = 'test: validate initial apply receipt fixture boundaries 20261023'
+PARENT = '22f7bbc97c3766ebb2989fb1b7dda37b5061f748'
+MESSAGE = 'test: validate initial apply observation lint repair 20261023'
 WORKFLOW = 'initial-apply-receipt-green.yml'
 REQUEST_PATH = 'requests/initial-apply-receipt-green-20261023.json'
-SOURCE_REF = 'refs/heads/test/follow-prepared-boundary-compat-20261023'
-SOURCE_SHA = '88e505d162d50975c6b0bfded6abb835ec3c896e'
+SOURCE_REF = 'refs/heads/fix/follow-initial-apply-flow-lint-20261023'
+SOURCE_SHA = 'f6251a2a0e6441f174d05b488bc0fb1b41d52e39'
 SERVER_SHA = previous.SERVER_SHA
 REQUEST = dict(previous.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               mode='initial-apply-receipt-full-green-validation', attempt=94)
+               mode='initial-apply-receipt-full-green-validation', attempt=95)
 INVENTORY_PATH = 'tool/follow_initial_apply_receipt/green_inventory.json'
 INVENTORY_SHA256 = '5628a0ea2f6781ad78ed816f5e17f96157f0da9fb3a663be14f8b634d90b2306'
 EXPECTED_COUNTS = (3, 8)

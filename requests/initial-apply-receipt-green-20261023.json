@@ -1,9 +1,9 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/test/follow-prepared-boundary-compat-20261023",
-  "source_sha": "88e505d162d50975c6b0bfded6abb835ec3c896e",
+  "source_ref": "refs/heads/fix/follow-initial-apply-flow-lint-20261023",
+  "source_sha": "f6251a2a0e6441f174d05b488bc0fb1b41d52e39",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "initial-apply-receipt-full-green-validation",
-  "attempt": 94
+  "attempt": 95
 }
