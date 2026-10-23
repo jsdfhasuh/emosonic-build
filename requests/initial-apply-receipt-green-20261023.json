@@ -1,0 +1,9 @@
+{
+  "source_repository": "jsdfhasuh/emosonic",
+  "source_ref": "refs/heads/fix/follow-initial-apply-receipt-20261023",
+  "source_sha": "fd0deab86014c0f0cee0b1c525893e493f426b9c",
+  "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
+  "version": "1.0.10+27",
+  "mode": "initial-apply-receipt-full-green-validation",
+  "attempt": 92
+}
