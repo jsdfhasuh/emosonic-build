@@ -94,6 +94,37 @@ class TimingVerifierCompatibility(unittest.TestCase):
         timing.restore_harness.assert_called_once_with(b'observed')
         lifecycle.verify_prepared.assert_called_once_with(Path('/unused'), require_harness=False)
 
+    def test_actual_independent_layer_pins_agree_before_any_private_checkout(self):
+        # Do not mock imported verifier constants: that concealed the prior
+        # stale attribution pins even though inverse/decorate tests passed.
+        self.assertEqual(r.AFTER[r.LAB], l.BEFORE_SHA256)
+        self.assertEqual(l.AFTER_HARNESS_SHA256, t.HARNESS_SHA)
+        self.assertEqual(t.HARNESS_SHA, a.TIMING_BASELINE_LAB_SHA256)
+        self.assertEqual(t.AFTER[t.HARNESS], a.TIMING_OBSERVED_LAB_SHA256)
+        self.assertEqual(r.PREPARE, t.PREPARE)
+        for name in r.PAYLOAD_HASHES: r.payload(name)
+        for name in l.PAYLOAD_HASHES: l.payload(name)
+
+    def test_actual_attribution_guard_rejects_stale_independent_pins_before_io(self):
+        for name in ('TIMING_BASELINE_LAB_SHA256', 'TIMING_OBSERVED_LAB_SHA256'):
+            with self.subTest(pin=name), patch.object(a, name, '0' * 64):
+                with self.assertRaisesRegex(ValueError, '^Attribution timing fixed hash chain changed$'):
+                    a._verify_timing_observation(Path('/unused'), enabled=True)
+
+    def test_actual_attribution_guard_rejects_altered_timing_and_lifecycle_modules(self):
+        for filename, old_pin in (('native_seek_anchor_observation.py', t.HARNESS_SHA),
+                                  ('native_follow_lifecycle.py', l.AFTER_HARNESS_SHA256)):
+            with self.subTest(module=filename), tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp).resolve(); (root/'native_attribution').mkdir()
+                for name in ('native_seek_anchor_observation.py', 'native_follow_lifecycle.py'):
+                    text=(ROOT/'scripts'/name).read_text()
+                    if name == filename:
+                        self.assertIn(old_pin, text); text=text.replace(old_pin, '0'*64)
+                    (root/name).write_text(text)
+                with patch.object(a, 'ROOT', root/'native_attribution'):
+                    with self.assertRaisesRegex(ValueError, '^Attribution timing fixed hash chain changed$'):
+                        a._verify_timing_observation(Path('/unused'), enabled=True)
+
     def test_default_and_wrong_type_modes_never_load_extra_observation(self):
         with patch.object(a.importlib.util, 'spec_from_file_location') as loading:
             a._verify_timing_observation(Path('/unused'))

@@ -34,8 +34,8 @@ BASELINE_HASHES = {
 }
 LAB_MAIN = 'tool/native_playback_mac/main.dart'
 LAB_DEBUG_MAIN_SHA256 = 'f8781ae5077924daebc0908500f79e57ee9a80af8e9d25d474468651563d2af0'
-TIMING_OBSERVED_LAB_SHA256 = '7fcfd5a13db96092806dc5e85883fd20a07e3cb22543ffaf7398ee4f668038dc'
-TIMING_BASELINE_LAB_SHA256 = 'a283fefe723aa6002f21836bb159c64d3d060a8a23e778da4f3fcc6a5e4cc5a6'
+TIMING_OBSERVED_LAB_SHA256 = 'd2ce73aa1a0c15848940123bc8a90ce2d7c2ef8782e761f8d3b0cbbe22b9f3f6'
+TIMING_BASELINE_LAB_SHA256 = '04a9fa4f411ca43366ee05e30d9f8180962d57d68263e1012a7ccffff8dfa6f9'
 IMPORT = "import 'native_lab_scoped_api_client.dart';\n"
 ORIGINAL = '''SubsonicApiClient createAccountApiClient(Ref ref, AccountSession session) {
   session.requestContext.ensureCurrent();

@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '7a3f82c6ff26634da74fbea25d2fe4360c9df628' &&
-      github.event.head_commit.message == 'test: validate owned provisional Follow transfer 20261023' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '40b9833dd9e99f62880175362e1b94a3aa178e9e' &&
+      github.event.head_commit.message == 'test: verify composed attribution preflight 20261023' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
