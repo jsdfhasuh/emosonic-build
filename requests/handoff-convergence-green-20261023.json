@@ -1,0 +1,9 @@
+{
+  "source_repository": "jsdfhasuh/emosonic",
+  "source_ref": "refs/heads/fix/feedback-reconcile-completion-20261023",
+  "source_sha": "aaa07a9860d167cafcf440ac16011e745a5c74a4",
+  "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
+  "version": "1.0.10+27",
+  "mode": "handoff-convergence-full-green-validation",
+  "attempt": 74
+}
