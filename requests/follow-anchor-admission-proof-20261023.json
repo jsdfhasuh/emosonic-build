@@ -1,10 +1,10 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
   "source_ref": "refs/heads/test/follow-anchor-admission-gap-20261023",
-  "source_sha": "9d05555e6f65ff1527a7e100dd044ac7a435c4d2",
+  "source_sha": "3926502af51ef8a105b15c5601c8bd90db55a80c",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "follow-anchor-admission-expected-red-proof",
-  "attempt": 58,
+  "attempt": 59,
   "baseline_sha": "54844e610f5d5c6e935431be087f1fae64fe96d6"
 }
