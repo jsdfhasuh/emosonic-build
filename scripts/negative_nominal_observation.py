@@ -3,7 +3,7 @@ from pathlib import Path
 from follow_seek_latency_observation import strict_json, MAX_BYTES, MAX_EVENTS
 
 TEST_PATH = 'test/services/emo_follow_directional_boundary_test.dart'
-FIXTURE_SHA256 = '16db235aa9a61faaf04b41368888ed979cddb92f2605e511a8307d9089b99a97'
+FIXTURE_SHA256 = '1c5d63c2f6aea6c8da7336de90eca58fe2f67367d72f5fc980d1883a3d5600b5'
 PREFIX = 'FOLLOW_NEGATIVE_NOMINAL_DIAGNOSTIC '
 PHASES = ('after_ack', 'after_first', 'after_second')
 
@@ -54,8 +54,8 @@ def observe_negative_nominal(raw, source, suites, phase):
         return None
     if (len(selected) != 1 or selected[0].get('sha256') != FIXTURE_SHA256
             or type(selected[0].get('names')) is not list
-            or len(selected[0]['names']) != 3
-            or len(set(selected[0]['names'])) != 3):
+            or len(selected[0]['names']) != 4
+            or len(set(selected[0]['names'])) != 4):
         return report
     test_name = selected[0]['names'][2]
     if type(test_name) is not str:

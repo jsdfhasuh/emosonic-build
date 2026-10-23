@@ -14,7 +14,7 @@ class NegativeNominalObservationTests(unittest.TestCase):
             rateWrites=[dict(atMs=200,rate=1.44),dict(atMs=3400,rate=1.5)],
             snapshots=[dict(phase=p,nowMs=3400+i*100,nativeResidualMs=49,runtimeDriftMs=49,currentRate=1.5,nativeRate=1.5,requestedRate=1.5,settledCount=0 if i<2 else 1,activeTimerCount=2,rateWriteCount=2,anchorSequence=i+1,anchorPositionUs=1000000+i*150000,anchorSampleOffsetUs=201+i*100,ageBeforeUs=10,ageAfterUs=20) for i,p in enumerate(c.PHASES)])
     def suites(self):
-        return [dict(path=c.TEST_PATH,sha256=c.FIXTURE_SHA256,names=['private one','private two','private target'])]
+        return [dict(path=c.TEST_PATH,sha256=c.FIXTURE_SHA256,names=['private one','private two','private target','private boundary'])]
     def events(self,value=None):
         return [dict(type='suite',suite=dict(id=2,path=c.TEST_PATH)),dict(type='testStart',test=dict(id=5,suiteID=2,name='private target')),dict(type='print',testID=5,message=c.PREFIX+json.dumps(value or self.value())),dict(type='testDone',testID=5,result='failure',hidden=False,skipped=False),dict(type='done',success=False)]
     def observe(self,events=None,suites=None):
@@ -27,7 +27,9 @@ class NegativeNominalObservationTests(unittest.TestCase):
         self.assertEqual(c.project(v),v)
     def test_wrong_manifest_and_case_cannot_export(self):
         s=self.suites();s[0]['sha256']='a'*64;self.assertEqual(self.observe(suites=s)['status'],'fixture-mismatch')
-        e=self.events();e[1]['test']['name']='private one';self.assertEqual(self.observe(e)['status'],'missing-target')
+        for name in ('private one','private boundary'):
+            e=self.events();e[1]['test']['name']=name;self.assertEqual(self.observe(e)['status'],'missing-target')
+        s=self.suites();s[0]['names'].pop();self.assertEqual(self.observe(suites=s)['status'],'fixture-mismatch')
         e=self.events();e[2]['testID']=99;self.assertEqual(self.observe(e)['status'],'wrong-test-id')
     def test_ambiguous_suite_target_and_boolean_ids_fail_closed(self):
         for field in ('suite','target','bool'):

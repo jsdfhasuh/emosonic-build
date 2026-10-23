@@ -1,9 +1,9 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/fix/follow-native-receipt-wake-20261023",
-  "source_sha": "821f22b14fc2e9b6b175f6c0d201106c72a00f95",
+  "source_ref": "refs/heads/test/native-receipt-fixture-compatibility-20261023",
+  "source_sha": "17a35e301ca7182d4fed1114c7e42a940f2d208e",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "native-receipt-consumption-full-green-validation",
-  "attempt": 83
+  "attempt": 84
 }
