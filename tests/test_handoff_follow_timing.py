@@ -142,7 +142,7 @@ class RecoveryValidationGateTests(unittest.TestCase):
 class IngressValidationGateTests(unittest.TestCase):
     def evidence(self):
         run={'id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
-             'path':'.github/workflows/follow-broadcast-compat-green.yml','event':'push',
+             'path':'.github/workflows/handoff-convergence-green.yml','event':'push',
              'head_branch':'main','run_attempt':1,'status':'completed','conclusion':'success'}
         jobs={'jobs':[{'name':name,'run_id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
                        'status':'completed','conclusion':'success',
@@ -152,14 +152,14 @@ class IngressValidationGateTests(unittest.TestCase):
         return run,jobs
 
     def test_exact_directional_successor_pins_and_both_matrix_stages(self):
-        self.assertEqual(c.SOURCE_SHA,'c5a62f48839f79ea1000853ac106e96d301645c5')
-        self.assertEqual(c.SOURCE_REF,'refs/heads/test/broadcast-native-cache-compat-20261023')
-        self.assertEqual(c.PARENT,'b29441d2e6aeedab3965c092aecc8006cd4695c5')
-        self.assertEqual(c.REQUEST['attempt'],72)
-        self.assertEqual(c.INGRESS_RUN,39896357069)
+        self.assertEqual(c.SOURCE_SHA,'aaa07a9860d167cafcf440ac16011e745a5c74a4')
+        self.assertEqual(c.SOURCE_REF,'refs/heads/fix/feedback-reconcile-completion-20261023')
+        self.assertEqual(c.PARENT,'0eabfd392324cc7c12a192ce5a780b11edc36d16')
+        self.assertEqual(c.REQUEST['attempt'],75)
+        self.assertEqual(c.INGRESS_RUN,39903667601)
         self.assertEqual(c.INGRESS_HEAD,c.PARENT)
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)
-        self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate targeted compatibility and all prior focused cases')
+        self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate all prior and guarded convergence focused cases')
         self.assertIn('follow',c.NATIVE_STAGES);self.assertIn('handoff',c.NATIVE_STAGES)
 
     def test_exact_current_candidate_green_required(self):
