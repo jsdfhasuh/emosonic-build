@@ -1,14 +1,14 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/fix/follow-fractional-precision-20261023",
-  "source_sha": "c7301a107fd1474ec0d22bb609426a435bc52584",
+  "source_ref": "refs/heads/fix/follow-initial-apply-flow-lint-20261023",
+  "source_sha": "f6251a2a0e6441f174d05b488bc0fb1b41d52e39",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "native-follow-timing-observation",
-  "attempt": 90,
+  "attempt": 96,
   "proof_run_id": 39745934922,
   "validation_run_id": 39767536382,
-  "ingress_validation_run_id": 39930329614,
-  "auxiliary_observer_sha": "11f7a4c0371838e5c1bdb4e6a6de5619327be89c",
-  "auxiliary_observer_ref": "refs/heads/test/recovery-check-observation-20261023"
+  "ingress_validation_run_id": 39966140487,
+  "auxiliary_observer_sha": "895af76dbd648acc73497bb41fb32f36b70c88d7",
+  "auxiliary_observer_ref": "refs/heads/test/recovery-check-f625-observation-20261023"
 }

@@ -53,15 +53,15 @@ class RecoveryAuxiliaryTests(unittest.TestCase):
         return invoke
 
     def test_exact_fixed_auxiliary_contract(self):
-        self.assertEqual(c.AUX_SHA,'11f7a4c0371838e5c1bdb4e6a6de5619327be89c')
-        self.assertEqual(c.AUX_TREE,'88dccd3658ce8376ae6f11cc2a43739fedb6c647')
+        self.assertEqual(c.AUX_SHA,'895af76dbd648acc73497bb41fb32f36b70c88d7')
+        self.assertEqual(c.AUX_TREE,'9fd50b7e36475199a502fc573ab9f80eaabb7ded')
         self.assertEqual(c.SOURCE_SHA,wrapper.SOURCE_SHA)
         self.assertEqual(set(c.FILES),{'transform.py','schema.json','README.md','test_transform.py'})
         self.assertEqual(c.FILES['schema.json'][0], '530496ee1d92ce2238ec7fc8769633bcb41aae36c4008920d63c7b026a0bf808')
         self.assertEqual(wrapper.REQUEST['auxiliary_observer_sha'],c.AUX_SHA)
         self.assertEqual(wrapper.REQUEST['auxiliary_observer_ref'],c.AUX_REF)
-        self.assertEqual(wrapper.REQUEST['attempt'],90)
-        self.assertEqual(wrapper.INGRESS_RUN,39930329614)
+        self.assertEqual(wrapper.REQUEST['attempt'],96)
+        self.assertEqual(wrapper.INGRESS_RUN,39966140487)
 
     def test_package_requires_exact_hash_size_blob_and_no_extra_files(self):
         for change in ('content','extra','missing','manifest','symlink'):

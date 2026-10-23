@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: 'c7301a107fd1474ec0d22bb609426a435bc52584'
+  SOURCE_SHA: 'f6251a2a0e6441f174d05b488bc0fb1b41d52e39'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == 'c2fb5278686f7c6ae95271a9fab2a3f7dc6fceb0' &&
-      github.event.head_commit.message == 'test: enforce sustained native Follow precision 20261023' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'd03a90db5341ceed03eb2d200eae0b270804f0fc' &&
+      github.event.head_commit.message == 'test: validate initial apply strict native precision 20261023' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/follow-fractional-precision-20261023
+          SOURCE_REF: refs/heads/fix/follow-initial-apply-flow-lint-20261023
         run: python3 scripts/handoff_follow_timing.py source prepare
 
   native-macos-server:

@@ -11,22 +11,17 @@ import sys
 import tempfile
 from unittest.mock import patch
 
-SOURCE_SHA = 'c7301a107fd1474ec0d22bb609426a435bc52584'
-AUX_SHA = '11f7a4c0371838e5c1bdb4e6a6de5619327be89c'
-AUX_REF = 'refs/heads/test/recovery-check-observation-20261023'
-AUX_TREE = '88dccd3658ce8376ae6f11cc2a43739fedb6c647'
+SOURCE_SHA = 'f6251a2a0e6441f174d05b488bc0fb1b41d52e39'
+AUX_SHA = '895af76dbd648acc73497bb41fb32f36b70c88d7'
+AUX_REF = 'refs/heads/test/recovery-check-f625-observation-20261023'
+AUX_TREE = '9fd50b7e36475199a502fc573ab9f80eaabb7ded'
 PREFIX = 'tool/native_playback_mac/recovery_check_observation/'
 STATE = '.native_recovery_check_observation'
-FILES = {
-    'transform.py': ('dd025c29208c2a7e9ffc4135d63ca8cab9b329b0fd1cd9058654fac635dc02b4', 24417, '320e9795f4b3048dd7639800e1b20819da19553b'),
-    'schema.json': ('530496ee1d92ce2238ec7fc8769633bcb41aae36c4008920d63c7b026a0bf808', 6071, 'b1f01ab4e151e2d2228385fab69ac39259e576f7'),
-    'README.md': ('fa72b5b3da0b8da26c0c794ef7497cf8aee696e79569161ba47913939cdd9854', 7285, '382163778e82fd03aaba3ea28e1ea66f79d5f5d2'),
-    'test_transform.py': ('04429382eb0bfcf1a923f466334bd9d0055bb4284ee67899303cbb2c9d0db55f', 4575, '910ea43a4c1ef5b865ffb954eb068176ee609830'),
-}
+FILES = {'transform.py': ('76cb68b248fc746bf2052e88b78d63b54fde132ce5fc0025d2997513d89e4ce3', 24417, 'f0f01d738d32f68822664b5286cc2575743ed140'), 'schema.json': ('530496ee1d92ce2238ec7fc8769633bcb41aae36c4008920d63c7b026a0bf808', 6071, 'b1f01ab4e151e2d2228385fab69ac39259e576f7'), 'README.md': ('e1ba12ec04e979bd981670aa194b827bae927773fd20aaedebb3fd35f790bb44', 7644, '0045f8b44d6fea482aeda0f1c020f80600f76c00'), 'test_transform.py': ('04429382eb0bfcf1a923f466334bd9d0055bb4284ee67899303cbb2c9d0db55f', 4575, '910ea43a4c1ef5b865ffb954eb068176ee609830')}
 CONTROLLER = 'lib/services/emo_follow_sync_controller.dart'
 MAIN = 'tool/native_playback_mac/main.dart'
-BASE = {CONTROLLER: 'f70619b2ee1ae88843e1fdc04fb771968ea58dc73e8504dcf115b70b198d3182', MAIN: '7e4b804a9eaeeec929768ddd9ce9a5479639f73f443a8f3e6693916e59565833'}
-AFTER = {CONTROLLER: 'd342b8478e9ff29fcf97f61089975fdd23fd447c5a014591851b0d0e093ed8a3', MAIN: '669a5e8c8358100c5ff29ac38b20e2424cf1596fc0c109074e9cd5175ae25de2'}
+BASE = {CONTROLLER: '113320f040275374526ba15defc37f85d8e2e149ebbf31e93fdb37109950f1ef', MAIN: '7e4b804a9eaeeec929768ddd9ce9a5479639f73f443a8f3e6693916e59565833'}
+AFTER = {CONTROLLER: 'cf069243315944b661cdb99e2cb10a885a7f1e667773c8cf4e4d17728136258c', MAIN: '669a5e8c8358100c5ff29ac38b20e2424cf1596fc0c109074e9cd5175ae25de2'}
 LOGGED_MAIN = 'd32814327facb7cf382db291b10a0ca81915d2dcf9be05f45f395c2e7b6eddf4'
 LOG_OLD = b'  await Logger.setLogLevel(LogLevel.warning);\n'
 LOG_NEW = b'  await Logger.setLogLevel(LogLevel.debug);\n'

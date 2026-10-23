@@ -143,7 +143,7 @@ class RecoveryValidationGateTests(unittest.TestCase):
 class IngressValidationGateTests(unittest.TestCase):
     def evidence(self):
         run={'id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
-             'path':'.github/workflows/fractional-precision-green.yml','event':'push',
+             'path':'.github/workflows/initial-apply-receipt-green.yml','event':'push',
              'head_branch':'main','run_attempt':1,'status':'completed','conclusion':'success'}
         jobs={'jobs':[{'name':name,'run_id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
                        'status':'completed','conclusion':'success',
@@ -153,15 +153,29 @@ class IngressValidationGateTests(unittest.TestCase):
         return run,jobs
 
     def test_exact_directional_successor_pins_and_both_matrix_stages(self):
-        self.assertEqual(c.SOURCE_SHA,'c7301a107fd1474ec0d22bb609426a435bc52584')
-        self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-fractional-precision-20261023')
-        self.assertEqual(c.PARENT,'c2fb5278686f7c6ae95271a9fab2a3f7dc6fceb0')
-        self.assertEqual(c.REQUEST['attempt'],90)
-        self.assertEqual(c.INGRESS_RUN,39930329614)
-        self.assertEqual(c.INGRESS_HEAD,'c0b5d5fea7662af646a145c2699eb7ea7d99a2cc')
+        self.assertEqual(c.SOURCE_SHA,'f6251a2a0e6441f174d05b488bc0fb1b41d52e39')
+        self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-initial-apply-flow-lint-20261023')
+        self.assertEqual(c.PARENT,'d03a90db5341ceed03eb2d200eae0b270804f0fc')
+        self.assertEqual(c.REQUEST['attempt'],96)
+        self.assertEqual(c.INGRESS_RUN,39966140487)
+        self.assertEqual(c.INGRESS_HEAD,'d03a90db5341ceed03eb2d200eae0b270804f0fc')
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)
-        self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate all prior and guarded fractional precision focused cases')
+        self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate all prior and initial apply receipt focused cases')
         self.assertIn('follow',c.NATIVE_STAGES);self.assertIn('handoff',c.NATIVE_STAGES)
+
+    def test_exact_254_case_current_inventory_not_stale_243_gate(self):
+        import initial_apply_receipt_green as green
+        self.assertEqual(c.SOURCE_SHA, green.SOURCE_SHA)
+        self.assertEqual(c.SOURCE_REF, green.SOURCE_REF)
+        self.assertEqual(green.EXPECTED_COUNTS, (3, 8))
+        self.assertEqual(green.INVENTORY_PATH, 'tool/follow_initial_apply_receipt/green_inventory.json')
+        self.assertEqual(green.INVENTORY_SHA256, '5628a0ea2f6781ad78ed816f5e17f96157f0da9fb3a663be14f8b634d90b2306')
+        self.assertEqual(c.INGRESS_STEPS['validate-source'][0], 'Validate all prior and initial apply receipt focused cases')
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / '.github/workflows/initial-apply-receipt-green.yml').read_text()
+        self.assertIn(c.SOURCE_SHA, workflow)
+        self.assertIn('initial_apply_receipt_green.py source focused', workflow)
+        self.assertIn(c.INGRESS_STEPS['validate-source'][0], workflow)
 
     def test_exact_current_candidate_green_required(self):
         with patch.object(c.base.request.p,'api',side_effect=self.evidence()):c.require_ingress_validation()

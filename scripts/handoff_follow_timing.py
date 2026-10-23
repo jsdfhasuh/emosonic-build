@@ -8,15 +8,15 @@ import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 import native_recovery_check_observation as recovery_observation
 
-PARENT = 'c2fb5278686f7c6ae95271a9fab2a3f7dc6fceb0'
-MESSAGE = 'test: enforce sustained native Follow precision 20261023'
+PARENT = 'd03a90db5341ceed03eb2d200eae0b270804f0fc'
+MESSAGE = 'test: validate initial apply strict native precision 20261023'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
-SOURCE_SHA = 'c7301a107fd1474ec0d22bb609426a435bc52584'
-SOURCE_REF = 'refs/heads/fix/follow-fractional-precision-20261023'
+SOURCE_SHA = 'f6251a2a0e6441f174d05b488bc0fb1b41d52e39'
+SOURCE_REF = 'refs/heads/fix/follow-initial-apply-flow-lint-20261023'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=90, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39930329614,
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=96, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39966140487,
                auxiliary_observer_sha=recovery_observation.AUX_SHA, auxiliary_observer_ref=recovery_observation.AUX_REF)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
@@ -87,10 +87,10 @@ def require_recovery_validation():
                       'Recovery tests, full validation, BOOL proof and cleanup must succeed.')
 
 
-INGRESS_RUN = 39930329614
-INGRESS_HEAD = 'c0b5d5fea7662af646a145c2699eb7ea7d99a2cc'
+INGRESS_RUN = 39966140487
+INGRESS_HEAD = 'd03a90db5341ceed03eb2d200eae0b270804f0fc'
 INGRESS_STEPS = {'validate-source': (
-    'Validate all prior and guarded fractional precision focused cases',
+    'Validate all prior and initial apply receipt focused cases',
     'Validate complete source analysis, tests, provenance and byte integrity without user Secrets',
     'Remove private source and generated validation outputs',
 )}
@@ -102,7 +102,7 @@ def require_ingress_validation():
     run=p.api(endpoint)
     p.require(type(run) is dict and type(run.get('id')) is int and run['id']==INGRESS_RUN
               and run.get('head_sha')==INGRESS_HEAD
-              and run.get('path')=='.github/workflows/fractional-precision-green.yml'
+              and run.get('path')=='.github/workflows/initial-apply-receipt-green.yml'
               and run.get('event')=='push' and run.get('head_branch')=='main'
               and type(run.get('run_attempt')) is int and run['run_attempt']==1
               and run.get('status')=='completed' and run.get('conclusion')=='success',
