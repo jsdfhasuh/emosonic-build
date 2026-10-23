@@ -114,6 +114,16 @@ def exact_red(raw):
     reports = [e.get('message') for e in events if e.get('type') == 'print'
                and e.get('testID') == target and type(e.get('message')) is str
                and e['message'].startswith(prefix)]
+    samples = project_synthetic_samples(reports)
+    return {'tests':visible,'expectedFailures':1,'passedControls':visible-1,
+            'unexpectedFailures':0,'syntheticSamples':samples}
+
+
+def project_synthetic_samples(reports):
+    # Shared exact projection; the historical red proof keeps its original checks.
+    p = request.p
+    message = 'Exact causal failure and all twelve controls required; details suppressed.'
+    prefix = 'FOLLOW_SEEK_LATENCY_SAMPLES '
     p.require(len(reports) == 1 and len(reports[0]) < 8192, message)
     samples = json.loads(reports[0][len(prefix):])
     keys = {'cycle','rate','holdMs','decision','requestedPositionMs','serverNowMs',
@@ -133,8 +143,7 @@ def exact_red(raw):
                   and all(type(sample[key]) is int and -1000000 <= sample[key] <= 1000000
                           for key in ('holdMs','requestedPositionMs','serverNowMs','residualMs',
                                       'nativeResidualMs','realProjectionUpperMs')), message)
-    return {'tests':visible,'expectedFailures':1,'passedControls':visible-1,
-            'unexpectedFailures':0,'syntheticSamples':samples}
+    return samples
 
 
 def prove(stage):

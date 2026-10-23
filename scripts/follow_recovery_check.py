@@ -9,6 +9,7 @@ from unittest.mock import patch
 import current_source_check as request
 import handoff_repair_check as regression
 from fixed_flutter_green import verify_green, observe_green, GreenVerificationError
+from follow_seek_latency_observation import observe_samples
 
 PARENT = '591551d1ce30921ad7a1aaf2cfdb576ab22cf1aa'
 MESSAGE = 'test: validate lint-clean follow recovery 20261022'
@@ -96,6 +97,8 @@ def focused():
                                   'status':'failed','reason':'timeout'}),flush=True)
                 continue
             STAGE='focused-observation'
+            sample_report=observe_samples(result.stdout,source,[suite],'focused')
+            if sample_report is not None:print(json.dumps(sample_report),flush=True)
             observation=observe_green(result.stdout,result.returncode,expected_names=suite['names'],
                                       fixture_basename=Path(suite['path']).name,stderr=result.stderr)
             print(json.dumps(dict(observation,suiteOrdinal=ordinal)),flush=True)
@@ -158,6 +161,8 @@ def analyzer_observation(raw, stderr, paths, source, returncode):
 
 def full_test_observation(raw, stderr, paths, source, suites, returncode):
     # Reuse bounded whole-stream accounting; no source-derived names are exported.
+    sample_report=observe_samples(raw,source,suites,'full')
+    if sample_report is not None:print(json.dumps(sample_report),flush=True)
     observation=observe_green(raw,returncode,expected_names=['__diagnostic_count_only__'],
                               fixture_basename='diagnostic_count_only_test.dart',stderr=stderr,
                               diagnostic_max_bytes=128 * 1024 * 1024, diagnostic_max_events=1000000)

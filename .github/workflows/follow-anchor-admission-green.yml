@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '870533605f1b0fc7aa22b95517e1220e137e2ceb' &&
-      github.event.head_commit.message == 'test: verify bounded native anchor admission ownership 20261023' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'e4d0d442d698d6dcb0e4f67e689c4f9efc3d4beb' &&
+      github.event.head_commit.message == 'test: observe unchanged admission regression samples 20261023' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build

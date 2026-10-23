@@ -4,15 +4,15 @@ import sys
 from unittest.mock import patch
 import follow_clock_interval_green as previous
 
-PARENT = '870533605f1b0fc7aa22b95517e1220e137e2ceb'
-MESSAGE = 'test: verify bounded native anchor admission ownership 20261023'
+PARENT = 'e4d0d442d698d6dcb0e4f67e689c4f9efc3d4beb'
+MESSAGE = 'test: observe unchanged admission regression samples 20261023'
 WORKFLOW = 'follow-anchor-admission-green.yml'
 REQUEST_PATH = 'requests/follow-anchor-admission-green-20261023.json'
 SOURCE_REF = 'refs/heads/fix/follow-anchor-admission-ownership-20261023'
 SOURCE_SHA = '6adf81189c02d4c9997fdeff5edc61b7f33308ee'
 SERVER_SHA = previous.SERVER_SHA
 REQUEST = dict(previous.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               mode='follow-anchor-admission-full-green-validation', attempt=60)
+               mode='follow-anchor-admission-full-green-validation', attempt=62)
 INVENTORY_PATH = 'tool/follow_anchor_admission_gap/green_inventory.json'
 INVENTORY_SHA256 = '0bb5f47b2cb9b25c8c5b49cafc3efb2b058ef52ee8ec69ce263948647c545a12'
 ORIGINAL_INVENTORY = previous.inventory

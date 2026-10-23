@@ -79,7 +79,7 @@ class AnchorAdmissionGreenTests(unittest.TestCase):
         for value in ('contents: read','source focused','source validate_source','if: always()','source cleanup','persist-credentials: false'):self.assertIn(value,workflow)
         for forbidden in ('upload-artifact','source native','source package','source publish','contents: write','workflow_dispatch'):self.assertNotIn(forbidden,workflow)
         self.assertEqual(json.loads((root/c.REQUEST_PATH).read_text()),c.REQUEST)
-        self.assertEqual(c.REQUEST['attempt'],60)
+        self.assertEqual(c.REQUEST['attempt'],62)
         self.assertEqual(c.INVENTORY_PATH,'tool/follow_anchor_admission_gap/green_inventory.json')
 
 
