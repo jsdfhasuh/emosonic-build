@@ -103,12 +103,43 @@ RECOVERY_CHECK_SCHEMA = {
         'floorPositionMs': ('integer', -86400000, 86400000),
     }, 129),
 }
+PLAY_POLICY_PHASES = ('policy_begin', 'policy_end', 'policy_threw',
+    'post_policy_owner_rejected', 'post_policy_owner_accepted', 'play_submitted',
+    'native_baseline', 'native_progress', 'superseded_trigger', 'superseded_seek',
+    'disposed', 'player_recreated', 'closed', 'truncated')
+PLAY_POLICY_SCHEMA = {
+    'status': frozenset({'unavailable', 'invalid', 'observed'}),
+    'coverage': frozenset({'complete', 'incomplete'}),
+    'snapshotBasis': frozenset({'existing_state_endpoint_not_alignment_sample'}),
+    'timeBasis': frozenset({'process_local_stopwatch_not_native_clock'}),
+    'receiptBasis': frozenset({'accepted_service_receipt_not_native_observer_ordinal'}),
+    'measurementMeaning': frozenset({'in_process_observation_not_native_start_latency'}),
+    'nativeLoadAttribution': frozenset({'unverified'}),
+    'nullFields': frozenset({'omitted_unavailable'}),
+    'producerStatus': frozenset({'recording', 'truncated'}),
+    'schemaVersion': ('integer', 1, 1), 'recordLimit': ('integer', 32, 32),
+    'truncationRecordLimit': ('integer', 1, 1), 'attemptCount': ('integer', 0, 33),
+    'droppedCount': COUNT, 'droppedCountSaturated': bool,
+    'pendingTriggerOrdinal': ('integer', 1, 32),
+    'records': ('list', {
+        'eventOrdinal': ('integer', 1, 33), 'triggerOrdinal': ('integer', 1, 32),
+        'phase': frozenset(PLAY_POLICY_PHASES),
+        'elapsedUs': ('integer', 0, 9007199254740991),
+        'vendorSequence': ('integer', 0, 9007199254740991),
+        'policyOutcome': frozenset({'local', 'remote', 'denied', 'unknown'}),
+        'cacheKind': frozenset({'cached', 'network', 'unknown'}),
+        'nativeLoadAttribution': frozenset({'unverified'}),
+        **{key: bool for key in ('currentTrigger', 'serviceOwnerMatches',
+            'sampleAfterPlayRequest', 'receiptProgress')},
+    }, 33),
+}
 ENDPOINT_TIMING_SCHEMA = {
     'status': frozenset({'observed', 'unavailable'}),
     'meaning': frozenset({'latest_stored_fact_not_controller_decision'}),
     'clients': ('list', {
         'clientOrdinal': ('integer', 0, 2),
         'recoveryChecks': RECOVERY_CHECK_SCHEMA,
+        'playPolicy': PLAY_POLICY_SCHEMA,
         **{name: ('number', 0, 60000) for name in ('runtimeAdaptiveDelayMs', 'configuredMinDelayMs',
             'configuredMaxDelayMs', 'observedProjectionDelayMs')},
         **{name: ('number', -86400000, 86400000) for name in ('lastObservedControllerDriftMs',

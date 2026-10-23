@@ -12,17 +12,18 @@ import tempfile
 from unittest.mock import patch
 
 SOURCE_SHA = 'f6251a2a0e6441f174d05b488bc0fb1b41d52e39'
-AUX_SHA = '895af76dbd648acc73497bb41fb32f36b70c88d7'
-AUX_REF = 'refs/heads/test/recovery-check-f625-observation-20261023'
-AUX_TREE = '9fd50b7e36475199a502fc573ab9f80eaabb7ded'
+AUX_SHA = 'e19bf7da3bdee9bb202728a30ad7db38c883d29e'
+AUX_REF = 'refs/heads/test/immediate-play-policy-observation-20261023'
+AUX_TREE = 'cdc936920eface1f30d8718da6e8a6d1e179f4c2'
 PREFIX = 'tool/native_playback_mac/recovery_check_observation/'
 STATE = '.native_recovery_check_observation'
-FILES = {'transform.py': ('76cb68b248fc746bf2052e88b78d63b54fde132ce5fc0025d2997513d89e4ce3', 24417, 'f0f01d738d32f68822664b5286cc2575743ed140'), 'schema.json': ('530496ee1d92ce2238ec7fc8769633bcb41aae36c4008920d63c7b026a0bf808', 6071, 'b1f01ab4e151e2d2228385fab69ac39259e576f7'), 'README.md': ('e1ba12ec04e979bd981670aa194b827bae927773fd20aaedebb3fd35f790bb44', 7644, '0045f8b44d6fea482aeda0f1c020f80600f76c00'), 'test_transform.py': ('04429382eb0bfcf1a923f466334bd9d0055bb4284ee67899303cbb2c9d0db55f', 4575, '910ea43a4c1ef5b865ffb954eb068176ee609830')}
+FILES = {'transform.py': ('7ed83093945322da1a7aff141a64befea9df357dd03bf6b9cbe25dbe2d40a21d', 41596, 'de66910830b81fa3903ade4d996f684f75b3c71f'), 'schema.json': ('530496ee1d92ce2238ec7fc8769633bcb41aae36c4008920d63c7b026a0bf808', 6071, 'b1f01ab4e151e2d2228385fab69ac39259e576f7'), 'play_policy_schema.json': ('9104b050fcaef7db7111acc4d42fe845d11ff5fb8de9a30d70f992046985adc6', 5920, '0c0aa4375af980bcc22534daf338d703ad7e1fd3'), 'README.md': ('16e3c71c5f5fd4f169e4f477a5ec06959154237357d5ee5c65a905d57452e627', 13991, 'a5913216c85dd8e2902153d2dab5e53fd3e9ec5c'), 'test_transform.py': ('a04b10d9e4bfc6abf58eea454b6fefc521e6fa9a98cd3f2f88a745647d681300', 8605, 'ef911e1eb048ea4a3b509b8f360a5595bf09c9be')}
 CONTROLLER = 'lib/services/emo_follow_sync_controller.dart'
+SERVICE = 'lib/services/audio_player_service.dart'
 MAIN = 'tool/native_playback_mac/main.dart'
-BASE = {CONTROLLER: '113320f040275374526ba15defc37f85d8e2e149ebbf31e93fdb37109950f1ef', MAIN: '7e4b804a9eaeeec929768ddd9ce9a5479639f73f443a8f3e6693916e59565833'}
-AFTER = {CONTROLLER: 'cf069243315944b661cdb99e2cb10a885a7f1e667773c8cf4e4d17728136258c', MAIN: '669a5e8c8358100c5ff29ac38b20e2424cf1596fc0c109074e9cd5175ae25de2'}
-LOGGED_MAIN = 'd32814327facb7cf382db291b10a0ca81915d2dcf9be05f45f395c2e7b6eddf4'
+BASE = {CONTROLLER: '113320f040275374526ba15defc37f85d8e2e149ebbf31e93fdb37109950f1ef', SERVICE: 'beffc2d192c0e6948c7d726f819513e47bfeb5fb6924698d30453e80d0c5a252', MAIN: '7e4b804a9eaeeec929768ddd9ce9a5479639f73f443a8f3e6693916e59565833'}
+AFTER = {CONTROLLER: 'cf069243315944b661cdb99e2cb10a885a7f1e667773c8cf4e4d17728136258c', SERVICE: 'f362779d03ad01cee0cd9b5a1edfd04bf5ba356b33751553f360475976603ea5', MAIN: 'a10b9bc32b65cb62319d6fc7a35a11e61977bda7adc2e5db60ae7fa774708717'}
+LOGGED_MAIN = '4e6ecf2e4b8471f3186f0763e32ed053372ed1a7066e3496c33dbbb7df927ea1'
 LOG_OLD = b'  await Logger.setLogLevel(LogLevel.warning);\n'
 LOG_NEW = b'  await Logger.setLogLevel(LogLevel.debug);\n'
 
@@ -69,9 +70,10 @@ def fingerprints():
     def row(path):
         return dict(baseSha256=BASE[path], overlaySha256=AFTER[path],
                     inverseSha256=BASE[path], inverseByteIdentical=True)
-    return dict(schemaVersion=1, controller=row(CONTROLLER), labMain=row(MAIN),
-                controllerOperationCount=32, labMainOperationCount=1,
+    return dict(schemaVersion=2, controller=row(CONTROLLER), audioService=row(SERVICE), labMain=row(MAIN),
+                controllerOperationCount=32, serviceOperationCount=15, labMainOperationCount=2,
                 recordLimit=128, truncationRecordLimit=1, droppedCountLimit=1000000,
+                policyRecordLimit=32, policyTruncationRecordLimit=1,
                 nativeRunPerformed=False, productSourceModified=False)
 
 
@@ -156,12 +158,15 @@ def verify(source, *, logged=True):
     root = package(source)
     exact(strict_json(owned(root, 'applied.json').read_bytes()), fingerprints())
     controller = owned(source, CONTROLLER).read_bytes()
+    service = owned(source, SERVICE).read_bytes()
     main = normalized_main(owned(source, MAIN).read_bytes(), logged)
-    require(digest(controller) == AFTER[CONTROLLER])
+    require(digest(controller) == AFTER[CONTROLLER] and digest(service) == AFTER[SERVICE])
     with tempfile.TemporaryDirectory(prefix='recovery-inverse-', dir=root.parent) as temp:
         scratch = Path(temp)
-        (scratch / 'controller').write_bytes(controller); (scratch / 'main').write_bytes(main)
-        return invoke(root, ['check-inverse', '--input', scratch / 'controller', '--main-input', scratch / 'main'], observation_env())
+        (scratch / 'controller').write_bytes(controller); (scratch / 'service').write_bytes(service)
+        (scratch / 'main').write_bytes(main)
+        return invoke(root, ['check-inverse', '--input', scratch / 'controller',
+            '--service-input', scratch / 'service', '--main-input', scratch / 'main'], observation_env())
 
 
 def apply_after_pristine(source, sha, env, original_fingerprint):
@@ -172,10 +177,12 @@ def apply_after_pristine(source, sha, env, original_fingerprint):
     with tempfile.TemporaryDirectory(prefix='recovery-apply-', dir=root.parent) as temp:
         scratch = Path(temp)
         report = invoke(root, ['apply', '--input', owned(source, CONTROLLER), '--output', scratch / 'controller',
+                              '--service-input', owned(source, SERVICE), '--service-output', scratch / 'service',
                               '--main-input', owned(source, MAIN), '--main-output', scratch / 'main',
                               '--manifest', scratch / 'manifest.json'], env)
         exact(strict_json(owned(scratch, 'manifest.json').read_bytes()), report)
-        updates = {CONTROLLER: owned(scratch, 'controller').read_bytes(), MAIN: owned(scratch, 'main').read_bytes()}
+        updates = {CONTROLLER: owned(scratch, 'controller').read_bytes(), SERVICE: owned(scratch, 'service').read_bytes(),
+                   MAIN: owned(scratch, 'main').read_bytes()}
         require(all(digest(data) == AFTER[name] for name, data in updates.items()))
         # Prove the private transformer touched no checkout bytes before admission.
         require(original_fingerprint(source, sha, env) == before)

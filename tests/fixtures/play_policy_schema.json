@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Disposable final-play-policy observation envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "status": {
+      "enum": [
+        "recording",
+        "truncated"
+      ]
+    },
+    "recordLimit": {
+      "const": 32
+    },
+    "truncationRecordLimit": {
+      "const": 1
+    },
+    "attemptCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 33
+    },
+    "droppedCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "droppedCountSaturated": {
+      "type": "boolean"
+    },
+    "records": {
+      "type": "array",
+      "maxItems": 33,
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    },
+    "pendingTriggerOrdinal": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 32
+    }
+  },
+  "$defs": {
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "eventOrdinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 33
+        },
+        "triggerOrdinal": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 32
+        },
+        "phase": {
+          "enum": [
+            "policy_begin",
+            "policy_end",
+            "policy_threw",
+            "post_policy_owner_rejected",
+            "post_policy_owner_accepted",
+            "play_submitted",
+            "native_baseline",
+            "native_progress",
+            "superseded_trigger",
+            "superseded_seek",
+            "disposed",
+            "player_recreated",
+            "closed",
+            "truncated"
+          ]
+        },
+        "elapsedUs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "policyOutcome": {
+          "enum": [
+            "local",
+            "remote",
+            "denied",
+            "unknown",
+            null
+          ]
+        },
+        "currentTrigger": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cacheKind": {
+          "enum": [
+            "cached",
+            "network",
+            "unknown",
+            null
+          ]
+        },
+        "vendorSequence": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "serviceOwnerMatches": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "sampleAfterPlayRequest": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "receiptProgress": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "nativeLoadAttribution": {
+          "enum": [
+            "unverified",
+            null
+          ]
+        }
+      },
+      "required": [
+        "eventOrdinal",
+        "triggerOrdinal",
+        "phase",
+        "elapsedUs",
+        "policyOutcome",
+        "currentTrigger",
+        "cacheKind",
+        "vendorSequence",
+        "serviceOwnerMatches",
+        "sampleAfterPlayRequest",
+        "receiptProgress",
+        "nativeLoadAttribution"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "truncated"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "eventOrdinal": {
+                "const": 33
+              },
+              "triggerOrdinal": {
+                "const": null
+              },
+              "phase": {
+                "const": "truncated"
+              },
+              "elapsedUs": {
+                "const": null
+              },
+              "policyOutcome": {
+                "const": null
+              },
+              "currentTrigger": {
+                "const": null
+              },
+              "cacheKind": {
+                "const": null
+              },
+              "vendorSequence": {
+                "const": null
+              },
+              "serviceOwnerMatches": {
+                "const": null
+              },
+              "sampleAfterPlayRequest": {
+                "const": null
+              },
+              "receiptProgress": {
+                "const": null
+              },
+              "nativeLoadAttribution": {
+                "const": null
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "eventOrdinal": {
+                "maximum": 32
+              },
+              "triggerOrdinal": {
+                "type": "integer"
+              },
+              "nativeLoadAttribution": {
+                "const": "unverified"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "attemptCount": {
+            "const": 33
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "truncated"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "status": {
+            "const": "recording"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "droppedCountSaturated": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "droppedCount": {
+            "const": 1000000
+          }
+        }
+      }
+    }
+  ],
+  "required": [
+    "schemaVersion",
+    "status",
+    "recordLimit",
+    "truncationRecordLimit",
+    "attemptCount",
+    "droppedCount",
+    "droppedCountSaturated",
+    "records",
+    "pendingTriggerOrdinal"
+  ]
+}

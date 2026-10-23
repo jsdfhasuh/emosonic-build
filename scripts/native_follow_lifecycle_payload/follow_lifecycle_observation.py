@@ -692,6 +692,100 @@ def _recovery_check_snapshot(value):
         return {'status': 'invalid'}
 
 
+
+PLAY_POLICY_PHASES = ('policy_begin', 'policy_end', 'policy_threw',
+    'post_policy_owner_rejected', 'post_policy_owner_accepted', 'play_submitted',
+    'native_baseline', 'native_progress', 'superseded_trigger', 'superseded_seek',
+    'disposed', 'player_recreated', 'closed', 'truncated')
+PLAY_POLICY_FLAGS = ('currentTrigger', 'serviceOwnerMatches', 'sampleAfterPlayRequest', 'receiptProgress')
+PLAY_POLICY_FIELDS = frozenset(('eventOrdinal', 'triggerOrdinal', 'phase', 'elapsedUs',
+    'policyOutcome', 'currentTrigger', 'cacheKind', 'vendorSequence',
+    'serviceOwnerMatches', 'sampleAfterPlayRequest', 'receiptProgress', 'nativeLoadAttribution'))
+
+
+def _play_policy_record(value):
+    """Validate the complete private schema, then omit only unavailable nulls."""
+    if type(value) is not dict or set(value) != PLAY_POLICY_FIELDS:
+        raise ValueError('Policy observation fields changed')
+    ordinal, phase = value['eventOrdinal'], value['phase']
+    if type(ordinal) is not int or not 1 <= ordinal <= 33 or type(phase) is not str or phase not in PLAY_POLICY_PHASES:
+        raise ValueError('Policy observation ordinal or phase changed')
+    if (ordinal == 33) != (phase == 'truncated'):
+        raise ValueError('Policy observation truncation changed')
+    if phase == 'truncated':
+        if any(value[key] is not None for key in PLAY_POLICY_FIELDS - {'eventOrdinal', 'phase'}):
+            raise ValueError('Policy observation marker changed')
+    else:
+        if type(value['triggerOrdinal']) is not int or not 1 <= value['triggerOrdinal'] <= 32:
+            raise ValueError('Policy observation trigger changed')
+        if type(value['nativeLoadAttribution']) is not str or value['nativeLoadAttribution'] != 'unverified':
+            raise ValueError('Policy observation attribution changed')
+    for key in ('elapsedUs', 'vendorSequence'):
+        if value[key] is not None and (type(value[key]) is not int or not 0 <= value[key] <= 9007199254740991):
+            raise ValueError('Policy observation integer changed')
+    for key in PLAY_POLICY_FLAGS:
+        if value[key] is not None and type(value[key]) is not bool:
+            raise ValueError('Policy observation flag changed')
+    for key, allowed in (('policyOutcome', ('local', 'remote', 'denied', 'unknown')),
+                         ('cacheKind', ('cached', 'network', 'unknown'))):
+        if value[key] is not None and (type(value[key]) is not str or value[key] not in allowed):
+            raise ValueError('Policy observation enum changed')
+    return {key: item for key, item in value.items() if item is not None}
+
+
+def _play_policy_snapshot(value):
+    """Reuse a state endpoint, without I/O or a clock read.
+
+    Complete covers attempts through this snapshot, not an entire playback
+    episode. Stopwatch offsets describe in-process observations, not native
+    start latency. Vendor receipt sequences are not native observer ordinals;
+    neither the native load nor a cross-clock origin is attributed here.
+    """
+    if value is None: return {'status': 'unavailable'}
+    try:
+        keys = {'schemaVersion', 'status', 'recordLimit', 'truncationRecordLimit',
+            'attemptCount', 'droppedCount', 'droppedCountSaturated', 'records', 'pendingTriggerOrdinal'}
+        if type(value) is not dict or set(value) != keys:
+            raise ValueError('Policy snapshot fields changed')
+        for key, expected in (('schemaVersion', 1), ('recordLimit', 32), ('truncationRecordLimit', 1)):
+            if type(value[key]) is not int or value[key] != expected:
+                raise ValueError('Policy snapshot version or bound changed')
+        for key, maximum in (('attemptCount', 33), ('droppedCount', 1000000)):
+            if type(value[key]) is not int or not 0 <= value[key] <= maximum:
+                raise ValueError('Policy snapshot count changed')
+        pending = value['pendingTriggerOrdinal']
+        if pending is not None and (type(pending) is not int or not 1 <= pending <= 32):
+            raise ValueError('Policy snapshot pending trigger changed')
+        if type(value['status']) is not str or value['status'] not in ('recording', 'truncated') or type(value['droppedCountSaturated']) is not bool:
+            raise ValueError('Policy snapshot status changed')
+        if (value['attemptCount'] == 33) != (value['status'] == 'truncated'):
+            raise ValueError('Policy snapshot truncation changed')
+        if value['droppedCountSaturated'] and value['droppedCount'] != 1000000:
+            raise ValueError('Policy snapshot saturation changed')
+        if type(value['records']) is not list or len(value['records']) > 33:
+            raise ValueError('Policy snapshot record bound changed')
+        records = [_play_policy_record(row) for row in value['records']]
+        ordinals = [row['eventOrdinal'] for row in records]
+        if ordinals != sorted(set(ordinals)) or any(n > value['attemptCount'] for n in ordinals):
+            raise ValueError('Policy snapshot ordinal order changed')
+        complete = (value['status'] == 'recording' and value['droppedCount'] == 0
+            and value['droppedCountSaturated'] is False
+            and ordinals == list(range(1, value['attemptCount'] + 1)))
+        result = {'status': 'observed', 'coverage': 'complete' if complete else 'incomplete',
+            'snapshotBasis': 'existing_state_endpoint_not_alignment_sample',
+            'timeBasis': 'process_local_stopwatch_not_native_clock',
+            'receiptBasis': 'accepted_service_receipt_not_native_observer_ordinal',
+            'measurementMeaning': 'in_process_observation_not_native_start_latency',
+            'nativeLoadAttribution': 'unverified', 'nullFields': 'omitted_unavailable',
+            'producerStatus': value['status'], **{key: value[key] for key in (
+                'schemaVersion', 'recordLimit', 'truncationRecordLimit', 'attemptCount',
+                'droppedCount', 'droppedCountSaturated')}, 'records': records}
+        if pending is not None: result['pendingTriggerOrdinal'] = pending
+        return result
+    except (ValueError, TypeError, OverflowError, RecursionError):
+        return {'status': 'invalid'}
+
+
 def _endpoint_timing(states):
     if type(states) is not list or not 1 <= len(states) <= 3:
         return {'status': 'unavailable'}
@@ -709,6 +803,8 @@ def _endpoint_timing(states):
         row = {'clientOrdinal': ordinal}
         if 'followRecoveryCheckDiagnostics' in state:
             row['recoveryChecks'] = _recovery_check_snapshot(state['followRecoveryCheckDiagnostics'])
+        if 'playPolicyDiagnostics' in state:
+            row['playPolicy'] = _play_policy_snapshot(state['playPolicyDiagnostics'])
         raw = state.get('followTimingDiagnostics')
         if type(raw) is dict:
             for name, low, high in fields:

@@ -22,7 +22,7 @@ class RecoveryAuxiliaryTests(unittest.TestCase):
     def fixture(self, fetched=True):
         with tempfile.TemporaryDirectory() as temp:
             source = Path(temp) / 'source'; source.mkdir()
-            originals = {c.CONTROLLER: b'synthetic controller\n', c.MAIN: c.LOG_OLD + b'synthetic main\n'}
+            originals = {c.CONTROLLER: b'synthetic controller\n', c.SERVICE: b'synthetic service\n', c.MAIN: c.LOG_OLD + b'synthetic main\n'}
             updates = {name: value + b'synthetic observation\n' for name, value in originals.items()}
             payloads = {name: ('synthetic ' + name + '\n').encode() for name in c.FILES}
             pins = {name: (c.digest(data), len(data), blob(data)) for name, data in payloads.items()}
@@ -44,24 +44,50 @@ class RecoveryAuxiliaryTests(unittest.TestCase):
             flags=dict(zip(args[1::2],args[2::2]))
             if args[0]=='apply':
                 Path(flags['--output']).write_bytes(updates[c.CONTROLLER])
+                Path(flags['--service-output']).write_bytes(updates[c.SERVICE])
                 Path(flags['--main-output']).write_bytes(updates[c.MAIN])
                 Path(flags['--manifest']).write_text(json.dumps(c.fingerprints()))
             else:
                 self.assertEqual(Path(flags['--input']).read_bytes(),updates[c.CONTROLLER])
+                self.assertEqual(Path(flags['--service-input']).read_bytes(),updates[c.SERVICE])
                 self.assertEqual(Path(flags['--main-input']).read_bytes(),updates[c.MAIN])
             return c.fingerprints()
         return invoke
 
     def test_exact_fixed_auxiliary_contract(self):
-        self.assertEqual(c.AUX_SHA,'895af76dbd648acc73497bb41fb32f36b70c88d7')
-        self.assertEqual(c.AUX_TREE,'9fd50b7e36475199a502fc573ab9f80eaabb7ded')
+        self.assertEqual(c.AUX_SHA,'e19bf7da3bdee9bb202728a30ad7db38c883d29e')
+        self.assertEqual(c.AUX_TREE,'cdc936920eface1f30d8718da6e8a6d1e179f4c2')
         self.assertEqual(c.SOURCE_SHA,wrapper.SOURCE_SHA)
-        self.assertEqual(set(c.FILES),{'transform.py','schema.json','README.md','test_transform.py'})
+        self.assertEqual(set(c.FILES),{'transform.py','schema.json','play_policy_schema.json','README.md','test_transform.py'})
         self.assertEqual(c.FILES['schema.json'][0], '530496ee1d92ce2238ec7fc8769633bcb41aae36c4008920d63c7b026a0bf808')
         self.assertEqual(wrapper.REQUEST['auxiliary_observer_sha'],c.AUX_SHA)
         self.assertEqual(wrapper.REQUEST['auxiliary_observer_ref'],c.AUX_REF)
-        self.assertEqual(wrapper.REQUEST['attempt'],98)
+        self.assertEqual(wrapper.REQUEST['attempt'],99)
         self.assertEqual(wrapper.INGRESS_RUN,39966140487)
+
+    def test_exact_three_file_manifest_and_policy_bounds(self):
+        value=c.fingerprints()
+        self.assertEqual(set(c.BASE),{c.CONTROLLER,c.SERVICE,c.MAIN})
+        self.assertEqual(set(c.AFTER),set(c.BASE))
+        self.assertEqual(value['schemaVersion'],2)
+        self.assertEqual((value['controllerOperationCount'],value['serviceOperationCount'],value['labMainOperationCount']),(32,15,2))
+        self.assertEqual((value['recordLimit'],value['policyRecordLimit'],value['policyTruncationRecordLimit']),(128,32,1))
+        contract=Path(__file__).resolve().parent/'fixtures/play_policy_schema.json'
+        self.assertEqual(c.digest(contract.read_bytes()),c.FILES['play_policy_schema.json'][0])
+        for key,path in (('controller',c.CONTROLLER),('audioService',c.SERVICE),('labMain',c.MAIN)):
+            self.assertEqual(value[key],dict(baseSha256=c.BASE[path],overlaySha256=c.AFTER[path],
+                inverseSha256=c.BASE[path],inverseByteIdentical=True))
+
+    def test_each_composed_source_tamper_is_rejected_without_mutation(self):
+        for relative in (c.CONTROLLER,c.SERVICE,c.MAIN):
+            with self.subTest(source=relative),self.fixture() as (source,root,originals,updates,_),patch.object(c,'invoke',side_effect=self.invoker(updates)):
+                c.apply_after_pristine(source,c.SOURCE_SHA,{},lambda *a:('synthetic',set(originals)))
+                main=source/c.MAIN;main.write_bytes(updates[c.MAIN].replace(c.LOG_OLD,c.LOG_NEW,1))
+                c.verify(source)
+                target=source/relative;target.write_bytes(target.read_bytes()+b'changed')
+                before={name:(source/name).read_bytes() for name in originals}
+                with self.assertRaises(ValueError):c.verify(source)
+                self.assertEqual(before,{name:(source/name).read_bytes() for name in originals})
 
     def test_package_requires_exact_hash_size_blob_and_no_extra_files(self):
         for change in ('content','extra','missing','manifest','symlink'):
@@ -107,7 +133,7 @@ class RecoveryAuxiliaryTests(unittest.TestCase):
     def test_fetch_exact_parent_tree_allowlist_and_subprocess_only_credentials(self):
         with self.fixture(False) as (source,root,_,__,payloads),patch.dict(c.os.environ,{'SOURCE_READ_TOKEN':'SYNTHETIC_TOKEN'},clear=True):
             p,seen=self.fetch_api(source,payloads);c.fetch(source,p);c.package(source)
-            self.assertEqual(len(list(root.iterdir())),5)
+            self.assertEqual(len(list(root.iterdir())),6)
             for args,env in seen:
                 self.assertNotIn('SYNTHETIC_TOKEN',' '.join(args));self.assertNotIn('SOURCE_READ_TOKEN',env)
                 self.assertEqual('GIT_CONFIG_VALUE_0' in env,args[1] in ('ls-remote','fetch'))

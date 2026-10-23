@@ -155,8 +155,8 @@ class IngressValidationGateTests(unittest.TestCase):
     def test_exact_directional_successor_pins_and_both_matrix_stages(self):
         self.assertEqual(c.SOURCE_SHA,'f6251a2a0e6441f174d05b488bc0fb1b41d52e39')
         self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-initial-apply-flow-lint-20261023')
-        self.assertEqual(c.PARENT,'40b9833dd9e99f62880175362e1b94a3aa178e9e')
-        self.assertEqual(c.REQUEST['attempt'],98)
+        self.assertEqual(c.PARENT,'cd58afa39280c0fce7087799c18de8cceb2154ab')
+        self.assertEqual(c.REQUEST['attempt'],99)
         self.assertEqual(c.INGRESS_RUN,39966140487)
         self.assertEqual(c.INGRESS_HEAD,'d03a90db5341ceed03eb2d200eae0b270804f0fc')
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)
