@@ -616,6 +616,82 @@ def finish_follow_lifecycle(matrix):
     return result
 
 
+RECOVERY_CHECK_REASONS = ('recovery_started', 'receipt_accepted', 'wake_deferred', 'wake_queued_ignored', 'wake_busy', 'wake_dispatch', 'check_enter', 'inactive_or_cancelled', 'owner_or_service_changed', 'source_owner_changed', 'deadline_reached', 'exhausted_or_ticking', 'source_not_current', 'seek_pending', 'missing_nominal_ack', 'anchor_snapshot', 'baseline_stale', 'baseline_adopted', 'missing_or_nonprogressing_anchor', 'anchor_age_rejected', 'nominal_floor_rejected', 'nominal_progress_rejected', 'effective_anchor_too_early', 'nonfinite_drift', 'eligible_progress', 'before_rate_write', 'check_finally', 'seek_future_finally', 'truncated')
+RECOVERY_CHECK_FLAGS = ('seekPending', 'ticking', 'supported', 'ownedRatePresent', 'receiptPending', 'receiptScheduled', 'cancelled', 'exhausted')
+RECOVERY_CHECK_SEQUENCES = ('cachedSequence', 'baselineSequence', 'lastObservedSequence', 'nominalSequenceFloor')
+RECOVERY_CHECK_FIELDS = frozenset(('v', 'eventOrdinal', 'recoveryOrdinal', 'reason', 'cachedSequence', 'baselineSequence', 'lastObservedSequence', 'nominalSequenceFloor', 'seekPending', 'ticking', 'supported', 'ownedRatePresent', 'receiptPending', 'receiptScheduled', 'cancelled', 'exhausted', 'ageMs', 'floorPositionMs'))
+
+
+def _recovery_check_record(value):
+    """Validate the frozen uniform record before omitting unavailable nulls."""
+    if type(value) is not dict or set(value) != RECOVERY_CHECK_FIELDS:
+        raise ValueError('Checkpoint fields changed')
+    if type(value['v']) is not int or value['v'] != 1:
+        raise ValueError('Checkpoint version changed')
+    if type(value['eventOrdinal']) is not int or not 1 <= value['eventOrdinal'] <= 129:
+        raise ValueError('Checkpoint ordinal changed')
+    if type(value['reason']) is not str or value['reason'] not in RECOVERY_CHECK_REASONS:
+        raise ValueError('Checkpoint reason changed')
+    if (value['eventOrdinal'] == 129) != (value['reason'] == 'truncated'):
+        raise ValueError('Checkpoint truncation changed')
+    for key in RECOVERY_CHECK_FLAGS:
+        if type(value[key]) is not bool: raise ValueError('Checkpoint flag changed')
+    bounds = {'recoveryOrdinal': (0, 129), 'floorPositionMs': (-86400000, 86400000),
+              **{key: (-9007199254740991, 9007199254740991) for key in RECOVERY_CHECK_SEQUENCES}}
+    for key, (low, high) in bounds.items():
+        item = value[key]
+        if item is not None and (type(item) is not int or not low <= item <= high):
+            raise ValueError('Checkpoint integer changed')
+    age = value['ageMs']
+    if age is not None and (type(age) not in (int, float) or not math.isfinite(age) or not -86400000 <= age <= 86400000):
+        raise ValueError('Checkpoint age changed')
+    return {key: item for key, item in value.items() if item is not None}
+
+
+def _recovery_check_snapshot(value):
+    """Project a retained endpoint field without reading a client or clock.
+
+    Complete coverage means all observer attempts through this snapshot, not a
+    completed recovery episode or a successful playback outcome.
+    """
+    if value is None: return {'status': 'unavailable'}
+    try:
+        keys = {'schemaVersion', 'status', 'recordLimit', 'truncationRecordLimit',
+            'attemptCount', 'droppedCount', 'droppedCountSaturated', 'records'}
+        if type(value) is not dict or set(value) != keys:
+            raise ValueError('Snapshot fields changed')
+        for key, expected in (('schemaVersion', 1), ('recordLimit', 128), ('truncationRecordLimit', 1)):
+            if type(value[key]) is not int or value[key] != expected:
+                raise ValueError('Snapshot version or bound changed')
+        for key, maximum in (('attemptCount', 129), ('droppedCount', 1000000)):
+            if type(value[key]) is not int or not 0 <= value[key] <= maximum:
+                raise ValueError('Snapshot counter changed')
+        if type(value['droppedCountSaturated']) is not bool or value['status'] not in ('recording', 'truncated'):
+            raise ValueError('Snapshot status changed')
+        if (value['attemptCount'] == 129) != (value['status'] == 'truncated'):
+            raise ValueError('Snapshot truncation status changed')
+        if value['droppedCountSaturated'] and value['droppedCount'] != 1000000:
+            raise ValueError('Snapshot saturation changed')
+        if type(value['records']) is not list or len(value['records']) > 129:
+            raise ValueError('Snapshot record bound changed')
+        records = [_recovery_check_record(row) for row in value['records']]
+        ordinals = [row['eventOrdinal'] for row in records]
+        if ordinals != sorted(set(ordinals)) or any(n > value['attemptCount'] for n in ordinals):
+            raise ValueError('Snapshot ordinal order changed')
+        complete = (value['status'] == 'recording' and value['droppedCount'] == 0
+            and value['droppedCountSaturated'] is False and value['attemptCount'] <= 128
+            and ordinals == list(range(1, value['attemptCount'] + 1)))
+        return {'status': 'observed', 'coverage': 'complete' if complete else 'incomplete',
+            'snapshotBasis': 'existing_state_endpoint_not_alignment_sample',
+            'sequenceBasis': 'vendor_position_receipt_not_native_observer_ordinal',
+            'timeBasis': 'existing_control_flow_values_no_new_clock',
+            'nullFields': 'omitted_unavailable', 'producerStatus': value['status'],
+            **{key: value[key] for key in ('schemaVersion', 'recordLimit', 'truncationRecordLimit',
+                'attemptCount', 'droppedCount', 'droppedCountSaturated')}, 'records': records}
+    except (ValueError, TypeError, OverflowError, RecursionError):
+        return {'status': 'invalid'}
+
+
 def _endpoint_timing(states):
     if type(states) is not list or not 1 <= len(states) <= 3:
         return {'status': 'unavailable'}
@@ -631,6 +707,8 @@ def _endpoint_timing(states):
     for ordinal, state in enumerate(states):
         if type(state) is not dict: continue
         row = {'clientOrdinal': ordinal}
+        if 'followRecoveryCheckDiagnostics' in state:
+            row['recoveryChecks'] = _recovery_check_snapshot(state['followRecoveryCheckDiagnostics'])
         raw = state.get('followTimingDiagnostics')
         if type(raw) is dict:
             for name, low, high in fields:

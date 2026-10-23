@@ -31,7 +31,7 @@ class TimingWrapperTests(unittest.TestCase):
 
     def test_prepare_order(self):
         calls=[]
-        with patch.object(sys,'argv',['helper','native','prepare']),patch.object(c.base,'main',side_effect=lambda:calls.append('base') or 0),patch.object(c.lifecycle,'apply',side_effect=lambda p:calls.append('lifecycle')),patch.object(c.timing,'apply',side_effect=lambda p:calls.append('timing')):
+        with patch.object(sys,'argv',['helper','native','prepare']),patch.object(c.recovery_observation,'verify'),patch.object(c.base,'main',side_effect=lambda:calls.append('base') or 0),patch.object(c.lifecycle,'apply',side_effect=lambda p:calls.append('lifecycle')),patch.object(c.timing,'apply',side_effect=lambda p:calls.append('timing')):
             self.assertEqual(c.main(),0)
         self.assertEqual(calls,['base','lifecycle','timing'])
 
@@ -39,11 +39,11 @@ class TimingWrapperTests(unittest.TestCase):
         original_schema=dict(c.base.native.RATE_SCHEMA)
         def run():
             c.base.readiness.verify_prepared(Path('source'))
-            self.assertEqual(c.base.ATTRIBUTION_EXTRA_ARGS,('--lab-debug-observation','--lab-timing-observation'))
+            self.assertEqual(c.base.ATTRIBUTION_EXTRA_ARGS,('--lab-debug-observation','--lab-timing-observation','--lab-recovery-observation'))
             self.assertEqual(c.base.OBSERVED_HARNESS_SHA256,c.timing.AFTER[c.timing.HARNESS])
             self.assertIs(c.base.native.RATE_SCHEMA['nativeTiming']['follower'],c.timing.SCHEMA)
             return 0
-        with patch.object(sys,'argv',['helper','native','unit']),patch.object(c.base,'main',side_effect=run),patch.object(c.lifecycle,'verify_prepared') as lifecycle,patch.object(c.timing,'verify_prepared') as timing,patch.object(c.base.readiness,'verify_prepared') as readiness:
+        with patch.object(sys,'argv',['helper','native','unit']),patch.object(c.recovery_observation,'verify'),patch.object(c.base,'main',side_effect=run),patch.object(c.lifecycle,'verify_prepared') as lifecycle,patch.object(c.timing,'verify_prepared') as timing,patch.object(c.base.readiness,'verify_prepared') as readiness:
             self.assertEqual(c.main(),0)
             self.assertTrue(lifecycle.call_args.kwargs['timing_observation'])
             self.assertTrue(timing.call_args.kwargs['require_harness'])
@@ -52,7 +52,7 @@ class TimingWrapperTests(unittest.TestCase):
 
     def test_compile_verification_after_success_only(self):
         for result in (0,1):
-            with self.subTest(result=result),patch.object(sys,'argv',['helper','native','build']),patch.object(c.base,'main',return_value=result),patch.object(c.lifecycle,'verify_prepared'),patch.object(c.timing,'verify_prepared'),patch.object(c.timing,'verify_compiled') as compiled:
+            with self.subTest(result=result),patch.object(sys,'argv',['helper','native','build']),patch.object(c.recovery_observation,'verify'),patch.object(c.base,'main',return_value=result),patch.object(c.lifecycle,'verify_prepared'),patch.object(c.timing,'verify_prepared'),patch.object(c.timing,'verify_compiled') as compiled:
                 self.assertEqual(c.main(),result)
                 self.assertEqual(compiled.call_count,1 if result==0 else 0)
 
@@ -155,8 +155,8 @@ class IngressValidationGateTests(unittest.TestCase):
     def test_exact_directional_successor_pins_and_both_matrix_stages(self):
         self.assertEqual(c.SOURCE_SHA,'c7301a107fd1474ec0d22bb609426a435bc52584')
         self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-fractional-precision-20261023')
-        self.assertEqual(c.PARENT,'40f189553c4ded3d7ab7bb7170f868478f041c41')
-        self.assertEqual(c.REQUEST['attempt'],88)
+        self.assertEqual(c.PARENT,'3a4c5de3d385316402868f3c25e01d75c47dead1')
+        self.assertEqual(c.REQUEST['attempt'],89)
         self.assertEqual(c.INGRESS_RUN,39930329614)
         self.assertEqual(c.INGRESS_HEAD,'c0b5d5fea7662af646a145c2699eb7ea7d99a2cc')
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)

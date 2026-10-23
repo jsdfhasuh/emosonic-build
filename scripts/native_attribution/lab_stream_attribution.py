@@ -7,7 +7,7 @@ Caller owns source checkout admission, complete source validation and cleanup.
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import hashlib
 import inspect
 import importlib.util
@@ -19,6 +19,7 @@ import subprocess
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
+RECOVERY_HELPER = None
 API = 'lib/providers/api_client_providers.dart'
 HELPER = 'lib/providers/native_lab_scoped_api_client.dart'
 TEST = 'test/remediation/native_lab_scoped_attribution_test.dart'
@@ -33,7 +34,7 @@ BASELINE_HASHES = {
 }
 LAB_MAIN = 'tool/native_playback_mac/main.dart'
 LAB_DEBUG_MAIN_SHA256 = 'f8781ae5077924daebc0908500f79e57ee9a80af8e9d25d474468651563d2af0'
-TIMING_OBSERVED_LAB_SHA256 = '44da20c4a134df49d857b800185a287eb8764e4a6563553ff9f89fc0acda59bc'
+TIMING_OBSERVED_LAB_SHA256 = 'b15bf0d7a6e7e611fd142eab6865355cb7408cbd7aa4d03956fb97f60945b768'
 TIMING_BASELINE_LAB_SHA256 = '55ba43b3d08fe525677c544f2dc583cb5aef05699b23ee63a98f01a18aacbb0f'
 IMPORT = "import 'native_lab_scoped_api_client.dart';\n"
 ORIGINAL = '''SubsonicApiClient createAccountApiClient(Ref ref, AccountSession session) {
@@ -79,6 +80,27 @@ def checked_new_path(repo, relative):
 
 
 @contextmanager
+def recovery_observation(repo, enabled=False):
+    """Opt-in exact private inverse; no private transformation content is public."""
+    global RECOVERY_HELPER
+    if type(enabled) is not bool:
+        raise ValueError('Recovery observation mode refused')
+    old = RECOVERY_HELPER
+    try:
+        if enabled:
+            path = ROOT.parent / 'native_recovery_check_observation.py'
+            if not path.is_file() or any(p.is_symlink() for p in (path, *path.parents)):
+                raise ValueError('Recovery observation verifier path refused')
+            spec = importlib.util.spec_from_file_location('owned_recovery_observation', path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            RECOVERY_HELPER = module
+        yield
+    finally:
+        RECOVERY_HELPER = old
+
+
+@contextmanager
 def lab_debug_observation(repo, enabled=False):
     """Explicit opt-in admits exactly one reviewed disposable lab log setting.
 
@@ -88,7 +110,12 @@ def lab_debug_observation(repo, enabled=False):
     if type(enabled) is not bool:
         raise ValueError('Lab debug observation mode refused')
     original_hash = BASELINE_HASHES[LAB_MAIN]
-    if enabled:
+    if RECOVERY_HELPER is not None:
+        if not enabled:
+            raise ValueError('Recovery observation requires the exact existing debug layer')
+        RECOVERY_HELPER.verify(repo, logged=True)
+        BASELINE_HASHES[LAB_MAIN] = RECOVERY_HELPER.LOGGED_MAIN
+    elif enabled:
         data = checked_file(repo, LAB_MAIN).read_bytes()
         old = b'  await Logger.setLogLevel(LogLevel.warning);\n'
         new = b'  await Logger.setLogLevel(LogLevel.debug);\n'
@@ -431,7 +458,8 @@ def _verify_timing_observation(repo, *, enabled=False, observed=None):
     content = checked_file(repo, LAB).read_bytes() if observed is None else observed
     if digest(content) != TIMING_OBSERVED_LAB_SHA256 or digest(timing.restore_harness(content)) != TIMING_BASELINE_LAB_SHA256:
         raise ValueError('Attribution timing inverse changed')
-    lifecycle.verify_prepared(repo, require_harness=False)
+    with RECOVERY_HELPER.lifecycle_pins(lifecycle) if RECOVERY_HELPER is not None else nullcontext():
+        lifecycle.verify_prepared(repo, require_harness=False)
 
 
 def apply_native_handoff(repo, *, expected_lab_before_sha256, lab_timing_observation=False):
@@ -487,11 +515,12 @@ def main():
     parser.add_argument('--expected-lab-before-sha256')
     parser.add_argument('--lab-debug-observation', action='store_true')
     parser.add_argument('--lab-timing-observation', action='store_true')
+    parser.add_argument('--lab-recovery-observation', action='store_true')
     args = parser.parse_args()
     if args.stage != 'proof' and (args.expected_lab_before_sha256 is None or
             re.fullmatch(r'[0-9a-f]{64}', args.expected_lab_before_sha256) is None):
         parser.error('native and verify require an independent expected lab before hash')
-    with lab_debug_observation(args.repo, enabled=args.lab_debug_observation):
+    with recovery_observation(args.repo, enabled=args.lab_recovery_observation), lab_debug_observation(args.repo, enabled=args.lab_debug_observation):
         if args.stage == 'proof':
             prove_and_patch(args.repo, lab_timing_observation=args.lab_timing_observation)
         elif args.stage == 'native':

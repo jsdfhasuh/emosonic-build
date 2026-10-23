@@ -81,11 +81,34 @@ CORRECTION_SEQUENCE_SCHEMA = {
         **{name: ('number', .5, 2) for name in ('rate', 'baseSpeed', 'syncSpeed')},
     }, 128),
 }
+RECOVERY_CHECK_REASONS = ('recovery_started', 'receipt_accepted', 'wake_deferred', 'wake_queued_ignored', 'wake_busy', 'wake_dispatch', 'check_enter', 'inactive_or_cancelled', 'owner_or_service_changed', 'source_owner_changed', 'deadline_reached', 'exhausted_or_ticking', 'source_not_current', 'seek_pending', 'missing_nominal_ack', 'anchor_snapshot', 'baseline_stale', 'baseline_adopted', 'missing_or_nonprogressing_anchor', 'anchor_age_rejected', 'nominal_floor_rejected', 'nominal_progress_rejected', 'effective_anchor_too_early', 'nonfinite_drift', 'eligible_progress', 'before_rate_write', 'check_finally', 'seek_future_finally', 'truncated')
+RECOVERY_CHECK_SCHEMA = {
+    'status': frozenset({'unavailable', 'invalid', 'observed'}),
+    'coverage': frozenset({'complete', 'incomplete'}),
+    'snapshotBasis': frozenset({'existing_state_endpoint_not_alignment_sample'}),
+    'sequenceBasis': frozenset({'vendor_position_receipt_not_native_observer_ordinal'}),
+    'timeBasis': frozenset({'existing_control_flow_values_no_new_clock'}),
+    'nullFields': frozenset({'omitted_unavailable'}),
+    'producerStatus': frozenset({'recording', 'truncated'}),
+    'schemaVersion': ('integer', 1, 1), 'recordLimit': ('integer', 128, 128),
+    'truncationRecordLimit': ('integer', 1, 1), 'attemptCount': ('integer', 0, 129),
+    'droppedCount': COUNT, 'droppedCountSaturated': bool,
+    'records': ('list', {
+        'v': ('integer', 1, 1), 'eventOrdinal': ('integer', 1, 129),
+        'recoveryOrdinal': ('integer', 0, 129), 'reason': frozenset(RECOVERY_CHECK_REASONS),
+        **{key: ('integer', -9007199254740991, 9007199254740991)
+           for key in ('cachedSequence', 'baselineSequence', 'lastObservedSequence', 'nominalSequenceFloor')},
+        **{key: bool for key in ('seekPending', 'ticking', 'supported', 'ownedRatePresent', 'receiptPending', 'receiptScheduled', 'cancelled', 'exhausted')},
+        'ageMs': ('number', -86400000, 86400000),
+        'floorPositionMs': ('integer', -86400000, 86400000),
+    }, 129),
+}
 ENDPOINT_TIMING_SCHEMA = {
     'status': frozenset({'observed', 'unavailable'}),
     'meaning': frozenset({'latest_stored_fact_not_controller_decision'}),
     'clients': ('list', {
         'clientOrdinal': ('integer', 0, 2),
+        'recoveryChecks': RECOVERY_CHECK_SCHEMA,
         **{name: ('number', 0, 60000) for name in ('runtimeAdaptiveDelayMs', 'configuredMinDelayMs',
             'configuredMaxDelayMs', 'observedProjectionDelayMs')},
         **{name: ('number', -86400000, 86400000) for name in ('lastObservedControllerDriftMs',

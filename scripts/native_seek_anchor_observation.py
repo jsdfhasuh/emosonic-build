@@ -20,7 +20,7 @@ HARNESS = LAB_ROOT + '/run_lab.py'
 COPIED_HELPER = LAB_ROOT + '/native_seek_anchor_observation.py'
 STATE = '.native_timing_observation/manifest.json'
 PAYLOAD_DIRECTORY = 'native_seek_anchor_observation_payload'
-AFTER = {'tool/native_playback_mac/prepare_build.py': 'a7aea3aa0530bcd6a39c2e91788a4712093f02570ab631790f4d36dd550a6593', 'tool/native_playback_mac/run_lab.py': '44da20c4a134df49d857b800185a287eb8764e4a6563553ff9f89fc0acda59bc'}
+AFTER = {'tool/native_playback_mac/prepare_build.py': 'a7aea3aa0530bcd6a39c2e91788a4712093f02570ab631790f4d36dd550a6593', 'tool/native_playback_mac/run_lab.py': 'b15bf0d7a6e7e611fd142eab6865355cb7408cbd7aa4d03956fb97f60945b768'}
 NATIVE_AFTER = {'AudioPlayer.h': '007d2925fa33997665d64c0a4e1dd6a74c0b21d69f746eae722e5de48b070201', 'AudioPlayer.m': '6e09059b4440a82c4f6d0e86beb37c38245c714a1f3a9163612d5218766b77e3'}
 REJECTION_NAMES = ('budget_or_clock', 'not_healthy', 'primary_identity',
                    'no_timebase', 'effective_rate', 'read_clock', 'capture_quality')
@@ -336,11 +336,47 @@ def summarize_state(state, previous=None, elapsed_ms=None, paired_state=None):
         return {'status': 'malformed'}
 
 
+def successful_follow_observation(matrix):
+    """Export existing alignment evidence only after the strict rate window.
+
+    The native tape is the retained last alignment snapshot. The owned log and
+    endpoint snapshot are observed later, after measurement; neither is claimed
+    to be simultaneous with that tape. This does not finalize the observer or
+    read a new client/native state or database snapshot.
+    """
+    measurement = getattr(matrix, 'rate_measurement', None)
+    if type(measurement) is not dict or type(measurement.get('nativeTiming')) is not dict:
+        return {}
+    if set(measurement['nativeTiming']) != {'authority', 'follower'}:
+        return {}
+    try:
+        from follow_lifecycle_observation import read_log_since, _endpoint_timing
+        observer = getattr(matrix, 'follow_lifecycle_observation', None)
+        if observer is None:
+            lifecycle = {'status': 'not_observed'}
+        else:
+            lifecycle = dict(observer.value)
+            lifecycle['ownedLog'] = read_log_since(observer.client, observer.original, observer.cursor)
+            lifecycle['status'] = 'observed'
+        lifecycle['endpointTiming'] = _endpoint_timing(getattr(matrix, 'last', None))
+    except Exception:
+        lifecycle = {'status': 'observation_unavailable'}
+    return {'observationBasis': 'retained_alignment_and_post_measurement_log',
+            'rateMeasurement': measurement, 'followLifecycle': lifecycle}
+
+
+RATE_SUCCESS = """        self.outcome(label, measuredRate=round(measured, 4), nativeRate=last['playbackRate'],
+                     elapsedSeconds=elapsed, nativeSamples=samples)
+"""
+RATE_SUCCESS_OBSERVED = RATE_SUCCESS.replace('nativeSamples=samples)',
+    'nativeSamples=samples, **successful_follow_observation(self))')
+
+
 def patch_harness(original):
     if digest(original) != HARNESS_SHA:
         raise ValueError('Observation harness source pin mismatch')
     change = Transform(original.decode('utf-8'))
-    change.once('import argparse\n', 'import argparse\nfrom native_seek_anchor_observation import summarize_state\n')
+    change.once('import argparse\n', 'import argparse\nfrom native_seek_anchor_observation import summarize_state, successful_follow_observation\n')
     anchor = '''            authority, follower = states[authority_index], states[2]
             assert follow_correction_identity(states, authority_index, context) == correction_identity'''
     addition = '''            self.rate_measurement['nativeTiming'] = {
@@ -349,12 +385,18 @@ def patch_harness(original):
             }
 '''
     change.once(anchor, anchor.replace('            assert ', addition + '            assert ', 1))
+    change.once(RATE_SUCCESS, RATE_SUCCESS_OBSERVED)
     result = change.finish()
-    # Remove only the new import and one new observational assignment. The full
+    # Remove only the exact observation additions, never controls or assertions. The full
     # original AST, including every assertion/control/deadline, must be equal.
     class Projection(ast.NodeTransformer):
         def visit_ImportFrom(self, node):
             return None if node.module == 'native_seek_anchor_observation' else node
+        def visit_Call(self, node):
+            expected = ast.parse('successful_follow_observation(self)').body[0].value
+            node.keywords = [keyword for keyword in node.keywords
+                if not (keyword.arg is None and ast.dump(keyword.value) == ast.dump(expected))]
+            return self.generic_visit(node)
         def visit_Assign(self, node):
             if (len(node.targets) == 1 and isinstance(node.targets[0], ast.Subscript)
                     and ast.unparse(node.targets[0]) == "self.rate_measurement['nativeTiming']"):
@@ -369,15 +411,16 @@ def patch_harness(original):
 def restore_harness(observed):
     """Reverse only this fixed observation layer, never write source bytes."""
     text = observed.decode('utf-8')
-    imported = 'from native_seek_anchor_observation import summarize_state\n'
+    imported = 'from native_seek_anchor_observation import summarize_state, successful_follow_observation\n'
     addition = '''            self.rate_measurement['nativeTiming'] = {
                 'authority': summarize_state(authority, self.rate_measurement.get('nativeTiming', {}).get('authority'), (time.monotonic() - started) * 1000, follower),
                 'follower': summarize_state(follower, self.rate_measurement.get('nativeTiming', {}).get('follower'), (time.monotonic() - started) * 1000, authority),
             }
 '''
-    if text.count(imported) != 1 or text.count(addition) != 1:
+    if text.count(imported) != 1 or text.count(addition) != 1 or text.count(RATE_SUCCESS_OBSERVED) != 1:
         raise ValueError('Observation harness inverse anchors changed')
-    original = text.replace(imported, '', 1).replace(addition, '', 1).encode('utf-8')
+    original = text.replace(imported, '', 1).replace(addition, '', 1).replace(
+        RATE_SUCCESS_OBSERVED, RATE_SUCCESS, 1).encode('utf-8')
     if digest(original) != HARNESS_SHA or patch_harness(original) != observed:
         raise ValueError('Observation harness inverse pin mismatch')
     return original

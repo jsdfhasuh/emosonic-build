@@ -12,7 +12,7 @@ SPEC.loader.exec_module(a)
 
 class PublicAttributionTests(unittest.TestCase):
     def test_reviewed_payloads_and_script(self):
-        self.assertEqual(a.digest(Path(a.__file__).read_bytes()), '9545bdb215e5d7c3c42232f4938cf39d802860fc9da85cc559ff62abd5ac31f2')
+        self.assertEqual(a.digest(Path(a.__file__).read_bytes()), 'df515ed5b368391d430e128b233e07013432d4db60034ff87171c61af24ca0e5')
         for name, expected in [('native_lab_scoped_api_client.dart', '853582b7c96254c3b8107e7633cb85eca08031dcfb70679d5315ca0731078a3d'), ('native_lab_scoped_attribution_test.dart', '6aa928bbf52683c0e47603079a105d4d1ba68748a1c4d2d554e6dc54a6182ad7')]:
             self.assertEqual(a.digest((a.ROOT / 'payload' / name).read_bytes()), expected)
 

@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Disposable recovery-check observation envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "status": {
+      "enum": [
+        "recording",
+        "truncated"
+      ]
+    },
+    "recordLimit": {
+      "const": 128
+    },
+    "truncationRecordLimit": {
+      "const": 1
+    },
+    "attemptCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 129
+    },
+    "droppedCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "droppedCountSaturated": {
+      "type": "boolean"
+    },
+    "records": {
+      "type": "array",
+      "maxItems": 129,
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    }
+  },
+  "$defs": {
+    "record": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "Disposable recovery control-flow observation",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "eventOrdinal",
+        "recoveryOrdinal",
+        "reason",
+        "cachedSequence",
+        "baselineSequence",
+        "lastObservedSequence",
+        "nominalSequenceFloor",
+        "seekPending",
+        "ticking",
+        "supported",
+        "ownedRatePresent",
+        "receiptPending",
+        "receiptScheduled",
+        "cancelled",
+        "exhausted",
+        "ageMs",
+        "floorPositionMs"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "eventOrdinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 129
+        },
+        "recoveryOrdinal": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 129
+        },
+        "reason": {
+          "enum": [
+            "recovery_started",
+            "receipt_accepted",
+            "wake_deferred",
+            "wake_queued_ignored",
+            "wake_busy",
+            "wake_dispatch",
+            "check_enter",
+            "inactive_or_cancelled",
+            "owner_or_service_changed",
+            "source_owner_changed",
+            "deadline_reached",
+            "exhausted_or_ticking",
+            "source_not_current",
+            "seek_pending",
+            "missing_nominal_ack",
+            "anchor_snapshot",
+            "baseline_stale",
+            "baseline_adopted",
+            "missing_or_nonprogressing_anchor",
+            "anchor_age_rejected",
+            "nominal_floor_rejected",
+            "nominal_progress_rejected",
+            "effective_anchor_too_early",
+            "nonfinite_drift",
+            "eligible_progress",
+            "before_rate_write",
+            "check_finally",
+            "seek_future_finally",
+            "truncated"
+          ]
+        },
+        "cachedSequence": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "baselineSequence": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "lastObservedSequence": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "nominalSequenceFloor": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "seekPending": {
+          "type": "boolean"
+        },
+        "ticking": {
+          "type": "boolean"
+        },
+        "supported": {
+          "type": "boolean"
+        },
+        "ownedRatePresent": {
+          "type": "boolean"
+        },
+        "receiptPending": {
+          "type": "boolean"
+        },
+        "receiptScheduled": {
+          "type": "boolean"
+        },
+        "cancelled": {
+          "type": "boolean"
+        },
+        "exhausted": {
+          "type": "boolean"
+        },
+        "ageMs": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": -86400000,
+          "maximum": 86400000
+        },
+        "floorPositionMs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": -86400000,
+          "maximum": 86400000
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "eventOrdinal": {
+                "const": 129
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "const": "truncated"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "reason": {
+                "const": "truncated"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "eventOrdinal": {
+                "const": 129
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "attemptCount": {
+            "const": 129
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "truncated"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "status": {
+            "const": "recording"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "droppedCountSaturated": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "droppedCount": {
+            "const": 1000000
+          }
+        }
+      }
+    }
+  ],
+  "required": [
+    "schemaVersion",
+    "status",
+    "recordLimit",
+    "truncationRecordLimit",
+    "attemptCount",
+    "droppedCount",
+    "droppedCountSaturated",
+    "records"
+  ]
+}

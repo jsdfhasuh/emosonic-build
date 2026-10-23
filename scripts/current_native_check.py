@@ -290,6 +290,7 @@ FOLLOW_OBSERVATION_SCHEMA = {
     'rateMeasurement': RATE_SCHEMA, 'command': BRIDGE_SCHEMA,
 }
 DIAGNOSTIC_SCHEMA.update({
+    'observationBasis': frozenset({'retained_alignment_and_post_measurement_log'}),
     'followLifecycle': FOLLOW_LIFECYCLE_SCHEMA,
     'bridgeCommandFailure': BRIDGE_SCHEMA,
     'failureStateRefresh': frozenset({'refreshed', 'unavailable'}),

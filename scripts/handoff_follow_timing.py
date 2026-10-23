@@ -6,16 +6,18 @@ from unittest.mock import patch
 import handoff_follow_readiness as base
 import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
+import native_recovery_check_observation as recovery_observation
 
-PARENT = '40f189553c4ded3d7ab7bb7170f868478f041c41'
-MESSAGE = 'test: repeat fractional native precision matrix 20261023'
+PARENT = '3a4c5de3d385316402868f3c25e01d75c47dead1'
+MESSAGE = 'test: observe native recovery completion boundaries 20261023'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
 SOURCE_SHA = 'c7301a107fd1474ec0d22bb609426a435bc52584'
 SOURCE_REF = 'refs/heads/fix/follow-fractional-precision-20261023'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=88, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39930329614)
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=89, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39930329614,
+               auxiliary_observer_sha=recovery_observation.AUX_SHA, auxiliary_observer_ref=recovery_observation.AUX_REF)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
 
@@ -145,21 +147,37 @@ def main():
                 WORKFLOW=WORKFLOW,REQUEST_PATH=REQUEST_PATH,REQUEST=REQUEST,
                 SOURCE_SHA=SOURCE_SHA,SOURCE_REF=SOURCE_REF,
                 OBSERVED_HARNESS_SHA256=timing.AFTER[timing.HARNESS],
-                ATTRIBUTION_EXTRA_ARGS=('--lab-debug-observation','--lab-timing-observation')))
+                ATTRIBUTION_EXTRA_ARGS=('--lab-debug-observation','--lab-timing-observation','--lab-recovery-observation')))
             stack.enter_context(patch.object(base.request,'SERVER_SHA',SERVER_SHA))
             stack.enter_context(patch.dict(base.native.RATE_SCHEMA,
                 {'nativeTiming': {'authority': timing.SCHEMA, 'follower': timing.SCHEMA}}))
+            if category == 'native' and stage != 'cleanup':
+                stack.enter_context(recovery_observation.lifecycle_pins(lifecycle))
+                if stage == 'prepare':
+                    original_fingerprint = base.request.p.source_fingerprint
+                    stack.enter_context(patch.object(base.request.p, 'source_fingerprint',
+                        partial(recovery_observation.apply_after_pristine, original_fingerprint=original_fingerprint)))
+                else:
+                    recovery_observation.verify(source)
             if category == 'native' and stage in ('unit','attribution','build','handoff','follow'):
                 lifecycle.verify_prepared(source,require_harness=stage in ('unit','attribution'),timing_observation=True)
                 timing.verify_prepared(source,require_harness=stage in ('unit','attribution'))
                 for name in ('verify_prepared','verify_compiled'):
                     stack.enter_context(patch.object(base.readiness,name,
                         partial(getattr(base.readiness,name),timing_observation=True)))
+            if category == 'source' and stage == 'cleanup':
+                try:
+                    return base.main()
+                finally:
+                    recovery_observation.cleanup(source)
             result = base.main()
+            if result == 0 and category == 'source' and stage == 'fetch':
+                recovery_observation.fetch(source, base.request.p)
             if result == 0 and category == 'native':
                 if stage == 'prepare':
                     lifecycle.apply(source)
                     timing.apply(source)
+                    recovery_observation.verify(source)
                 elif stage in ('build','handoff','follow'):
                     timing.verify_compiled(source)
             return result
