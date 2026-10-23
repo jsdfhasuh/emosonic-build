@@ -3,19 +3,21 @@ import re
 import sys
 from unittest.mock import patch
 import handoff_convergence_green as previous
+import follow_directional_settle_green as directional
 
-PARENT = 'c18fd5552b4e43adbfea11ea1a450aa98ab96f89'
-MESSAGE = 'test: validate native rate feedback fixture lint cleanup 20261023'
+PARENT = 'cb895a5efe9a792bcadf87ad520afeff8c10744d'
+MESSAGE = 'test: observe negative nominal verification boundary 20261023'
 WORKFLOW = 'authority-rate-feedback-green.yml'
 REQUEST_PATH = 'requests/authority-rate-feedback-green-20261023.json'
-SOURCE_REF = 'refs/heads/test/native-rate-feedback-lint-20261023'
-SOURCE_SHA = '401f01e7e4ebe239b8aa5fb2201f45496facc686'
+SOURCE_REF = 'refs/heads/test/negative-nominal-diagnostic-20261023'
+SOURCE_SHA = '85c6a4dd772af299e3d87c048cc191093dd7e715'
 SERVER_SHA = previous.SERVER_SHA
 REQUEST = dict(previous.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               mode='authority-rate-feedback-full-green-validation', attempt=78)
+               mode='authority-rate-feedback-full-green-validation', attempt=79)
 INVENTORY_PATH = 'tool/native_rate_feedback/green_inventory.json'
 INVENTORY_SHA256 = '28bedc8f4905fbc2166038c1cac1c89f7015cab71ad2be8ffb25157b65289107'
 EXPECTED_COUNTS = (3, 5)
+DIRECTIONAL_INVENTORY_SHA256 = 'b43a892524f083713b65b1d0b5d96050686f2055d8cf21ae9ecb9fe4d37f8384'
 ORIGINAL_INVENTORY = previous.inventory
 TIMING = previous.TIMING
 
@@ -60,7 +62,7 @@ def main():
     except Exception:
         print('ERROR: RateFeedback repair pins or counts are incomplete or inconsistent.', file=sys.stderr)
         return 1
-    with patch.multiple(previous, PARENT=PARENT, MESSAGE=MESSAGE, WORKFLOW=WORKFLOW,
+    with patch.object(directional, 'INVENTORY_SHA256', DIRECTIONAL_INVENTORY_SHA256), patch.multiple(previous, PARENT=PARENT, MESSAGE=MESSAGE, WORKFLOW=WORKFLOW,
                         REQUEST_PATH=REQUEST_PATH, REQUEST=REQUEST, SOURCE_REF=SOURCE_REF,
                         SOURCE_SHA=SOURCE_SHA, SERVER_SHA=SERVER_SHA, inventory=inventory):
         return previous.main()

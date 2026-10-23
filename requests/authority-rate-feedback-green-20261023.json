@@ -1,9 +1,9 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/test/native-rate-feedback-lint-20261023",
-  "source_sha": "401f01e7e4ebe239b8aa5fb2201f45496facc686",
+  "source_ref": "refs/heads/test/negative-nominal-diagnostic-20261023",
+  "source_sha": "85c6a4dd772af299e3d87c048cc191093dd7e715",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "authority-rate-feedback-full-green-validation",
-  "attempt": 78
+  "attempt": 79
 }
