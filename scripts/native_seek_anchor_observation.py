@@ -13,14 +13,14 @@ EXPECTED = {
     'AudioPlayer.m': 'dfc408d533c30fe95b8d0a9ad2284f2266fdbaba3377da2bde372fcaad4441c7',
 }
 PREPARE_SHA = 'dfdd215375ac1afd5a90e278733f5ca1a1ef5683317f95526933b5b6fe758532'
-HARNESS_SHA = '55ba43b3d08fe525677c544f2dc583cb5aef05699b23ee63a98f01a18aacbb0f'
+HARNESS_SHA = 'a283fefe723aa6002f21836bb159c64d3d060a8a23e778da4f3fcc6a5e4cc5a6'
 LAB_ROOT = 'tool/native_playback_mac'
 PREPARE = LAB_ROOT + '/prepare_build.py'
 HARNESS = LAB_ROOT + '/run_lab.py'
 COPIED_HELPER = LAB_ROOT + '/native_seek_anchor_observation.py'
 STATE = '.native_timing_observation/manifest.json'
 PAYLOAD_DIRECTORY = 'native_seek_anchor_observation_payload'
-AFTER = {'tool/native_playback_mac/prepare_build.py': 'a7aea3aa0530bcd6a39c2e91788a4712093f02570ab631790f4d36dd550a6593', 'tool/native_playback_mac/run_lab.py': 'b15bf0d7a6e7e611fd142eab6865355cb7408cbd7aa4d03956fb97f60945b768'}
+AFTER = {'tool/native_playback_mac/prepare_build.py': 'a7aea3aa0530bcd6a39c2e91788a4712093f02570ab631790f4d36dd550a6593', 'tool/native_playback_mac/run_lab.py': '7fcfd5a13db96092806dc5e85883fd20a07e3cb22543ffaf7398ee4f668038dc'}
 NATIVE_AFTER = {'AudioPlayer.h': '007d2925fa33997665d64c0a4e1dd6a74c0b21d69f746eae722e5de48b070201', 'AudioPlayer.m': '6e09059b4440a82c4f6d0e86beb37c38245c714a1f3a9163612d5218766b77e3'}
 REJECTION_NAMES = ('budget_or_clock', 'not_healthy', 'primary_identity',
                    'no_timebase', 'effective_rate', 'read_clock', 'capture_quality')
@@ -377,8 +377,7 @@ def patch_harness(original):
         raise ValueError('Observation harness source pin mismatch')
     change = Transform(original.decode('utf-8'))
     change.once('import argparse\n', 'import argparse\nfrom native_seek_anchor_observation import summarize_state, successful_follow_observation\n')
-    anchor = '''            authority, follower = states[authority_index], states[2]
-            assert follow_correction_identity(states, authority_index, context) == correction_identity'''
+    anchor = '''            assert follow_correction_identity(states, authority_index, context) == correction_identity'''
     addition = '''            self.rate_measurement['nativeTiming'] = {
                 'authority': summarize_state(authority, self.rate_measurement.get('nativeTiming', {}).get('authority'), (time.monotonic() - started) * 1000, follower),
                 'follower': summarize_state(follower, self.rate_measurement.get('nativeTiming', {}).get('follower'), (time.monotonic() - started) * 1000, authority),

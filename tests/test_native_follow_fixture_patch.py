@@ -22,7 +22,7 @@ SYNTHETIC = '''class AlignmentBase:
 run_lab = types.SimpleNamespace(Matrix=AlignmentBase)
 
 def state(t, position, expected):
-    return {'sentinelTime': t, 'sentinelPosition': position, 'sentinelRate': expected}
+    return {'sentinelTime': t, 'sentinelPosition': position, 'sentinelRate': expected, 'nativePlayers': [{}]}
 
 class AlignmentMatrix(run_lab.Matrix):
     def __init__(self, clock, offset, expected=1.5, authority_index=0, mutate=None):
@@ -32,8 +32,8 @@ class AlignmentMatrix(run_lab.Matrix):
         self.observed, self.outcomes = [], []
 
     def states(self):
-        a = {'sentinelPosition': 100}
-        f = {'sentinelPosition': 200}
+        a = {'sentinelPosition': 100, 'nativePlayers': [{}]}
+        f = {'sentinelPosition': 200, 'nativePlayers': [{}]}
         if self.mutate is not None:
             self.mutate(a, f)
         return a, f
@@ -115,6 +115,8 @@ class FixtureCompatibilityTests(unittest.TestCase):
             self.assertEqual(follower['preflightDiagnostics']['recoveryControlVersion'],
                 follower['preflightDiagnostics']['recoveryAppliedControlVersion'])
             for value in (authority, follower):
+                self.assertIs(value['nativePlayers'][0]['seekInProgress'], False)
+                self.assertIs(value['nativePlayers'][0]['playingIntent'], True)
                 self.assertIs(type(value['pid']), int)
                 self.assertGreater(value['pid'], 0)
                 for key in ('bundleId', 'root', 'clientId', 'deviceSessionId', 'contextId'):

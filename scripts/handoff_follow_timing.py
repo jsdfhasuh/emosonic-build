@@ -8,15 +8,15 @@ import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 import native_recovery_check_observation as recovery_observation
 
-PARENT = '3a4c5de3d385316402868f3c25e01d75c47dead1'
-MESSAGE = 'test: observe native recovery completion boundaries 20261023'
+PARENT = 'c2fb5278686f7c6ae95271a9fab2a3f7dc6fceb0'
+MESSAGE = 'test: enforce sustained native Follow precision 20261023'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
 SOURCE_SHA = 'c7301a107fd1474ec0d22bb609426a435bc52584'
 SOURCE_REF = 'refs/heads/fix/follow-fractional-precision-20261023'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=89, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39930329614,
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=90, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39930329614,
                auxiliary_observer_sha=recovery_observation.AUX_SHA, auxiliary_observer_ref=recovery_observation.AUX_REF)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
@@ -165,12 +165,34 @@ def main():
                 for name in ('verify_prepared','verify_compiled'):
                     stack.enter_context(patch.object(base.readiness,name,
                         partial(getattr(base.readiness,name),timing_observation=True)))
+            unit_invocations = 0
+            if category == 'native' and stage == 'unit':
+                def fixed_unit_execute(command, label, report=False):
+                    nonlocal unit_invocations
+                    expected = [sys.executable, '-m', 'unittest', 'discover', '-s',
+                                'tool/native_playback_mac', '-p', 'test_*.py']
+                    base.request.p.require(type(command) is list and command == expected
+                        and all(type(value) is str for value in command)
+                        and type(label) is str and label == 'native-measurement-guards'
+                        and report is False and unit_invocations == 0,
+                        'Unexpected fixed native unit invocation.')
+                    unit_invocations += 1
+                    with patch.dict(base.native.os.environ, base.native.native_env(), clear=True):
+                        result = base.readiness.verify_units(source)
+                    expected_result = {'stage': 'native-follow-unit-layers', 'status': 'passed',
+                        'priorProvenanceChecks': 70, 'finalCompatibleChecks': 63, 'finalPrecisionChecks': 35}
+                    base.request.p.require(type(result) is dict and result == expected_result
+                        and all(type(result[key]) is type(value) for key, value in expected_result.items()),
+                        'Exact native unit layers must all pass.')
+                stack.enter_context(patch.object(base.native, 'execute', fixed_unit_execute))
             if category == 'source' and stage == 'cleanup':
                 try:
                     return base.main()
                 finally:
                     recovery_observation.cleanup(source)
             result = base.main()
+            if result == 0 and category == 'native' and stage == 'unit':
+                base.request.p.require(unit_invocations == 1, 'Fixed native unit invocation missing.')
             if result == 0 and category == 'source' and stage == 'fetch':
                 recovery_observation.fetch(source, base.request.p)
             if result == 0 and category == 'native':

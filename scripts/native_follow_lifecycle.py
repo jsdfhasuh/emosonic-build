@@ -14,8 +14,8 @@ MAIN_AFTER_SHA256 = 'f8781ae5077924daebc0908500f79e57ee9a80af8e9d25d474468651563
 LOG_OLD = b'  await Logger.setLogLevel(LogLevel.warning);\n'
 LOG_NEW = b'  await Logger.setLogLevel(LogLevel.debug);\n'
 STATE = '.native_follow_lifecycle/manifest.json'
-BEFORE_SHA256 = '6eb44ffc54f90dab0df7bd320c68e39f0c764c1af126c05fa29e64da22acdc36'
-AFTER_HARNESS_SHA256 = '55ba43b3d08fe525677c544f2dc583cb5aef05699b23ee63a98f01a18aacbb0f'
+BEFORE_SHA256 = 'af4053d6801cbd18e20f777b4a952f8dcf7822a1fbe1c4e0965211c42d431b82'
+AFTER_HARNESS_SHA256 = 'a283fefe723aa6002f21836bb159c64d3d060a8a23e778da4f3fcc6a5e4cc5a6'
 PAYLOAD_HASHES = {'follow_lifecycle_observation.py': '61f845892a17587b30e223289a8899cbeab38861d9fcaba08057a03186c42ad2', 'follow_server_observation.py': '5426d798c3b65fe46652814f3433657bb6e315d0b4345c214555bc4e2479e4cc'}
 OBSERVER_CALLS = (
     'begin_follow_lifecycle(self, context, follower_original, native_follow_task_ready)',
@@ -96,8 +96,8 @@ def _transform_harness(original):
     text = once(text, anchor, "            begin_follow_lifecycle(self, context, follower_original, native_follow_task_ready)\n"
         "            _follow_response = follower.command('follow', contextId=context)\n"
         "            observe_follow_command(self, _follow_response)\n")
-    anchor = '                states = self.states()\n                if reject_terminal_handoff:\n'
-    text = once(text, anchor, '                states = self.states()\n                observe_follow_wait(self, stage, states)\n                if reject_terminal_handoff:\n')
+    anchor = '                if reject_terminal_handoff:\n'
+    text = once(text, anchor, '                observe_follow_wait(self, stage, states)\n                if reject_terminal_handoff:\n')
     anchor = "                          'waitObservation': getattr(self, 'wait_observation', {}),\n"
     text = once(text, anchor, anchor + "                          'followLifecycle': finish_follow_lifecycle(self),\n")
     text = once(text, "state = Path(temporary) / 'server'", "state = Path(temporary).resolve(strict=True) / 'server'")

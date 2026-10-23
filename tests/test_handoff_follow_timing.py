@@ -43,7 +43,7 @@ class TimingWrapperTests(unittest.TestCase):
             self.assertEqual(c.base.OBSERVED_HARNESS_SHA256,c.timing.AFTER[c.timing.HARNESS])
             self.assertIs(c.base.native.RATE_SCHEMA['nativeTiming']['follower'],c.timing.SCHEMA)
             return 0
-        with patch.object(sys,'argv',['helper','native','unit']),patch.object(c.recovery_observation,'verify'),patch.object(c.base,'main',side_effect=run),patch.object(c.lifecycle,'verify_prepared') as lifecycle,patch.object(c.timing,'verify_prepared') as timing,patch.object(c.base.readiness,'verify_prepared') as readiness:
+        with patch.object(sys,'argv',['helper','native','attribution']),patch.object(c.recovery_observation,'verify'),patch.object(c.base,'main',side_effect=run),patch.object(c.lifecycle,'verify_prepared') as lifecycle,patch.object(c.timing,'verify_prepared') as timing,patch.object(c.base.readiness,'verify_prepared') as readiness:
             self.assertEqual(c.main(),0)
             self.assertTrue(lifecycle.call_args.kwargs['timing_observation'])
             self.assertTrue(timing.call_args.kwargs['require_harness'])
@@ -155,8 +155,8 @@ class IngressValidationGateTests(unittest.TestCase):
     def test_exact_directional_successor_pins_and_both_matrix_stages(self):
         self.assertEqual(c.SOURCE_SHA,'c7301a107fd1474ec0d22bb609426a435bc52584')
         self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-fractional-precision-20261023')
-        self.assertEqual(c.PARENT,'3a4c5de3d385316402868f3c25e01d75c47dead1')
-        self.assertEqual(c.REQUEST['attempt'],89)
+        self.assertEqual(c.PARENT,'c2fb5278686f7c6ae95271a9fab2a3f7dc6fceb0')
+        self.assertEqual(c.REQUEST['attempt'],90)
         self.assertEqual(c.INGRESS_RUN,39930329614)
         self.assertEqual(c.INGRESS_HEAD,'c0b5d5fea7662af646a145c2699eb7ea7d99a2cc')
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)
@@ -178,3 +178,125 @@ class IngressValidationGateTests(unittest.TestCase):
             elif change=='missing':steps.pop()
             else:steps.append(dict(steps[0]))
             with self.subTest(change=change),patch.object(c.base.request.p,'api',side_effect=[run,jobs]),self.assertRaises(c.base.request.p.GateError):c.require_ingress_validation()
+
+
+class FixedNativeUnitAdapterTests(unittest.TestCase):
+    command = [sys.executable, '-m', 'unittest', 'discover', '-s',
+               'tool/native_playback_mac', '-p', 'test_*.py']
+    result = {'stage': 'native-follow-unit-layers', 'status': 'passed',
+              'priorProvenanceChecks': 70, 'finalCompatibleChecks': 63, 'finalPrecisionChecks': 35}
+
+    def run_unit(self, action, *, result=None, error=None):
+        original = c.base.native.execute
+        with patch.object(sys, 'argv', ['helper', 'native', 'unit']), \
+             patch.object(c.recovery_observation, 'verify'), \
+             patch.object(c.lifecycle, 'verify_prepared'), \
+             patch.object(c.timing, 'verify_prepared'), \
+             patch.object(c.base, 'main', side_effect=action), \
+             patch.object(c.base.readiness, 'verify_units', create=True,
+                          return_value=self.result if result is None else result, side_effect=error) as units:
+            status = c.main()
+        self.assertIs(c.base.native.execute, original)
+        return status, units
+
+    def execute_once(self):
+        c.base.native.execute(list(self.command), 'native-measurement-guards')
+        return 0
+
+    def test_exact_unit_command_runs_all_layers_once_and_restores(self):
+        status, units = self.run_unit(self.execute_once)
+        self.assertEqual(status, 0)
+        units.assert_called_once_with(c.base.request.p.ROOT / 'source')
+
+    def test_unexpected_command_label_path_report_and_argument_types_fail_closed(self):
+        wrong_path = list(self.command); wrong_path[5] = 'elsewhere'
+        for args in [(wrong_path, 'native-measurement-guards'),
+                     (self.command + ['extra'], 'native-measurement-guards'),
+                     (self.command, 'other'), (self.command, 'native-measurement-guards', True),
+                     (self.command, 'native-measurement-guards', 0),
+                     (tuple(self.command), 'native-measurement-guards')]:
+            with self.subTest(args=args):
+                status, units = self.run_unit(lambda: c.base.native.execute(*args) or 0)
+                self.assertEqual(status, 1); units.assert_not_called()
+
+    def test_missing_or_duplicate_unit_invocation_fails_closed(self):
+        status, units = self.run_unit(lambda: 0)
+        self.assertEqual(status, 1); units.assert_not_called()
+        def twice():
+            self.execute_once(); return self.execute_once()
+        status, units = self.run_unit(twice)
+        self.assertEqual(status, 1); self.assertEqual(units.call_count, 1)
+
+    def test_exact_unit_report_requires_all_counts_status_and_no_extra_keys(self):
+        for key, value in [('priorProvenanceChecks', 69), ('finalCompatibleChecks', 62),
+                           ('finalPrecisionChecks', 34), ('priorProvenanceChecks', 70.0),
+                           ('finalPrecisionChecks', True), ('status', 'failed'),
+                           ('stage', 'other'), ('extra', True)]:
+            report = dict(self.result, **{key: value})
+            with self.subTest(key=key, value=value):
+                status, units = self.run_unit(self.execute_once, result=report)
+                self.assertEqual(status, 1); self.assertEqual(units.call_count, 1)
+
+    def test_unit_failure_restores_execute_and_does_not_retry(self):
+        status, units = self.run_unit(self.execute_once, error=ValueError('synthetic'))
+        self.assertEqual(status, 1); self.assertEqual(units.call_count, 1)
+
+    def test_non_unit_execution_delegates_unchanged(self):
+        def action():
+            c.base.native.execute(['synthetic'], 'unchanged', True)
+            return 0
+        with patch.object(sys, 'argv', ['helper', 'native', 'dependencies']), \
+             patch.object(c.recovery_observation, 'verify'), \
+             patch.object(c.base, 'main', side_effect=action), \
+             patch.object(c.base.native, 'execute') as execute, \
+             patch.object(c.base.readiness, 'verify_units', create=True) as units:
+            self.assertEqual(c.main(), 0)
+        execute.assert_called_once_with(['synthetic'], 'unchanged', True)
+        units.assert_not_called()
+
+    def test_actual_base_unit_retains_context_source_server_and_platform_guards(self):
+        for mode in ('valid', 'wrong-source', 'wrong-server', 'wrong-platform', 'no-network-approval'):
+            with self.subTest(mode=mode):
+                heads = [c.SOURCE_SHA, c.SERVER_SHA] * 2
+                if mode == 'wrong-source': heads[0] = '0' * 40
+                if mode == 'wrong-server': heads[1] = '0' * 40
+                original = c.base.native.execute
+                with patch.object(sys, 'argv', ['helper', 'native', 'unit']), \
+                     patch.object(sys, 'platform', 'linux' if mode == 'wrong-platform' else 'darwin'), \
+                     patch.dict(c.base.native.os.environ, {'EMOSONIC_MAC_LAB_NETWORK_APPROVED':
+                         '0' if mode == 'no-network-approval' else '1'}), \
+                     patch.object(c.recovery_observation, 'verify'), \
+                     patch.object(c.lifecycle, 'verify_prepared'), \
+                     patch.object(c.timing, 'verify_prepared'), \
+                     patch.object(c.base.readiness, 'verify_prepared'), \
+                     patch.object(c.base.request, 'context') as context, \
+                     patch.object(c.base.request.p, 'quiet', side_effect=heads) as quiet, \
+                     patch.object(c.base.readiness, 'verify_units', create=True, return_value=self.result) as units:
+                    self.assertEqual(c.main(), 0 if mode == 'valid' else 1)
+                self.assertIs(c.base.native.execute, original)
+                if mode == 'valid':
+                    self.assertEqual(context.call_count, 2)
+                    self.assertEqual(quiet.call_count, 4)
+                    units.assert_called_once_with(c.base.request.p.ROOT / 'source')
+                else:
+                    units.assert_not_called()
+
+
+    def test_unit_api_inherits_exact_native_environment_filter_and_restores(self):
+        excluded = ('SOURCE_READ_TOKEN', 'GITHUB_TOKEN', 'APP_PASSWORD', 'API_SECRET',
+                    'KEYSTORE_PATH', 'KEY_ALIAS', 'DEFAULT_SERVER_URL', 'GITHUB_ENV',
+                    'GITHUB_OUTPUT', 'GITHUB_PATH', 'GITHUB_STEP_SUMMARY')
+        values = {key: 'synthetic' for key in excluded}
+        values['NATIVE_UNIT_SAFE_MARKER'] = 'retained'
+        for fail in (False, True):
+            def verify(_):
+                self.assertTrue(all(key not in c.base.native.os.environ for key in excluded))
+                self.assertEqual(c.base.native.os.environ['NATIVE_UNIT_SAFE_MARKER'], 'retained')
+                if fail:
+                    raise ValueError('synthetic')
+                return dict(self.result)
+            with self.subTest(fail=fail), patch.dict(c.base.native.os.environ, values):
+                status, units = self.run_unit(self.execute_once, error=verify)
+                self.assertEqual(status, 1 if fail else 0)
+                self.assertEqual(units.call_count, 1)
+                self.assertTrue(all(c.base.native.os.environ[key] == value for key, value in values.items()))

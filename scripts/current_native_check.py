@@ -50,7 +50,7 @@ PUBLIC_STAGES = PUBLIC_STAGES | frozenset(['all-native-players-paused', 'authori
 
 PUBLIC_STAGES = PUBLIC_STAGES | LIFECYCLE_STAGES
 
-PUBLIC_STAGES = PUBLIC_STAGES | {'native-follow-readiness-proof', 'source-load-command-returned', 'scoped-attribution-baseline', 'scoped-attribution-patched', 'scoped-attribution-proof-failure'}
+PUBLIC_STAGES = PUBLIC_STAGES | {'native-follow-readiness-proof', 'native-follow-precision-proof', 'native-follow-unit-layers', 'source-load-command-returned', 'scoped-attribution-baseline', 'scoped-attribution-patched', 'scoped-attribution-proof-failure'}
 PUBLIC_STATUSES = frozenset({'passed', 'failed', 'not-verified', 'unavailable'})
 PUBLIC_ERRORS = frozenset({'AssertionError', 'TimeoutError', 'BridgeCommandFailure',
     'HTTPError', 'URLError', 'RuntimeError', 'ConnectionError', 'KeyError',
@@ -120,9 +120,18 @@ CLIENT_SCHEMA = {
     'handoffHistory': ('list', HANDOFF_SCHEMA, 8),
 }
 DIAGNOSTIC_SCHEMA = {
+    'unitLayer': frozenset({'inventory', 'prior', 'final_compatible', 'precision'}),
+    'priorProvenanceChecks': ('integer', 70, 70), 'finalCompatibleChecks': ('integer', 63, 63),
+    'finalPrecisionChecks': ('integer', 35, 35),
+    'failedCaseOrdinals': ('list', ('integer', 1, 70), 70),
     'checks': ('integer', 0, 35),
     'failedTestOrdinals': ('list', ('integer', 1, 35), 35),
     'errorCategory': frozenset({'assertion', 'runner'}),
+    'precisionSamples': ('integer', 0, 1000000),
+    **{key: ('number', -86400000, 86400000) for key in ('precisionDriftMs', 'precisionUncertaintyMs',
+        'precisionWorstCaseMs', 'precisionMaxWorstCaseMs', 'initialFollowAcquisitionMs',
+        'initialFollowCommandToMeasurementEndMs')},
+    'precisionSourceNative': NATIVE_SCHEMA, 'precisionFollowerNative': NATIVE_SCHEMA,
     'correctionReadinessPollCount': ('integer', 0, 25),
     'correctionReadinessElapsedMs': ('number', 0, 5000),
     'diagnostic': {
@@ -245,7 +254,7 @@ DIAGNOSTIC_SCHEMA['serverCanonicalObservation'] = {
 
 
 # Finite failure/Follow evidence already produced by the reviewed lab.
-FOLLOW_CONDITIONS = frozenset(['authority_rate', 'follower_rate', 'hard_drift_limit', 'lab_five_second_settling', 'native_35s_progression', 'native_evidence', 'rate_change', 'restoration', 'safe_follow_task'])
+FOLLOW_CONDITIONS = frozenset(['steady_sample_precision', 'authority_rate', 'follower_rate', 'hard_drift_limit', 'lab_five_second_settling', 'native_35s_progression', 'native_evidence', 'rate_change', 'restoration', 'safe_follow_task'])
 BRIDGE_SCHEMA = {
 'action': frozenset(['cancelHandoff', 'follow', 'handoff', 'next', 'pause', 'play', 'playQueue', 'refresh', 'seek', 'speed', 'stopFollow', 'unrecognized']),
 'exceptionCategory': frozenset(['ArgumentError', 'EmoInboundContractViolation', 'EmoProtocolException', 'EmoProtocolPayloadViolation', 'FormatException', 'HttpException', 'PlatformException', 'PlayerException', 'PlayerInterruptedException', 'SocketException', 'StateError', 'TimeoutException', 'unrecognized']),
@@ -257,6 +266,11 @@ BRIDGE_SCHEMA = {
         'queue_launch_missingPlaybackContext', 'queue_launch_syncTimeout'}),
 }
 RATE_SCHEMA = {
+    'precisionSamples': ('integer', 0, 1000000),
+    **{key: ('number', -86400000, 86400000) for key in ('precisionDriftMs', 'precisionUncertaintyMs',
+        'precisionWorstCaseMs', 'precisionMaxWorstCaseMs', 'initialFollowAcquisitionMs',
+        'initialFollowCommandToMeasurementEndMs')},
+    'precisionSourceNative': NATIVE_SCHEMA, 'precisionFollowerNative': NATIVE_SCHEMA,
     'correctionReadinessPollCount': ('integer', 0, 25),
     'correctionReadinessElapsedMs': ('number', 0, 5000),
     **{key: NUMBER for key in ('expectedRate', 'measurementWindowSeconds', 'requestedPositionMs',
@@ -286,6 +300,7 @@ FOLLOW_OBSERVATION_SCHEMA = {
     **{key: NUMBER for key in ('followerMinusAuthorityClockOffsetMs', 'alignedNativeDriftMs',
         'readUncertaintyMs', 'nativeReadSkewMs', 'syncToleranceMs', 'hardSeekThresholdMs',
         'leadCompensationMs', 'elapsedSeconds', 'unsettledSeconds')},
+    'precision': RATE_SCHEMA,
     'phase': frozenset({'rate_change', 'restoration'}), 'errorType': PUBLIC_ERRORS | {'unrecognized'},
     'rateMeasurement': RATE_SCHEMA, 'command': BRIDGE_SCHEMA,
 }
