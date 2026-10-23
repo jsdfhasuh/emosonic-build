@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '99efbf7da849eb72be727129ef7d9312320e9632'
+  SOURCE_SHA: '401f01e7e4ebe239b8aa5fb2201f45496facc686'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == 'daf041272b11201c4087aa8f0c66b8fb88b9d62b' &&
-      github.event.head_commit.message == 'test: verify native authority rate feedback 20261023' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'c18fd5552b4e43adbfea11ea1a450aa98ab96f89' &&
+      github.event.head_commit.message == 'test: validate native rate feedback fixture lint cleanup 20261023' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/native-rate-feedback-20261023
+          SOURCE_REF: refs/heads/test/native-rate-feedback-lint-20261023
         run: python3 scripts/authority_rate_feedback_green.py source prepare
 
   validate-source:

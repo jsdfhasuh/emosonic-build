@@ -4,17 +4,17 @@ import sys
 from unittest.mock import patch
 import handoff_convergence_green as previous
 
-PARENT = 'daf041272b11201c4087aa8f0c66b8fb88b9d62b'
-MESSAGE = 'test: verify native authority rate feedback 20261023'
+PARENT = 'c18fd5552b4e43adbfea11ea1a450aa98ab96f89'
+MESSAGE = 'test: validate native rate feedback fixture lint cleanup 20261023'
 WORKFLOW = 'authority-rate-feedback-green.yml'
 REQUEST_PATH = 'requests/authority-rate-feedback-green-20261023.json'
-SOURCE_REF = 'refs/heads/fix/native-rate-feedback-20261023'
-SOURCE_SHA = '99efbf7da849eb72be727129ef7d9312320e9632'
+SOURCE_REF = 'refs/heads/test/native-rate-feedback-lint-20261023'
+SOURCE_SHA = '401f01e7e4ebe239b8aa5fb2201f45496facc686'
 SERVER_SHA = previous.SERVER_SHA
 REQUEST = dict(previous.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               mode='authority-rate-feedback-full-green-validation', attempt=77)
+               mode='authority-rate-feedback-full-green-validation', attempt=78)
 INVENTORY_PATH = 'tool/native_rate_feedback/green_inventory.json'
-INVENTORY_SHA256 = '77ea287cfa508683781ceca6484929a633a522c3d209fc881ca7e5d5ab9ffcd5'
+INVENTORY_SHA256 = '28bedc8f4905fbc2166038c1cac1c89f7015cab71ad2be8ffb25157b65289107'
 EXPECTED_COUNTS = (3, 5)
 ORIGINAL_INVENTORY = previous.inventory
 TIMING = previous.TIMING

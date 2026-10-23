@@ -73,7 +73,7 @@ class RateFeedbackGreenTests(unittest.TestCase):
         for value in ('contents: read','source focused','source validate_source','if: always()','source cleanup','persist-credentials: false'):self.assertIn(value,w)
         for value in ('upload-artifact','source native','source package','source publish','contents: write','workflow_dispatch'):self.assertNotIn(value,w)
         self.assertEqual(json.loads((root/c.REQUEST_PATH).read_text()),c.REQUEST)
-        self.assertEqual(c.REQUEST['attempt'],77)
+        self.assertEqual(c.REQUEST['attempt'],78)
         self.assertLess(w.index('source focused'),w.index('source validate_source'))
 
 
