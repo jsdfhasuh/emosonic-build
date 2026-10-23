@@ -12,7 +12,7 @@ import sys
 
 import current_source_check as request
 import pipeline as p
-from native_follow_lifecycle_schema import FOLLOW_LIFECYCLE_SCHEMA, STAGES as LIFECYCLE_STAGES
+from native_follow_lifecycle_schema import BOOTSTRAP_SCHEMA, FOLLOW_LIFECYCLE_SCHEMA, STAGES as LIFECYCLE_STAGES
 
 OLD_SERVER = 'bcbb99e935fb4eb0799ab40fff893303cf2966df'
 STAGES = ('prepare', 'dependencies', 'unit', 'preflight', 'build', 'handoff', 'follow', 'cleanup')
@@ -145,6 +145,7 @@ DIAGNOSTIC_SCHEMA = {
     'nativeLogClassifications': ('list', {
         'clientOrdinal': ('integer', 0, 2),
         'readStatus': frozenset({'unverified', 'symlink_refused', 'oversized', 'unavailable', 'read', 'ownership_refused'}),
+        'bootstrap': BOOTSTRAP_SCHEMA,
         **{key: ('integer', 0, 1000000) for key in ('scopedNativeQueueBeforePlay',
             'scopedSingleSourceBeforePlay', 'staleExecutionGuard', 'staleCommandSideEffect', 'playFailed', 'playSlowStart')},
     }, 3),

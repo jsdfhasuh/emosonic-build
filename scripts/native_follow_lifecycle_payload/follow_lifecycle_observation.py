@@ -786,6 +786,89 @@ def _play_policy_snapshot(value):
         return {'status': 'invalid'}
 
 
+BOOTSTRAP_STAGES = ('client_id', 'device_session_id', 'device_alias',
+    'playback_context_outbox', 'follow_recovery', 'broadcast_recovery')
+BOOTSTRAP_STATUSES = ('started', 'completed', 'timed_out', 'failed')
+_BOOTSTRAP_ENTRY = re.compile(r'^\[\d{4}-\d{2}-\d{2}T[\d:.+Z-]+\] \[(?:DEBUG|INFO|WARNING|ERROR)\] \[(Main|EmoRealtimeClient)\] (.*)$')
+
+
+def add_bootstrap_observation(result, lines, offset, size, data):
+    """Reuse the existing owned 256 KiB tail, never perform another read.
+
+    Whole-current-file coverage is not lifetime coverage: prior rotation or
+    debug suppression is unknown, so zero counts never prove no startup.
+    Arbitrary scope, identity, error type, error and stack suffixes stay private.
+    """
+    try:
+        if (type(result) is not dict or type(lines) is not list or type(data) is not bytes
+                or type(offset) is not int or type(size) is not int
+                or not 0 <= offset <= size <= MAX_LOG or len(data) > 256 * 1024):
+            raise ValueError('Bootstrap observation bounds changed')
+        issues = 0
+        try:
+            data.decode('utf-8', errors='strict')
+        except UnicodeDecodeError:
+            issues += 1
+        partial = bool(data) and not data.endswith(b'\n')
+        issues += int(partial or offset + len(data) != size)
+        value = {'byteCoverage': 'tail_only' if offset else 'whole_current_file',
+            'launchCoverage': 'unknown', 'lineIssues': 0, 'countsSaturated': False,
+            'startup': dict.fromkeys(('connect', 'requested', 'failed'), 0),
+            'other': dict.fromkeys(('joined', 'stale', 'aborted', 'unknown'), 0),
+            'stages': {stage: dict.fromkeys(BOOTSTRAP_STATUSES, 0) for stage in BOOTSTRAP_STAGES}}
+        def count(group, key):
+            if group[key] >= MAX_COUNT:
+                value['countsSaturated'] = True
+            group[key] = min(MAX_COUNT, group[key] + 1)
+        for index, line in enumerate(lines):
+            if type(line) is not str or len(line) > MAX_LINE or '\ufffd' in line:
+                issues += 1
+                continue
+            if partial and index == len(lines)-1:
+                continue
+            entry = _BOOTSTRAP_ENTRY.fullmatch(line)
+            if entry is None:
+                continue
+            logger, body = entry.groups()
+            if logger == 'Main' and body.startswith('[[EMO_STARTUP]] '):
+                suffix = body[len('[[EMO_STARTUP]] '):]
+                if suffix.startswith('connect scope='):
+                    count(value['startup'], 'connect')
+                elif suffix == 'connect requested':
+                    count(value['startup'], 'requested')
+                elif suffix.startswith('connect failed type='):
+                    count(value['startup'], 'failed')
+                else:
+                    count(value['other'], 'unknown')
+            elif logger == 'EmoRealtimeClient' and body.startswith('[[EMO_CONNECT_BOOTSTRAP]] '):
+                suffix = body[len('[[EMO_CONNECT_BOOTSTRAP]] '):]
+                if suffix == 'join active request':
+                    count(value['other'], 'joined')
+                elif suffix.startswith('ignore failure reason=stale_attempt error='):
+                    count(value['other'], 'stale')
+                elif suffix.startswith('connection aborted error='):
+                    count(value['other'], 'aborted')
+                elif suffix.startswith('connection abort stack='):
+                    continue  # Never parse stack content, even embedded markers.
+                else:
+                    match = re.fullmatch(r'stage=(\w+) status=(\w+)(.*)', suffix)
+                    if match is None:
+                        count(value['other'], 'unknown'); continue
+                    stage, status, tail = match.groups()
+                    valid_tail = (status == 'completed' and tail == ''
+                        or status in ('started', 'timed_out') and re.fullmatch(r' timeoutMs=\d{1,9}', tail) is not None
+                        or status == 'failed' and tail.startswith(' error='))
+                    if stage not in BOOTSTRAP_STAGES or status not in BOOTSTRAP_STATUSES or not valid_tail:
+                        count(value['other'], 'unknown'); continue
+                    count(value['stages'][stage], status)
+        value['lineIssues'] = min(MAX_COUNT, issues)
+        if issues:
+            value['byteCoverage'] = 'partial'
+        result['bootstrap'] = value
+    except Exception:
+        result['bootstrap'] = {'byteCoverage': 'unavailable', 'launchCoverage': 'unknown'}
+
+
 def _endpoint_timing(states):
     if type(states) is not list or not 1 <= len(states) <= 3:
         return {'status': 'unavailable'}

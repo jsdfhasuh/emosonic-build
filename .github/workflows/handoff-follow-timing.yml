@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == 'cd58afa39280c0fce7087799c18de8cceb2154ab' &&
-      github.event.head_commit.message == 'test: measure immediate join play policy 20261023' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '751558cf2d6e6f998401051cebfe47cb735470ef' &&
+      github.event.head_commit.message == 'test: retain bounded native bootstrap evidence 20261023' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build

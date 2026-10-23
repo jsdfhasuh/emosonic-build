@@ -15,15 +15,16 @@ LOG_OLD = b'  await Logger.setLogLevel(LogLevel.warning);\n'
 LOG_NEW = b'  await Logger.setLogLevel(LogLevel.debug);\n'
 STATE = '.native_follow_lifecycle/manifest.json'
 BEFORE_SHA256 = 'e7e7e3b67338867d4cc562ebb6350560d936678df5c5ee0c91bb93f8f3a15879'
-AFTER_HARNESS_SHA256 = '04a9fa4f411ca43366ee05e30d9f8180962d57d68263e1012a7ccffff8dfa6f9'
-PAYLOAD_HASHES = {'follow_lifecycle_observation.py': '5ff3c5ccbeae87a44d30d1feb293abb21bce520123ad3b47f13024c95983ed25', 'follow_server_observation.py': '5426d798c3b65fe46652814f3433657bb6e315d0b4345c214555bc4e2479e4cc'}
+AFTER_HARNESS_SHA256 = '49e32674ea18b085887a13dad14cb69d3ee5f2a91c58cc5f9ae456c5c01b7a52'
+PAYLOAD_HASHES = {'follow_lifecycle_observation.py': '83a4fef529eff8fdb472d65ce25e0299c55113c2efb7ea6ecfa53b9e0d3f25ab', 'follow_server_observation.py': '5426d798c3b65fe46652814f3433657bb6e315d0b4345c214555bc4e2479e4cc'}
 OBSERVER_CALLS = (
     'begin_follow_lifecycle(self, context, follower_original, native_follow_task_ready)',
     'observe_follow_command(self, _follow_response)',
     'observe_follow_wait(self, stage, states)',
+    'add_bootstrap_observation(result, lines, offset, size, data)',
 )
 CALL_AST = tuple(ast.dump(ast.parse(source).body[0].value) for source in OBSERVER_CALLS)
-IMPORT = 'from follow_lifecycle_observation import begin_follow_lifecycle, observe_follow_command, observe_follow_wait, finish_follow_lifecycle\n'
+IMPORT = 'from follow_lifecycle_observation import begin_follow_lifecycle, observe_follow_command, observe_follow_wait, finish_follow_lifecycle, add_bootstrap_observation\n'
 
 
 def digest(data):
@@ -101,6 +102,8 @@ def _transform_harness(original):
     anchor = "                          'waitObservation': getattr(self, 'wait_observation', {}),\n"
     text = once(text, anchor, anchor + "                          'followLifecycle': finish_follow_lifecycle(self),\n")
     text = once(text, "state = Path(temporary) / 'server'", "state = Path(temporary).resolve(strict=True) / 'server'")
+    anchor = "        result.update(readStatus='read', **{key: min(value, 1000000) for key, value in counts.items()})\n"
+    text = once(text, anchor, anchor + '        add_bootstrap_observation(result, lines, offset, size, data)\n')
     result = text.encode('utf-8')
     prove_controls_unchanged(original, result)
     return result

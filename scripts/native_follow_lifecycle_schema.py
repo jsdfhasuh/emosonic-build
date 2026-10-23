@@ -2,6 +2,15 @@
 STAGES = frozenset({'native-follow-command-observation'})
 COUNT = ('integer', 0, 1000000)
 CURSOR = ('integer', 0, 1000000000000)
+BOOTSTRAP_SCHEMA = {
+    'byteCoverage': frozenset({'whole_current_file', 'tail_only', 'partial', 'unavailable'}),
+    'launchCoverage': frozenset({'unknown'}), 'lineIssues': COUNT, 'countsSaturated': bool,
+    'startup': {key: COUNT for key in ('connect', 'requested', 'failed')},
+    'other': {key: COUNT for key in ('joined', 'stale', 'aborted', 'unknown')},
+    'stages': {stage: {status: COUNT for status in ('started', 'completed', 'timed_out', 'failed')}
+        for stage in ('client_id', 'device_session_id', 'device_alias',
+            'playback_context_outbox', 'follow_recovery', 'broadcast_recovery')},
+}
 SERVER_SCHEMA = {
     'status': frozenset({'read_only_snapshot', 'refused_expected_scope', 'refused_fixture_scope',
         'refused_database_scope', 'malformed_observation', 'observation_unavailable'}),

@@ -32,6 +32,11 @@ class Matrix:
         return {'safe': True,
                           'waitObservation': getattr(self, 'wait_observation', {}),
                 }
+def owned_log(result, lines, offset, size, data, counts):
+    try:
+        result.update(readStatus='read', **{key: min(value, 1000000) for key, value in counts.items()})
+    except (OSError, ValueError, TypeError):
+        return result
 def main(temporary):
     state = Path(temporary) / 'server'
 '''
@@ -58,7 +63,7 @@ class LifecyclePatchTests(unittest.TestCase):
         proof = p.prove_controls_unchanged(SYNTHETIC,result)
         self.assertTrue(all(proof.values()))
         self.assertIn(b'Path(temporary).resolve(strict=True)', result)
-        for method in ('wait','run','failure'):
+        for method in ('wait','run','failure','owned_log'):
             before = [n for n in ast.walk(ast.parse(SYNTHETIC)) if isinstance(n,ast.FunctionDef) and n.name==method][0]
             after = [n for n in ast.walk(ast.parse(result)) if isinstance(n,ast.FunctionDef) and n.name==method][0]
             self.assertEqual(ast.dump(before),ast.dump(p.OriginalProjection().visit(copy.deepcopy(after))))
