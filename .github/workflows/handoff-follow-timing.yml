@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == 'c0b5d5fea7662af646a145c2699eb7ea7d99a2cc' &&
-      github.event.head_commit.message == 'test: validate fractional native precision matrix 20261023' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '40f189553c4ded3d7ab7bb7170f868478f041c41' &&
+      github.event.head_commit.message == 'test: repeat fractional native precision matrix 20261023' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build

@@ -155,10 +155,10 @@ class IngressValidationGateTests(unittest.TestCase):
     def test_exact_directional_successor_pins_and_both_matrix_stages(self):
         self.assertEqual(c.SOURCE_SHA,'c7301a107fd1474ec0d22bb609426a435bc52584')
         self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-fractional-precision-20261023')
-        self.assertEqual(c.PARENT,'c0b5d5fea7662af646a145c2699eb7ea7d99a2cc')
-        self.assertEqual(c.REQUEST['attempt'],87)
+        self.assertEqual(c.PARENT,'40f189553c4ded3d7ab7bb7170f868478f041c41')
+        self.assertEqual(c.REQUEST['attempt'],88)
         self.assertEqual(c.INGRESS_RUN,39930329614)
-        self.assertEqual(c.INGRESS_HEAD,c.PARENT)
+        self.assertEqual(c.INGRESS_HEAD,'c0b5d5fea7662af646a145c2699eb7ea7d99a2cc')
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)
         self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate all prior and guarded fractional precision focused cases')
         self.assertIn('follow',c.NATIVE_STAGES);self.assertIn('handoff',c.NATIVE_STAGES)

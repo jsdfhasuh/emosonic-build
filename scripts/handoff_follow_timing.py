@@ -7,15 +7,15 @@ import handoff_follow_readiness as base
 import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 
-PARENT = 'c0b5d5fea7662af646a145c2699eb7ea7d99a2cc'
-MESSAGE = 'test: validate fractional native precision matrix 20261023'
+PARENT = '40f189553c4ded3d7ab7bb7170f868478f041c41'
+MESSAGE = 'test: repeat fractional native precision matrix 20261023'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
 SOURCE_SHA = 'c7301a107fd1474ec0d22bb609426a435bc52584'
 SOURCE_REF = 'refs/heads/fix/follow-fractional-precision-20261023'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=87, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39930329614)
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=88, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=39930329614)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
 
