@@ -3,7 +3,7 @@ from pathlib import Path
 from follow_seek_latency_observation import strict_json, MAX_BYTES, MAX_EVENTS
 
 TEST_PATH = 'test/services/emo_follow_directional_boundary_test.dart'
-FIXTURE_SHA256 = '9b4e445f0b41b2b4f6f2182ccdc94ce73c5673b0df46e9e07ff80df882ecfa8d'
+FIXTURE_SHA256 = '16db235aa9a61faaf04b41368888ed979cddb92f2605e511a8307d9089b99a97'
 PREFIX = 'FOLLOW_NEGATIVE_NOMINAL_DIAGNOSTIC '
 PHASES = ('after_ack', 'after_first', 'after_second')
 

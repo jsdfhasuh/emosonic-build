@@ -5,19 +5,19 @@ from unittest.mock import patch
 import handoff_convergence_green as previous
 import follow_directional_settle_green as directional
 
-PARENT = 'cb895a5efe9a792bcadf87ad520afeff8c10744d'
-MESSAGE = 'test: observe negative nominal verification boundary 20261023'
+PARENT = 'bbb5b5dd0ae7e7ec5847bf0c96699dec19c02624'
+MESSAGE = 'test: validate synchronous negative nominal diagnostics 20261023'
 WORKFLOW = 'authority-rate-feedback-green.yml'
 REQUEST_PATH = 'requests/authority-rate-feedback-green-20261023.json'
-SOURCE_REF = 'refs/heads/test/negative-nominal-diagnostic-20261023'
-SOURCE_SHA = '85c6a4dd772af299e3d87c048cc191093dd7e715'
+SOURCE_REF = 'refs/heads/test/negative-nominal-print-lint-20261023'
+SOURCE_SHA = '28fc26149f5e4175fe952219b3cc5f9d18519c50'
 SERVER_SHA = previous.SERVER_SHA
 REQUEST = dict(previous.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               mode='authority-rate-feedback-full-green-validation', attempt=79)
+               mode='authority-rate-feedback-full-green-validation', attempt=80)
 INVENTORY_PATH = 'tool/native_rate_feedback/green_inventory.json'
 INVENTORY_SHA256 = '28bedc8f4905fbc2166038c1cac1c89f7015cab71ad2be8ffb25157b65289107'
 EXPECTED_COUNTS = (3, 5)
-DIRECTIONAL_INVENTORY_SHA256 = 'b43a892524f083713b65b1d0b5d96050686f2055d8cf21ae9ecb9fe4d37f8384'
+DIRECTIONAL_INVENTORY_SHA256 = '2c764aa0cd43d9f951417524640152b60052fac752ae76d683dcdd9016f94d63'
 ORIGINAL_INVENTORY = previous.inventory
 TIMING = previous.TIMING
 
