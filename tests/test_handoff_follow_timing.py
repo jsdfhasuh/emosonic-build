@@ -142,7 +142,7 @@ class RecoveryValidationGateTests(unittest.TestCase):
 class IngressValidationGateTests(unittest.TestCase):
     def evidence(self):
         run={'id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
-             'path':'.github/workflows/follow-anchor-admission-green.yml','event':'push',
+             'path':'.github/workflows/follow-directional-settle-green.yml','event':'push',
              'head_branch':'main','run_attempt':1,'status':'completed','conclusion':'success'}
         jobs={'jobs':[{'name':name,'run_id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
                        'status':'completed','conclusion':'success',
@@ -151,15 +151,15 @@ class IngressValidationGateTests(unittest.TestCase):
         jobs['total_count']=len(jobs['jobs'])
         return run,jobs
 
-    def test_exact_anchor_admission_successor_pins_and_both_matrix_stages(self):
-        self.assertEqual(c.SOURCE_SHA,'6adf81189c02d4c9997fdeff5edc61b7f33308ee')
-        self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-anchor-admission-ownership-20261023')
-        self.assertEqual(c.PARENT,'48a47500c7b43fd0de3af2bbcaa2684b592d956a')
-        self.assertEqual(c.REQUEST['attempt'],63)
-        self.assertEqual(c.INGRESS_RUN,39882128765)
+    def test_exact_directional_successor_pins_and_both_matrix_stages(self):
+        self.assertEqual(c.SOURCE_SHA,'dca06e757b9d71663e3ffc7d8841775910fefe41')
+        self.assertEqual(c.SOURCE_REF,'refs/heads/test/follow-directional-post-restore-compat-20261023')
+        self.assertEqual(c.PARENT,'9897308320495a511f1865de441ff0ddb124c37d')
+        self.assertEqual(c.REQUEST['attempt'],68)
+        self.assertEqual(c.INGRESS_RUN,39888714248)
         self.assertEqual(c.INGRESS_HEAD,c.PARENT)
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)
-        self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate all181 focused cases and anchor admission boundaries')
+        self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate all189 focused cases and natural directional boundaries')
         self.assertIn('follow',c.NATIVE_STAGES);self.assertIn('handoff',c.NATIVE_STAGES)
 
     def test_exact_current_candidate_green_required(self):
