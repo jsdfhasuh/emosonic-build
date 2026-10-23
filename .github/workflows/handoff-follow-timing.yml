@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '54844e610f5d5c6e935431be087f1fae64fe96d6'
+  SOURCE_SHA: '6adf81189c02d4c9997fdeff5edc61b7f33308ee'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == 'ade37001f495cf48be38f0f13b5bb3161b096eff' &&
-      github.event.head_commit.message == 'test: validate clock-fixed native precision matrix 20261022' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '48a47500c7b43fd0de3af2bbcaa2684b592d956a' &&
+      github.event.head_commit.message == 'test: validate anchor-admission native precision matrix 20261023' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/test/follow-expiry-native-oracle-20261022
+          SOURCE_REF: refs/heads/fix/follow-anchor-admission-ownership-20261023
         run: python3 scripts/handoff_follow_timing.py source prepare
 
   native-macos-server:

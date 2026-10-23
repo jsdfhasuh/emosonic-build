@@ -142,7 +142,7 @@ class RecoveryValidationGateTests(unittest.TestCase):
 class IngressValidationGateTests(unittest.TestCase):
     def evidence(self):
         run={'id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
-             'path':'.github/workflows/follow-clock-interval-green.yml','event':'push',
+             'path':'.github/workflows/follow-anchor-admission-green.yml','event':'push',
              'head_branch':'main','run_attempt':1,'status':'completed','conclusion':'success'}
         jobs={'jobs':[{'name':name,'run_id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
                        'status':'completed','conclusion':'success',
@@ -151,15 +151,15 @@ class IngressValidationGateTests(unittest.TestCase):
         jobs['total_count']=len(jobs['jobs'])
         return run,jobs
 
-    def test_exact_clock_successor_pins_and_both_matrix_stages(self):
-        self.assertEqual(c.SOURCE_SHA,'54844e610f5d5c6e935431be087f1fae64fe96d6')
-        self.assertEqual(c.SOURCE_REF,'refs/heads/test/follow-expiry-native-oracle-20261022')
-        self.assertEqual(c.PARENT,'ade37001f495cf48be38f0f13b5bb3161b096eff')
-        self.assertEqual(c.REQUEST['attempt'],57)
-        self.assertEqual(c.INGRESS_RUN,39874298131)
+    def test_exact_anchor_admission_successor_pins_and_both_matrix_stages(self):
+        self.assertEqual(c.SOURCE_SHA,'6adf81189c02d4c9997fdeff5edc61b7f33308ee')
+        self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-anchor-admission-ownership-20261023')
+        self.assertEqual(c.PARENT,'48a47500c7b43fd0de3af2bbcaa2684b592d956a')
+        self.assertEqual(c.REQUEST['attempt'],63)
+        self.assertEqual(c.INGRESS_RUN,39882128765)
         self.assertEqual(c.INGRESS_HEAD,c.PARENT)
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)
-        self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate all174 focused cases and clock interval boundaries')
+        self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate all181 focused cases and anchor admission boundaries')
         self.assertIn('follow',c.NATIVE_STAGES);self.assertIn('handoff',c.NATIVE_STAGES)
 
     def test_exact_current_candidate_green_required(self):
