@@ -1,0 +1,10 @@
+{
+  "source_repository": "jsdfhasuh/emosonic",
+  "source_ref": "refs/heads/test/native-rate-feedback-20261023",
+  "source_sha": "b1fd7295c7af882a772bb66e32ea0f61b1dc626c",
+  "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
+  "version": "1.0.10+27",
+  "mode": "follow-authority-rate-feedback-expected-red-proof",
+  "attempt": 76,
+  "baseline_sha": "aaa07a9860d167cafcf440ac16011e745a5c74a4"
+}
