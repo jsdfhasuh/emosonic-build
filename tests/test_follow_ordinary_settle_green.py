@@ -13,7 +13,7 @@ import follow_ordinary_settle_green as c
 
 
 # Synthetic fixtures, using the exact reviewed boundary count.
-SYNTHETIC_BOUNDARY_COUNT = 16
+SYNTHETIC_BOUNDARY_COUNT = 17
 
 
 def suites(counts, prefix):
@@ -40,11 +40,11 @@ class OrdinarySettlementGreenTests(unittest.TestCase):
                             ('EXPECTED_COUNTS',(4,'PENDING')), ('EXPECTED_COUNTS',(4,None)),
                             ('EXPECTED_COUNTS',(4,True)), ('EXPECTED_COUNTS',(3,7)),
                             ('EXPECTED_COUNTS',(4,)), ('EXPECTED_COUNTS',(4,0)),
-                            ('EXPECTED_COUNTS',(4,129)), ('EXPECTED_COUNTS',(True,16)),
-                            ('EXPECTED_COUNTS',(4,16.0)), ('EXPECTED_COUNTS',[4,16]),
+                            ('EXPECTED_COUNTS',(4,129)), ('EXPECTED_COUNTS',(True,17)),
+                            ('EXPECTED_COUNTS',(4,17.0)), ('EXPECTED_COUNTS',[4,17]),
                             ('REVIEWED_BOUNDARY_COUNT',None), ('REVIEWED_BOUNDARY_COUNT',True),
                             ('REVIEWED_BOUNDARY_COUNT',0), ('REVIEWED_BOUNDARY_COUNT',129),
-                            ('REVIEWED_BOUNDARY_COUNT',16.0), ('REVIEWED_BOUNDARY_COUNT',8),
+                            ('REVIEWED_BOUNDARY_COUNT',17.0), ('REVIEWED_BOUNDARY_COUNT',8),
                             ('SOURCE_REF','refs/tags/synthetic'), ('SOURCE_SHA','a'*39),
                             ('INVENTORY_SHA256','b'*63),
                             ('INVENTORY_PATH','tool/unreviewed/green_inventory.json'),
@@ -61,21 +61,21 @@ class OrdinarySettlementGreenTests(unittest.TestCase):
         with self.pins(), patch.object(c,'ORIGINAL_INVENTORY',return_value=prior), \
                 patch.object(c.TIMING,'component_inventory',return_value=extra) as load:
             actual=c.inventory(Path('/synthetic'))
-            load.assert_called_once_with(Path('/synthetic'),c.INVENTORY_PATH,'b'*64,(4,16))
+            load.assert_called_once_with(Path('/synthetic'),c.INVENTORY_PATH,'b'*64,(4,17))
         self.assertEqual(actual,prior+extra); self.assertEqual(actual[:33],prior)
         self.assertIs(actual[0],prior[0])  # Preserve Broadcast-first order.
-        self.assertEqual(len(actual),35); self.assertEqual(sum(len(s['names']) for s in actual),274)
-        self.assertEqual(len({name for suite in actual for name in suite['names']}),274)
+        self.assertEqual(len(actual),35); self.assertEqual(sum(len(s['names']) for s in actual),275)
+        self.assertEqual(len({name for suite in actual for name in suite['names']}),275)
         self.assertEqual(prior,before)
 
     def test_missing_changed_duplicate_cases_fail(self):
         for prior, extra in [(self.prior()[:-1],self.extra()),
                             (self.prior(),suites((4,6),'extra')),
                             (self.prior(),suites((11,),'extra')),
-                            (self.prior(),suites((4,16),'prior')),
+                            (self.prior(),suites((4,17),'prior')),
                             (self.prior()[:-1]+[self.prior()[20]],self.extra()),
                             (self.prior(),self.extra()[:1]),
-                            (self.prior(),suites((16,4),'extra')),
+                            (self.prior(),suites((17,4),'extra')),
                             (self.prior(),[dict(s,path='test/services/duplicate_test.dart') for s in self.extra()]),
                             (self.prior(),[dict(s,names=[s['names'][0]]*len(s['names'])) for s in self.extra()])]:
             with self.pins(), patch.object(c,'ORIGINAL_INVENTORY',return_value=prior), \
@@ -197,7 +197,7 @@ class OrdinarySettlementGreenTests(unittest.TestCase):
             (receipt.INVENTORY_PATH,receipt.INVENTORY_SHA256,(3,4),'receipt'),
             (fractional.INVENTORY_PATH,fractional.INVENTORY_SHA256,(3,4),'fractional'),
             (c.previous.INVENTORY_PATH,c.previous.INVENTORY_SHA256,(3,8),'initial'),
-            (c.INVENTORY_PATH,'b'*64,(4,16),'settlement'),
+            (c.INVENTORY_PATH,'b'*64,(4,17),'settlement'),
         )
         loaded={path:suites(counts,prefix) for path,_,counts,prefix in rows}
         def original(source):
@@ -220,8 +220,8 @@ class OrdinarySettlementGreenTests(unittest.TestCase):
                 if path!=receipt.broadcast.INVENTORY_PATH: expected+=loaded[path]
             self.assertEqual(actual,expected)
             self.assertEqual(len(actual),35)
-            self.assertEqual(sum(len(s['names']) for s in actual),274)
-            self.assertEqual(len({name for suite in actual for name in suite['names']}),274)
+            self.assertEqual(sum(len(s['names']) for s in actual),275)
+            self.assertEqual(len({name for suite in actual for name in suite['names']}),275)
             return 0
         with self.pins(), patch.object(sys,'argv',['gate','source','focused']), \
                 patch.object(receipt,'BASE_INVENTORY',side_effect=original), \
@@ -234,7 +234,7 @@ class OrdinarySettlementGreenTests(unittest.TestCase):
 
     def test_exact_reviewed_count_rejects_any_other_count(self):
         for first in (1,2,3,5,True):
-            with self.pins(), patch.object(c,'EXPECTED_COUNTS',(first,16)):
+            with self.pins(), patch.object(c,'EXPECTED_COUNTS',(first,17)):
                 with self.assertRaises(c.TIMING.previous.recovery.request.p.GateError): c.require_counts()
         for second in range(1,129):
             if second==SYNTHETIC_BOUNDARY_COUNT: continue
@@ -244,17 +244,17 @@ class OrdinarySettlementGreenTests(unittest.TestCase):
                 with self.assertRaises(c.TIMING.previous.recovery.request.p.GateError): c.require_counts()
 
     def test_fixed_baseline_and_reviewed_contract(self):
-        self.assertEqual(c.PARENT,'82243ad915ce3e028f074f667295dc8b9113ec83')
+        self.assertEqual(c.PARENT,'ec0703df69806fb6704be502569c91b782d0ed66')
         self.assertEqual(c.SERVER_SHA,'5adc23da173c5f20188d79aafe8fcc1e656eb38a')
-        self.assertEqual(c.REQUEST['attempt'],104)
+        self.assertEqual(c.REQUEST['attempt'],105)
         self.assertEqual(c.REQUEST['mode'],'follow-ordinary-settlement-full-green-validation')
         self.assertEqual(c.INVENTORY_PATH,'tool/follow_smooth_settlement/green_inventory.json')
         self.assertIs(c.ORIGINAL_INVENTORY,c.previous.inventory)
-        self.assertEqual(c.REVIEWED_BOUNDARY_COUNT,16)
-        self.assertEqual(c.EXPECTED_COUNTS,(4,16))
+        self.assertEqual(c.REVIEWED_BOUNDARY_COUNT,17)
+        self.assertEqual(c.EXPECTED_COUNTS,(4,17))
         self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-ordinary-settlement-20261024')
-        self.assertEqual(c.SOURCE_SHA,'7a6467b6f66f17f1a58127d9c6ad4debad4983bc')
-        self.assertEqual(c.INVENTORY_SHA256,'7b05327f397df0dd74fb8dd751a9f6a85b6716278679fc6ca814ed0590997ff7')
+        self.assertEqual(c.SOURCE_SHA,'2fb9f8bf711da6b1aaf8b9d7442ee3111befe0d4')
+        self.assertEqual(c.INVENTORY_SHA256,'e086df2bfc30773f04d355c860075bff478ad6bbb7b9610188c6dfe2e4977f47')
         with patch.object(c,'SOURCE_SHA','PENDING'), patch.object(c.previous,'main') as delegated, contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(c.main(),1); delegated.assert_not_called()
 

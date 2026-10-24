@@ -4,19 +4,19 @@ import sys
 from unittest.mock import patch
 import initial_apply_receipt_green as previous
 
-PARENT = '82243ad915ce3e028f074f667295dc8b9113ec83'
-MESSAGE = 'test: validate ordinary Follow settlement repair 20261024'
+PARENT = 'ec0703df69806fb6704be502569c91b782d0ed66'
+MESSAGE = 'test: validate ordinary Follow settlement fixture correction 20261024'
 WORKFLOW = 'follow-ordinary-settle-green.yml'
 REQUEST_PATH = 'requests/follow-ordinary-settle-green-20261024.json'
 SOURCE_REF = 'refs/heads/fix/follow-ordinary-settlement-20261024'
-SOURCE_SHA = '7a6467b6f66f17f1a58127d9c6ad4debad4983bc'
+SOURCE_SHA = '2fb9f8bf711da6b1aaf8b9d7442ee3111befe0d4'
 SERVER_SHA = previous.SERVER_SHA
 REQUEST = dict(previous.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               mode='follow-ordinary-settlement-full-green-validation', attempt=104)
+               mode='follow-ordinary-settlement-full-green-validation', attempt=105)
 INVENTORY_PATH = 'tool/follow_smooth_settlement/green_inventory.json'
-INVENTORY_SHA256 = '7b05327f397df0dd74fb8dd751a9f6a85b6716278679fc6ca814ed0590997ff7'
-# Final independently reviewed boundary count; preserve the frozen four cases.
-REVIEWED_BOUNDARY_COUNT = 16
+INVENTORY_SHA256 = 'e086df2bfc30773f04d355c860075bff478ad6bbb7b9610188c6dfe2e4977f47'
+# Final independently reviewed fixture correction; preserve the frozen four cases.
+REVIEWED_BOUNDARY_COUNT = 17
 EXPECTED_COUNTS = (4, REVIEWED_BOUNDARY_COUNT)
 ORIGINAL_INVENTORY = previous.inventory
 TIMING = previous.TIMING
@@ -24,10 +24,10 @@ TIMING = previous.TIMING
 
 def require_counts():
     TIMING.previous.recovery.request.p.require(
-        type(REVIEWED_BOUNDARY_COUNT) is int and REVIEWED_BOUNDARY_COUNT == 16
+        type(REVIEWED_BOUNDARY_COUNT) is int and REVIEWED_BOUNDARY_COUNT == 17
         and type(EXPECTED_COUNTS) is tuple and len(EXPECTED_COUNTS) == 2
         and all(type(n) is int for n in EXPECTED_COUNTS)
-        and EXPECTED_COUNTS == (4, 16),
+        and EXPECTED_COUNTS == (4, 17),
         'Frozen ordinary settlement baseline and exact reviewed boundary count are required.')
 
 
@@ -54,7 +54,7 @@ def inventory(source):
     require(len(additional) == 2 and tuple(len(s['names']) for s in additional) == EXPECTED_COUNTS,
             'Both complete frozen ordinary settlement suites are required.')
     suites = [*suites, *additional]
-    require(len(suites) == 35 and sum(len(s['names']) for s in suites) == 274
+    require(len(suites) == 35 and sum(len(s['names']) for s in suites) == 275
             and len({s['path'] for s in suites}) == 35
             and all(len(set(s['names'])) == len(s['names']) for s in suites),
             'All prior and ordinary settlement cases across 35 unique suites are required.')
