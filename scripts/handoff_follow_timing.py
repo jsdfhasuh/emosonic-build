@@ -8,15 +8,15 @@ import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 import native_recovery_check_observation as recovery_observation
 
-PARENT = 'ee64ede80838ef3ecc2bcfd1b90be893d49bcbf2'
-MESSAGE = 'test: retain transfer native timing 20261024'
+PARENT = '17386c088c0e5b4b2c47caaf3fd4675637a7bc50'
+MESSAGE = 'test: correct native interval precision 20261024'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
 SOURCE_SHA = '72e524134c81becacf80ba8ff3f3d7562328347f'
 SOURCE_REF = 'refs/heads/fix/follow-ordinary-settlement-20261024'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=108, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=40051389321,
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=109, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=40051389321,
                auxiliary_observer_sha=recovery_observation.AUX_SHA, auxiliary_observer_ref=recovery_observation.AUX_REF)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 

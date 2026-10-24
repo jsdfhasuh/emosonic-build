@@ -3,6 +3,7 @@ import contextlib
 import ast
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -106,9 +107,31 @@ def child(directory,layer):
     assert {p.name for p in directory.glob('test_*.py')}==set(contract['testFiles'])
     sys.path.insert(0,str(directory))
     with open(os.devnull,'w') as sink, contextlib.redirect_stdout(sink),contextlib.redirect_stderr(sink):
+        if layer == 'final_compatible':
+            # Apply only after every original fixture hash has been verified.
+            # Import the constructor before discovery binds its fixture aliases.
+            inputs_path = directory / 'native_clock_fixture_inputs.py'
+            assert inputs_path.is_file() and not inputs_path.is_symlink()
+            assert inputs_path.read_bytes() == (ROOT / inputs_path.name).read_bytes()
+            spec = importlib.util.spec_from_file_location('legacy_native_clock_inputs', inputs_path)
+            inputs = importlib.util.module_from_spec(spec); spec.loader.exec_module(inputs)
+            import test_rate_measurement
+            test_rate_measurement.state = inputs.legacy_state_with_native_uncertainty(test_rate_measurement.state)
         suite=unittest.defaultTestLoader.discover(str(directory),pattern='test_*.py')
         selected=select_exact(list(flattened(suite)),contract,layer)
-        result=unittest.TestResult();unittest.TestSuite(selected).run(result)
+        result=unittest.TestResult()
+        if layer == 'final_compatible':
+            # Only the disposable synthetic final runner receives raw inputs.
+            # The 70-case prior provenance module tree is never adapted.
+            import run_lab
+            actual_decoded = run_lab.decoded
+            def start_test(test):
+                # Reset the synthetic native sequence domain for each case,
+                # retaining unittest's discovery, suite and test identities.
+                run_lab.decoded = inputs.decoded_with_native_clock(actual_decoded)
+                unittest.TestResult.startTest(result, test)
+            result.startTest = start_test
+        unittest.TestSuite(selected).run(result)
     failed=[]
     known={row['caseSha256']:row['ordinal'] for row in contract['cases']}
     for test,_ in result.errors+result.failures:
@@ -142,6 +165,8 @@ def run_layer(source_directory,harness,layer):
                 original=data;data=adapt_budget_fixture(data,name,contract)
                 assert adapt_budget_fixture(data,name,contract,inverse=True)==original
             (directory/name).write_bytes(data)
+        if layer == 'final_compatible':
+            (directory/'native_clock_fixture_inputs.py').write_bytes((ROOT/'native_clock_fixture_inputs.py').read_bytes())
         (directory/'run_lab.py').write_bytes(harness)
         env={k:v for k,v in os.environ.items() if k not in
             ('GITHUB_ENV','GITHUB_OUTPUT','GITHUB_PATH','GITHUB_STEP_SUMMARY','PYTHONPATH','PYTHONHOME')}

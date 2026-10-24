@@ -13,14 +13,14 @@ EXPECTED = {
     'AudioPlayer.m': 'dfc408d533c30fe95b8d0a9ad2284f2266fdbaba3377da2bde372fcaad4441c7',
 }
 PREPARE_SHA = 'dfdd215375ac1afd5a90e278733f5ca1a1ef5683317f95526933b5b6fe758532'
-HARNESS_SHA = '008b2a068020bb1f620aa186a1e908cc93b546cc052cdeadd6b34afdbf969d67'
+HARNESS_SHA = '50c1d3f1d3adcdaa7bb78e8d177ccce60c710569dc6aa5a9e215d361fb4020f4'
 LAB_ROOT = 'tool/native_playback_mac'
 PREPARE = LAB_ROOT + '/prepare_build.py'
 HARNESS = LAB_ROOT + '/run_lab.py'
 COPIED_HELPER = LAB_ROOT + '/native_seek_anchor_observation.py'
 STATE = '.native_timing_observation/manifest.json'
 PAYLOAD_DIRECTORY = 'native_seek_anchor_observation_payload'
-AFTER = {'tool/native_playback_mac/prepare_build.py': 'a7aea3aa0530bcd6a39c2e91788a4712093f02570ab631790f4d36dd550a6593', 'tool/native_playback_mac/run_lab.py': 'cd8610e3f1074568d75a66fc6d3c406738c01d6fbaa7abc23d49fe4dafab42be'}
+AFTER = {'tool/native_playback_mac/prepare_build.py': 'a7aea3aa0530bcd6a39c2e91788a4712093f02570ab631790f4d36dd550a6593', 'tool/native_playback_mac/run_lab.py': '4cb598962b9a260d654deb21ae6d0eeee28abd11db669c138dd1e6f625d5ecfe'}
 NATIVE_AFTER = {'AudioPlayer.h': '007d2925fa33997665d64c0a4e1dd6a74c0b21d69f746eae722e5de48b070201', 'AudioPlayer.m': '6e09059b4440a82c4f6d0e86beb37c38245c714a1f3a9163612d5218766b77e3'}
 REJECTION_NAMES = ('budget_or_clock', 'not_healthy', 'primary_identity',
                    'no_timebase', 'effective_rate', 'read_clock', 'capture_quality')

@@ -48,6 +48,106 @@ def follow_nominal_precision_ready(authority, follower, expected):
             and abs(requested - expected) < 0.0001)
 
 
+def follow_native_interval_rate(old, current, expected):
+    """Prove rate from the same returned native CMTime and its enclosing clocks.
+
+    This removes only the extra integer-millisecond quantization. It makes no
+    claim about an unreported intrinsic media timescale or between-sample motion.
+    Missing, stale or unpaired data is never a rounded-rate fallback. No reads,
+    controls, waits, anchors or vendor receipt sequences enter this proof.
+    """
+    def finite(value, low, high):
+        return type(value) in (int, float) and math.isfinite(value) and low <= value <= high
+
+    def integer(value, low, high):
+        return type(value) is int and low <= value <= high
+
+    def rounded(value):
+        # Exact nonnegative llround equivalence without rounding value + 0.5.
+        floor = math.floor(value)
+        return floor + (value - floor >= 0.5)
+
+    def bounds(value):
+        # Guard the returned Float64 seconds-to-ms arithmetic/representation,
+        # not unknown CMTime tick accuracy. Outward endpoints also cover Python
+        # subtraction/division rounding below. JSON preserves the binary64 value.
+        error = 4 * max(math.ulp(value), 1000 * math.ulp(value / 1000))
+        return (math.nextafter(value - error, -math.inf),
+                math.nextafter(value + error, math.inf))
+
+    def point(native):
+        assert type(native) is dict and type(native.get('id')) is str and native['id']
+        timing = native.get('timingObservation')
+        assert type(timing) is dict
+        clock = timing.get('clockObservation')
+        assert type(clock) is dict
+        assert integer(clock.get('nativeCount'), 1, 65534)
+        assert integer(clock.get('ownerCount'), 1, 65534)
+        assert integer(clock.get('rateCount'), 0, 65534)
+        assert integer(timing.get('seekInvocations'), 0, 65534)
+        records = clock.get('native')
+        assert type(records) is list and 1 <= len(records) <= 8
+        sequences = [row.get('sequence') if type(row) is dict else None for row in records]
+        assert all(integer(sequence, 1, clock['nativeCount']) for sequence in sequences)
+        assert all(a < b for a, b in zip(sequences, sequences[1:]))
+        value = records[-1]
+        assert type(value) is dict
+        assert integer(value.get('sequence'), 1, 65534) and value['sequence'] == clock['nativeCount']
+        assert integer(value.get('owner'), 1, 65534) and value['owner'] == clock['ownerCount']
+        assert integer(value.get('rateSequence'), 0, 65534) and value['rateSequence'] == clock['rateCount']
+        assert integer(value.get('seekSequence'), 0, 65534) and value['seekSequence'] == timing['seekInvocations']
+        assert value.get('positionValid') is True and finite(value.get('positionMs'), 0, 86400000)
+        for key in ('wallBeforeMs', 'wallAfterMs', 'monoBeforeMs', 'monoAfterMs'):
+            assert finite(value.get(key), 0, 1e15)
+        wall = value['wallAfterMs'] - value['wallBeforeMs']
+        mono = value['monoAfterMs'] - value['monoBeforeMs']
+        assert 0 <= wall <= 1000 and 0 <= mono <= 1000 and abs(wall - mono) <= 2
+        assert integer(native.get('positionMs'), 0, 86400000)
+        assert native['positionMs'] == rounded(value['positionMs'])
+        assert integer(native.get('sampledAtMs'), 0, 10**15)
+        assert native['sampledAtMs'] == rounded((value['wallBeforeMs'] + value['wallAfterMs']) / 2)
+        assert finite(native.get('sampleUncertaintyMs'), 1, 501)
+        assert native['sampleUncertaintyMs'] == wall / 2 + 1
+        rates = value.get('rates')
+        assert type(rates) is dict and rates.get('identityMatches') is True
+        assert integer(rates.get('owner'), 1, 65534) and rates['owner'] == value['owner']
+        assert rates.get('playingIntent') is True and rates.get('seeking') is False
+        assert integer(rates.get('processingState'), 3, 3) and integer(rates.get('timeControl'), 2, 2)
+        assert rates.get('effectiveAvailable') is True and integer(rates.get('effectiveReadCount'), 1, 1)
+        for key in ('requestedRate', 'nativeRate', 'effectiveRate'):
+            assert finite(rates.get(key), 0, 4) and abs(rates[key] - expected) < 0.0001
+        assert rates['requestedRate'] == native.get('requestedRate')
+        assert rates['nativeRate'] == native.get('playbackRate')
+        for key in ('wallBeforeMs', 'wallAfterMs', 'monoBeforeMs', 'monoAfterMs'):
+            assert finite(rates.get(key), 0, 1e15)
+        rate_wall = rates['wallAfterMs'] - rates['wallBeforeMs']
+        rate_mono = rates['monoAfterMs'] - rates['monoBeforeMs']
+        assert 0 <= rate_wall <= 1000 and 0 <= rate_mono <= 1000 and abs(rate_wall-rate_mono) <= 2
+        delay = rates['monoBeforeMs'] - value['monoAfterMs']
+        assert 0 <= delay <= 1000
+        assert abs((rates['wallBeforeMs'] - value['wallAfterMs']) - delay) <= 2
+        return value
+
+    assert type(old) is dict and type(current) is dict
+    assert type(old.get('id')) is str and old['id'] and old['id'] == current.get('id')
+    assert finite(expected, 0.15, 4)
+    a, b = point(old), point(current)
+    assert b['sequence'] > a['sequence']
+    assert (a['owner'], a['rateSequence'], a['seekSequence']) == (b['owner'], b['rateSequence'], b['seekSequence'])
+    wall_interval = ((b['wallBeforeMs'] + b['wallAfterMs']) - (a['wallBeforeMs'] + a['wallAfterMs'])) / 2
+    mono_interval = ((b['monoBeforeMs'] + b['monoAfterMs']) - (a['monoBeforeMs'] + a['monoAfterMs'])) / 2
+    assert abs(wall_interval - mono_interval) <= 2
+    # Each position read is enclosed by its own before/after native uptime.
+    lower_dt = math.nextafter(bounds(b['monoBeforeMs'])[0] - bounds(a['monoAfterMs'])[1], -math.inf)
+    upper_dt = math.nextafter(bounds(b['monoAfterMs'])[1] - bounds(a['monoBeforeMs'])[0], math.inf)
+    lower_dp = math.nextafter(bounds(b['positionMs'])[0] - bounds(a['positionMs'])[1], -math.inf)
+    upper_dp = math.nextafter(bounds(b['positionMs'])[1] - bounds(a['positionMs'])[0], math.inf)
+    assert 0 < lower_dt <= upper_dt and 1 < lower_dp <= upper_dp
+    lower_rate = math.nextafter(lower_dp / upper_dt, -math.inf)
+    upper_rate = math.nextafter(upper_dp / lower_dt, math.inf)
+    return lower_rate > expected - 0.15 and upper_rate < expected + 0.15
+
+
 def follow_precision_sample(matrix, states, authority_index, context, expected, identity, previous=None, *, measurement=None):
     """Validate every existing tuple; never wait, restart, poll, or skip a tuple.
 
@@ -79,7 +179,7 @@ def follow_precision_sample(matrix, states, authority_index, context, expected, 
             assert current['id'] == old['id']
             assert delta_ms > 1
             assert elapsed_ms > current['sampleUncertaintyMs'] + old['sampleUncertaintyMs']
-            assert abs(delta_ms / elapsed_ms - expected) < 0.15
+            assert follow_native_interval_rate(old, current, expected)
     return (a, f)
 
 

@@ -14,6 +14,9 @@ FINAL = None
 _spec = importlib.util.spec_from_file_location('precision_synthetic_states', Path(__file__).with_name('readiness_contract.py'))
 fixture = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(fixture)
+_clock_spec = importlib.util.spec_from_file_location('precision_native_clock_inputs', Path(__file__).with_name('native_clock_fixture_inputs.py'))
+clock_fixture = importlib.util.module_from_spec(_clock_spec)
+_clock_spec.loader.exec_module(clock_fixture)
 
 
 def pair(at, expected=1.5):
@@ -27,7 +30,7 @@ def pair(at, expected=1.5):
 
 def load(clock, final):
     names = fixture.NAMES | {'native_requested_rate', 'follow_correction_identity',
-        'native_follow_readiness_pending', 'follow_nominal_precision_ready', 'follow_precision_sample', 'follow_convergence_observation',
+        'native_follow_readiness_pending', 'follow_nominal_precision_ready', 'follow_native_interval_rate', 'follow_precision_sample', 'follow_convergence_observation',
         'FollowPrecisionUnsafe', 'FollowPrecisionDeadline', '_follow_process_identity', '_follow_canonical_identity',
         '_follow_transition_ownership', 'begin_follow_precision_transition', 'observe_follow_precision_transition',
         '_follow_handoff_matches', 'pin_follow_transfer_command', '_follow_owned_provisional_target'}
@@ -38,6 +41,7 @@ def load(clock, final):
           'retain_transfer_native_timing': retain_transfer_native_timing,
           'emit_transfer_first_failure': emit_transfer_first_failure}
     exec(compile(ast.Module(body=selected,type_ignores=[]), '<owned-strict-precision>', 'exec'),ns)
+    ns['decoded'] = clock_fixture.decoded_with_native_clock(ns['decoded'])
     return ns
 
 
