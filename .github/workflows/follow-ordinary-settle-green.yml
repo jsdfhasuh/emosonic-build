@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '2fb9f8bf711da6b1aaf8b9d7442ee3111befe0d4'
+  SOURCE_SHA: '72e524134c81becacf80ba8ff3f3d7562328347f'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == 'ec0703df69806fb6704be502569c91b782d0ed66' &&
-      github.event.head_commit.message == 'test: validate ordinary Follow settlement fixture correction 20261024' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '2bcaef8c8585bd7039bfc9c056b334daae8fe9d7' &&
+      github.event.head_commit.message == 'test: validate ordinary Follow settlement flow lint 20261024' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build

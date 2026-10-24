@@ -244,16 +244,16 @@ class OrdinarySettlementGreenTests(unittest.TestCase):
                 with self.assertRaises(c.TIMING.previous.recovery.request.p.GateError): c.require_counts()
 
     def test_fixed_baseline_and_reviewed_contract(self):
-        self.assertEqual(c.PARENT,'ec0703df69806fb6704be502569c91b782d0ed66')
+        self.assertEqual(c.PARENT,'2bcaef8c8585bd7039bfc9c056b334daae8fe9d7')
         self.assertEqual(c.SERVER_SHA,'5adc23da173c5f20188d79aafe8fcc1e656eb38a')
-        self.assertEqual(c.REQUEST['attempt'],105)
+        self.assertEqual(c.REQUEST['attempt'],106)
         self.assertEqual(c.REQUEST['mode'],'follow-ordinary-settlement-full-green-validation')
         self.assertEqual(c.INVENTORY_PATH,'tool/follow_smooth_settlement/green_inventory.json')
         self.assertIs(c.ORIGINAL_INVENTORY,c.previous.inventory)
         self.assertEqual(c.REVIEWED_BOUNDARY_COUNT,17)
         self.assertEqual(c.EXPECTED_COUNTS,(4,17))
         self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-ordinary-settlement-20261024')
-        self.assertEqual(c.SOURCE_SHA,'2fb9f8bf711da6b1aaf8b9d7442ee3111befe0d4')
+        self.assertEqual(c.SOURCE_SHA,'72e524134c81becacf80ba8ff3f3d7562328347f')
         self.assertEqual(c.INVENTORY_SHA256,'e086df2bfc30773f04d355c860075bff478ad6bbb7b9610188c6dfe2e4977f47')
         with patch.object(c,'SOURCE_SHA','PENDING'), patch.object(c.previous,'main') as delegated, contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(c.main(),1); delegated.assert_not_called()

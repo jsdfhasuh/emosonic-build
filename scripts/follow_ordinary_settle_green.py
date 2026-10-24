@@ -4,15 +4,15 @@ import sys
 from unittest.mock import patch
 import initial_apply_receipt_green as previous
 
-PARENT = 'ec0703df69806fb6704be502569c91b782d0ed66'
-MESSAGE = 'test: validate ordinary Follow settlement fixture correction 20261024'
+PARENT = '2bcaef8c8585bd7039bfc9c056b334daae8fe9d7'
+MESSAGE = 'test: validate ordinary Follow settlement flow lint 20261024'
 WORKFLOW = 'follow-ordinary-settle-green.yml'
 REQUEST_PATH = 'requests/follow-ordinary-settle-green-20261024.json'
 SOURCE_REF = 'refs/heads/fix/follow-ordinary-settlement-20261024'
-SOURCE_SHA = '2fb9f8bf711da6b1aaf8b9d7442ee3111befe0d4'
+SOURCE_SHA = '72e524134c81becacf80ba8ff3f3d7562328347f'
 SERVER_SHA = previous.SERVER_SHA
 REQUEST = dict(previous.REQUEST, source_ref=SOURCE_REF, source_sha=SOURCE_SHA,
-               mode='follow-ordinary-settlement-full-green-validation', attempt=105)
+               mode='follow-ordinary-settlement-full-green-validation', attempt=106)
 INVENTORY_PATH = 'tool/follow_smooth_settlement/green_inventory.json'
 INVENTORY_SHA256 = 'e086df2bfc30773f04d355c860075bff478ad6bbb7b9610188c6dfe2e4977f47'
 # Final independently reviewed fixture correction; preserve the frozen four cases.
