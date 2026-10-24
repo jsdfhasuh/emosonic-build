@@ -20,7 +20,7 @@ HARNESS = LAB_ROOT + '/run_lab.py'
 COPIED_HELPER = LAB_ROOT + '/native_seek_anchor_observation.py'
 STATE = '.native_timing_observation/manifest.json'
 PAYLOAD_DIRECTORY = 'native_seek_anchor_observation_payload'
-AFTER = {'tool/native_playback_mac/prepare_build.py': 'a7aea3aa0530bcd6a39c2e91788a4712093f02570ab631790f4d36dd550a6593', 'tool/native_playback_mac/run_lab.py': 'a0eaed55fbc825512a8f0f81e213fa346bc224aba6f7887e7adbc538891204d4'}
+AFTER = {'tool/native_playback_mac/prepare_build.py': 'a7aea3aa0530bcd6a39c2e91788a4712093f02570ab631790f4d36dd550a6593', 'tool/native_playback_mac/run_lab.py': 'cd8610e3f1074568d75a66fc6d3c406738c01d6fbaa7abc23d49fe4dafab42be'}
 NATIVE_AFTER = {'AudioPlayer.h': '007d2925fa33997665d64c0a4e1dd6a74c0b21d69f746eae722e5de48b070201', 'AudioPlayer.m': '6e09059b4440a82c4f6d0e86beb37c38245c714a1f3a9163612d5218766b77e3'}
 REJECTION_NAMES = ('budget_or_clock', 'not_healthy', 'primary_identity',
                    'no_timebase', 'effective_rate', 'read_clock', 'capture_quality')
@@ -336,6 +336,152 @@ def summarize_state(state, previous=None, elapsed_ms=None, paired_state=None):
         return {'status': 'malformed'}
 
 
+
+TRANSFER_NATIVE_BASIS_SCHEMA = {
+    'snapshot': frozenset({'existing_transfer_tuple'}),
+    'authorityClientOrdinal': ('integer', 1, 1),
+    'followerClientOrdinal': ('integer', 2, 2),
+    'capturedCommandElapsedMs': ('number', 0, 600000),
+    'elapsedOrigin': frozenset({'before_transfer_command'}),
+    'receiptAttribution': frozenset({'unpaired_vendor_receipts'}),
+    'historyElapsedMeaning': frozenset({'command_relative_not_new_readiness_origin'}),
+}
+
+
+def retain_transfer_native_timing(matrix, states, now):
+    """Reduce only this existing transfer tuple and its already-read clock.
+
+    The existing history field readinessElapsedMs is command-relative here;
+    it neither starts a readiness window nor pairs vendor receipt sequences
+    with native owner, sample, or rate-request ordinals. The existing first
+    failure JSON copy identifies the separate immutable diagnostic record.
+    """
+    transition = getattr(matrix, 'follow_precision_transition', None)
+    if type(transition) is not dict or transition.get('kind') != 'transfer':
+        return
+    if transition.get('nativeTimingLastStates') is states:
+        return
+    measurement = transition.get('measurement')
+    origin = transition.get('origin')
+    if (type(measurement) is not dict or type(states) is not list or len(states) != 3
+            or not number(now, 0, 1e15) or not number(origin, 0, 1e15)):
+        return
+    elapsed = (now - origin) * 1000
+    if not number(elapsed, 0, 600000):
+        return
+    previous = transition.get('nativeTiming')
+    if type(previous) is not dict:
+        previous = {}
+    try:
+        projection = {
+            'authority': summarize_state(states[1], previous.get('authority'), elapsed, states[2]),
+            'follower': summarize_state(states[2], previous.get('follower'), elapsed, states[1]),
+        }
+    except Exception:
+        # Never leave an earlier tuple's tape labeled as the current capture.
+        projection = None
+    transition['nativeTiming'] = projection
+    transition['nativeTimingBasis'] = {
+        'snapshot': 'existing_transfer_tuple',
+        'authorityClientOrdinal': 1, 'followerClientOrdinal': 2,
+        'capturedCommandElapsedMs': elapsed,
+        'elapsedOrigin': 'before_transfer_command',
+        'receiptAttribution': 'unpaired_vendor_receipts',
+        'historyElapsedMeaning': 'command_relative_not_new_readiness_origin',
+    }
+    # Observer-only deduplication. Never alter the acceptance lastStates witness.
+    transition['nativeTimingLastStates'] = states
+
+
+TRANSFER_RECORD_STAGE = 'transfer-first-failure-native-timing'
+TRANSFER_RECORD_BYTE_LIMIT = 256 * 1024
+TRANSFER_RECORD_COUNT_LIMIT = 1
+TRANSFER_FAILURE_CONDITIONS = frozenset(('steady_sample_precision', 'authority_rate',
+    'follower_rate', 'hard_drift_limit', 'lab_ten_second_convergence',
+    'native_35s_progression', 'native_evidence', 'rate_change', 'restoration',
+    'safe_follow_task', 'unknown'))
+
+
+def _transfer_schema_valid(value, schema):
+    """Reject, never truncate or silently filter, the closed finite projection."""
+    if schema is bool:
+        return type(value) is bool
+    if type(schema) is frozenset:
+        return type(value) is str and value in schema
+    if type(schema) is dict:
+        return (type(value) is dict and set(value) <= set(schema)
+            and all(_transfer_schema_valid(field, schema[key]) for key, field in value.items()))
+    if schema[0] == 'list':
+        return (type(value) is list and len(value) <= schema[2]
+            and all(_transfer_schema_valid(item, schema[1]) for item in value))
+    return (type(value) in ((int,) if schema[0] == 'integer' else (int, float))
+        and math.isfinite(value) and schema[1] <= value <= schema[2])
+
+
+def emit_transfer_first_failure(matrix):
+    """One bounded record after the original first-failure copy, never a verdict.
+
+    Same tuple identity does not imply simultaneous clocks: a repeated tuple
+    may have been reduced earlier. Capture and failure elapsed are separate.
+    Vendor receipts remain unpaired with native monotonic sample ordinals.
+    Rejections are explicit; observation/printing errors never mask assertions.
+    """
+    if getattr(matrix, '_transfer_native_first_failure_emitted', False):
+        return
+    matrix._transfer_native_first_failure_emitted = True
+    evidence = {'recordOrdinal': 1, 'firstFailureOrdinal': 1,
+        'recordCountLimit': TRANSFER_RECORD_COUNT_LIMIT,
+        'recordByteLimit': TRANSFER_RECORD_BYTE_LIMIT,
+        'condition': 'unknown', 'evidenceStatus': 'unavailable'}
+    record = {'stage': TRANSFER_RECORD_STAGE, 'status': 'not-verified',
+        'transferNativeTiming': evidence}
+    try:
+        failure = getattr(matrix, 'follow_first_failure', None)
+        if type(failure) is dict and failure.get('condition') in TRANSFER_FAILURE_CONDITIONS:
+            evidence['condition'] = failure['condition']
+        transition = getattr(matrix, 'follow_precision_transition', None)
+        observation = failure.get('observation') if type(failure) is dict else None
+        precision = observation.get('precision') if type(observation) is dict else None
+        if type(transition) is dict and transition.get('kind') == 'transfer' and type(precision) is dict:
+            elapsed = precision.get('convergenceElapsedMs')
+            basis = transition.get('nativeTimingBasis')
+            captured = basis.get('capturedCommandElapsedMs') if type(basis) is dict else None
+            if number(elapsed, 0, 600000): evidence['failureObservationElapsedMs'] = elapsed
+            exact = (transition.get('nativeTimingLastStates') is getattr(matrix, 'last', None)
+                and type(transition.get('nativeTimingLastStates')) is list
+                and precision.get('convergenceKind') == 'transfer'
+                and precision.get('convergenceOrigin') == 'before_transfer_command'
+                and number(captured, 0, 600000) and number(elapsed, 0, 600000)
+                and captured <= elapsed)
+            if not exact:
+                evidence['evidenceStatus'] = 'mismatch'
+            else:
+                projection = transition.get('nativeTiming')
+                if (type(projection) is dict and set(projection) == {'authority', 'follower'}
+                        and _transfer_schema_valid(projection, {'authority': SCHEMA, 'follower': SCHEMA})
+                        and _transfer_schema_valid(basis, TRANSFER_NATIVE_BASIS_SCHEMA)):
+                    evidence.update(evidenceStatus='observed', association='same_first_failure_tuple',
+                        nativeTiming=projection, nativeTimingBasis=basis)
+                else:
+                    evidence['evidenceStatus'] = 'malformed'
+        encoded = json.dumps(record, separators=(',', ':'), allow_nan=False)
+        if len(encoded.encode('utf-8')) > TRANSFER_RECORD_BYTE_LIMIT:
+            evidence.pop('nativeTiming', None); evidence.pop('nativeTimingBasis', None)
+            evidence.pop('association', None)
+            evidence['evidenceStatus'] = 'oversized'
+            encoded = json.dumps(record, separators=(',', ':'), allow_nan=False)
+    except Exception:
+        evidence = {key: evidence[key] for key in ('recordOrdinal', 'firstFailureOrdinal',
+            'recordCountLimit', 'recordByteLimit')}
+        evidence.update(condition='unknown', evidenceStatus='malformed')
+        encoded = json.dumps({'stage': TRANSFER_RECORD_STAGE, 'status': 'not-verified',
+            'transferNativeTiming': evidence}, separators=(',', ':'), allow_nan=False)
+    try:
+        print(encoded, flush=True)
+    except Exception:
+        pass
+
+
 def successful_follow_observation(matrix):
     """Export existing alignment evidence only after the strict rate window.
 
@@ -376,7 +522,7 @@ def patch_harness(original):
     if digest(original) != HARNESS_SHA:
         raise ValueError('Observation harness source pin mismatch')
     change = Transform(original.decode('utf-8'))
-    change.once('import argparse\n', 'import argparse\nfrom native_seek_anchor_observation import summarize_state, successful_follow_observation\n')
+    change.once('import argparse\n', 'import argparse\nfrom native_seek_anchor_observation import summarize_state, successful_follow_observation, retain_transfer_native_timing, emit_transfer_first_failure\n')
     anchor = '''            assert follow_correction_identity(states, authority_index, context) == correction_identity'''
     addition = '''            self.rate_measurement['nativeTiming'] = {
                 'authority': summarize_state(authority, self.rate_measurement.get('nativeTiming', {}).get('authority'), (time.monotonic() - started) * 1000, follower),
@@ -385,12 +531,22 @@ def patch_harness(original):
 '''
     change.once(anchor, anchor.replace('            assert ', addition + '            assert ', 1))
     change.once(RATE_SUCCESS, RATE_SUCCESS_OBSERVED)
+    transition_anchor = '    now = time.monotonic()\n    follow_convergence_observation(matrix, transition[\'kind\']'
+    change.once(transition_anchor, transition_anchor.replace(
+        '    follow_convergence_observation',
+        '    retain_transfer_native_timing(matrix, states, now)\n    follow_convergence_observation', 1))
+    failure_anchor = "            self.follow_first_failure = {'condition': condition,\n                'observation': json.loads(json.dumps(self.follow_observation))}\n"
+    change.once(failure_anchor, failure_anchor + '            emit_transfer_first_failure(self)\n')
     result = change.finish()
     # Remove only the exact observation additions, never controls or assertions. The full
     # original AST, including every assertion/control/deadline, must be equal.
     class Projection(ast.NodeTransformer):
         def visit_ImportFrom(self, node):
             return None if node.module == 'native_seek_anchor_observation' else node
+        def visit_Expr(self, node):
+            expected = ast.parse('retain_transfer_native_timing(matrix, states, now)').body[0]
+            failure = ast.parse('emit_transfer_first_failure(self)').body[0]
+            return None if ast.dump(node) in (ast.dump(expected), ast.dump(failure)) else self.generic_visit(node)
         def visit_Call(self, node):
             expected = ast.parse('successful_follow_observation(self)').body[0].value
             node.keywords = [keyword for keyword in node.keywords
@@ -410,15 +566,19 @@ def patch_harness(original):
 def restore_harness(observed):
     """Reverse only this fixed observation layer, never write source bytes."""
     text = observed.decode('utf-8')
-    imported = 'from native_seek_anchor_observation import summarize_state, successful_follow_observation\n'
+    imported = 'from native_seek_anchor_observation import summarize_state, successful_follow_observation, retain_transfer_native_timing, emit_transfer_first_failure\n'
     addition = '''            self.rate_measurement['nativeTiming'] = {
                 'authority': summarize_state(authority, self.rate_measurement.get('nativeTiming', {}).get('authority'), (time.monotonic() - started) * 1000, follower),
                 'follower': summarize_state(follower, self.rate_measurement.get('nativeTiming', {}).get('follower'), (time.monotonic() - started) * 1000, authority),
             }
 '''
-    if text.count(imported) != 1 or text.count(addition) != 1 or text.count(RATE_SUCCESS_OBSERVED) != 1:
+    transition_hook = '    retain_transfer_native_timing(matrix, states, now)\n'
+    failure_hook = '            emit_transfer_first_failure(self)\n'
+    if (text.count(imported) != 1 or text.count(addition) != 1
+            or text.count(RATE_SUCCESS_OBSERVED) != 1 or text.count(transition_hook) != 1
+            or text.count(failure_hook) != 1):
         raise ValueError('Observation harness inverse anchors changed')
-    original = text.replace(imported, '', 1).replace(addition, '', 1).replace(
+    original = text.replace(imported, '', 1).replace(addition, '', 1).replace(transition_hook, '', 1).replace(failure_hook, '', 1).replace(
         RATE_SUCCESS_OBSERVED, RATE_SUCCESS, 1).encode('utf-8')
     if digest(original) != HARNESS_SHA or patch_harness(original) != observed:
         raise ValueError('Observation harness inverse pin mismatch')
@@ -781,3 +941,15 @@ SCHEMA['clockHistory']={'counterCapReached':bool,'count':('integer',0,65535),'dr
     'coverage':frozenset(('first_and_tail','complete_retained_samples')),
     'clockDomain':frozenset(('harness_elapsed_and_paired_native_epoch',)), 'recoveryArmAge':frozenset(('unavailable',)),
     'records':('list',CLOCK_ROW_SCHEMA,8)}
+
+
+TRANSFER_RECORD_SCHEMA = {
+    'recordOrdinal': ('integer', 1, 1), 'firstFailureOrdinal': ('integer', 1, 1),
+    'recordCountLimit': ('integer', 1, 1), 'recordByteLimit': ('integer', 262144, 262144),
+    'condition': TRANSFER_FAILURE_CONDITIONS,
+    'evidenceStatus': frozenset(('observed', 'unavailable', 'mismatch', 'oversized', 'malformed')),
+    'association': frozenset(('same_first_failure_tuple',)),
+    'failureObservationElapsedMs': ('number', 0, 600000),
+    'nativeTiming': {'authority': SCHEMA, 'follower': SCHEMA},
+    'nativeTimingBasis': TRANSFER_NATIVE_BASIS_SCHEMA,
+}

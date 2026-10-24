@@ -155,8 +155,8 @@ class IngressValidationGateTests(unittest.TestCase):
     def test_exact_ordinary_settlement_successor_pins_and_both_matrix_stages(self):
         self.assertEqual(c.SOURCE_SHA,'72e524134c81becacf80ba8ff3f3d7562328347f')
         self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-ordinary-settlement-20261024')
-        self.assertEqual(c.PARENT,'aaa7cc0cd8ba476d1b90e6900ab4e65163e7292b')
-        self.assertEqual(c.REQUEST['attempt'],107)
+        self.assertEqual(c.PARENT,'ee64ede80838ef3ecc2bcfd1b90be893d49bcbf2')
+        self.assertEqual(c.REQUEST['attempt'],108)
         self.assertEqual(c.INGRESS_RUN,40051389321)
         self.assertEqual(c.INGRESS_HEAD,'aaa7cc0cd8ba476d1b90e6900ab4e65163e7292b')
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)

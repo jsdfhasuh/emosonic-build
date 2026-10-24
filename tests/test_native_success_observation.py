@@ -16,6 +16,10 @@ import current_native_check as public
 from native_follow_lifecycle_schema import FOLLOW_LIFECYCLE_SCHEMA
 
 SYNTHETIC = ('''import argparse
+def observe_follow_precision_transition(matrix, states):
+    transition = matrix.follow_precision_transition
+    now = time.monotonic()
+    follow_convergence_observation(matrix, transition['kind'], now)
 class Matrix:
     def alignment(self, states, authority_index, context, correction_identity, started):
         if states:
@@ -27,6 +31,10 @@ class Matrix:
         self.trace.append('measurement_complete')
         assert valid and elapsed >= 3
 ''' + timing.RATE_SUCCESS + '''        self.rate_measurement = None
+    def record_follow_condition(self, condition, passed):
+        if not passed and self.follow_first_failure is None:
+            self.follow_first_failure = {'condition': condition,
+                'observation': json.loads(json.dumps(self.follow_observation))}
     def safe_failure(self):
         self.trace.append('original_failure')
         return {'stage': 'failure', 'status': 'failed', 'rateMeasurement': self.rate_measurement}

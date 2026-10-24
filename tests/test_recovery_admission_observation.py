@@ -18,6 +18,7 @@ import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 import current_native_check as public
 import test_native_compact_export as compact
+from test_follow_correction_observation import restore_legacy_apply_parser
 
 
 def summary(ordinal=1, reason='admitted', path='prepared', prepared='owner_accepted'):
@@ -136,7 +137,7 @@ class RecoveryAdmissionObservationTests(unittest.TestCase):
         self.assertTrue(all(len(row['recoveryAdmission']['summaries'])==4 for row in endpoint['clients']))
 
     def test_exact_public_inverse_preserves_all_existing_observer_bytes(self):
-        text=Path(observer.__file__).read_text();begin=text.index('ADMISSION_REASONS =')
+        text=restore_legacy_apply_parser(Path(observer.__file__).read_text());begin=text.index('ADMISSION_REASONS =')
         end=text.index('def _endpoint_timing(states):',begin)
         restored=text[:begin]+text[end:]
         hook=("        if 'recoveryAdmissionDiagnostics' in state:\n"

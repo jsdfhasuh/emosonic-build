@@ -135,11 +135,11 @@ def _correction_event(body, logger):
         else: invalid += 1
         return row, invalid
     if event == 'speed_correction_apply':
-        match = re.fullmatch(r'speedCorrection apply targetKey=\S+ driftMs=(\S+) baseSpeed=(\S+) syncSpeed=(\S+) durationMs=(\S+)', body)
+        match = re.fullmatch(r'speedCorrection apply targetKey=\S+ driftMs=(\S+) baseSpeed=(\S+) syncSpeed=(\S+) (durationMs|remainingMs)=(\S+)', body)
         if not match: return row, 1
-        for token, (key, low, high, integer) in zip(match.groups(), (
+        for token, (key, low, high, integer) in zip(match.group(1, 2, 3, 5), (
                 ('driftMs', -86400000, 86400000, True), ('baseSpeed', .5, 2, False),
-                ('syncSpeed', .5, 2, False), ('durationMs', 0, 5000, True))):
+                ('syncSpeed', .5, 2, False), (match.group(4), 0, 5000, True))):
             value = _finite_field(token, low, high, integer=integer)
             if value is not None: row[key] = value
             else: invalid += 1

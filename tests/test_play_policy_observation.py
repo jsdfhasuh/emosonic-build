@@ -17,6 +17,7 @@ import native_follow_lifecycle_schema as schema
 import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 import current_native_check as public
+from test_follow_correction_observation import restore_legacy_apply_parser
 CONTRACT = ROOT/'tests/fixtures/play_policy_schema.json'
 CONTRACT_SHA = '9104b050fcaef7db7111acc4d42fe845d11ff5fb8de9a30d70f992046985adc6'
 
@@ -193,7 +194,7 @@ class PlayPolicyObservationTests(unittest.TestCase):
                 self.assertTrue(all(len(row['playPolicy']['records'])==33 for row in clients))
 
     def test_exact_inverse_preserves_every_original_observer_byte(self):
-        text=Path(observer.__file__).read_text()
+        text=restore_legacy_apply_parser(Path(observer.__file__).read_text())
         begin=text.index('ADMISSION_REASONS =')
         end=text.index('def _endpoint_timing(states):',begin)
         text=text[:begin]+text[end:]

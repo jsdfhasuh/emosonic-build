@@ -1,5 +1,6 @@
 """Synthetic fixed-literal logs only; no native/private source or raw log export."""
 import copy
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -21,7 +22,146 @@ def parse(text):
     return obs.parse_log_slice(text.encode())['correctionSequence']
 
 
+def restore_legacy_apply_parser(text):
+    """Reverse only the approved terminal-field delta, not historical pins."""
+    changes = (
+        (r"        match = re.fullmatch(r'speedCorrection apply targetKey=\S+ driftMs=(\S+) baseSpeed=(\S+) syncSpeed=(\S+) durationMs=(\S+)', body)" + '\n',
+         r"        match = re.fullmatch(r'speedCorrection apply targetKey=\S+ driftMs=(\S+) baseSpeed=(\S+) syncSpeed=(\S+) (durationMs|remainingMs)=(\S+)', body)" + '\n'),
+        ('        for token, (key, low, high, integer) in zip(match.groups(), (\n',
+         '        for token, (key, low, high, integer) in zip(match.group(1, 2, 3, 5), (\n'),
+        ("                ('syncSpeed', .5, 2, False), ('durationMs', 0, 5000, True))):\n",
+         "                ('syncSpeed', .5, 2, False), (match.group(4), 0, 5000, True))):\n"),
+    )
+    for before, after in changes:
+        if text.count(after) != 1 or text.count(before) != 0:
+            raise ValueError('Correction terminal-field delta changed')
+        text = text.replace(after, before, 1)
+    return text
+
+
 class CorrectionObservationTests(unittest.TestCase):
+    def test_exact_parser_and_schema_inverse_preserves_all_previous_bytes(self):
+        restored = restore_legacy_apply_parser(Path(obs.__file__).read_text())
+        self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),
+            '5e4f1c7fa88b0c5d9ef142cd14daae7be76b91b23d98cb701e1d3962c369bdce')
+        text = Path(schema.__file__).read_text()
+        addition = "        'remainingMs': ('integer', 0, 5000),\n"
+        self.assertEqual(text.count(addition), 1)
+        self.assertEqual(hashlib.sha256(text.replace(addition, '', 1).encode()).hexdigest(),
+            '34eb0936aea26661268bb014ec740e5f93dc050cb0ef86639e7ccadcee9086c5')
+        with self.assertRaises(ValueError):
+            restore_legacy_apply_parser(restored)
+
+    def test_apply_terminal_fields_are_distinct_bounded_integer_facts(self):
+        for field in ('durationMs', 'remainingMs'):
+            for value in (0, 1333, 5000):
+                with self.subTest(field=field, value=value):
+                    result = parse(log('[[EMO_FOLLOW_SYNC]] speedCorrection apply '
+                        f'targetKey=PRIVATE driftMs=-80 baseSpeed=1.5 syncSpeed=1.59 {field}={value}'))
+                    self.assertEqual(result['invalidFieldCount'], 0)
+                    self.assertEqual(result['counts']['speed_correction_apply'], 1)
+                    self.assertEqual(result['records'], [{'event': 'speed_correction_apply',
+                        'driftMs': -80, 'baseSpeed': 1.5, 'syncSpeed': 1.59, field: value,
+                        'ordinal': 1, 'timeStatus': 'unpaired_wall', 'wallOffsetMs': 0}])
+                    self.assertFalse(result['monotonicClockPaired'])
+                    self.assertFalse(result['recoveryWindowStartObserved'])
+                    self.assertNotIn('PRIVATE', json.dumps(result))
+
+    def test_apply_both_duplicate_reordered_and_extra_fields_fail_closed(self):
+        base = 'targetKey=PRIVATE driftMs=-80 baseSpeed=1.5 syncSpeed=1.59'
+        bodies = [base + ' durationMs=1000 remainingMs=900',
+            base + ' remainingMs=900 durationMs=1000',
+            base + ' durationMs=1000 durationMs=1000',
+            base + ' remainingMs=900 remainingMs=900',
+            base + ' durationMs=1000 error=PRIVATE',
+            base + ' remainingMs=900 error=PRIVATE',
+            base, base + ' durationMs=', base + ' remainingMs=',
+            'targetKey=PRIVATE driftMs=-80 baseSpeed=1.5 durationMs=1000 syncSpeed=1.59',
+            'targetKey=PRIVATE driftMs=-80 baseSpeed=1.5 remainingMs=900 syncSpeed=1.59',
+            'targetKey=PRIVATE baseSpeed=1.5 driftMs=-80 syncSpeed=1.59 remainingMs=900',
+            base.replace('driftMs=-80', 'driftMs=-80 driftMs=7') + ' remainingMs=900']
+        for body in bodies:
+            with self.subTest(body=body):
+                result = parse(log('[[EMO_FOLLOW_SYNC]] speedCorrection apply ' + body))
+                self.assertEqual(result['invalidFieldCount'], 1)
+                self.assertEqual(result['records'], [{'event': 'speed_correction_apply',
+                    'ordinal': 1, 'timeStatus': 'unpaired_wall', 'wallOffsetMs': 0}])
+
+    def test_apply_terminal_invalid_values_omit_only_that_field(self):
+        tokens = ('NaN', 'Infinity', '-Infinity', '1e3', '1.0', 'true', 'false',
+            'True', 'False', 'null', '+1', '-1', '5001', '9' * 33, 'PRIVATE')
+        for field in ('durationMs', 'remainingMs'):
+            for token in tokens:
+                with self.subTest(field=field, token=token):
+                    result = parse(log('[[EMO_FOLLOW_SYNC]] speedCorrection apply '
+                        f'targetKey=PRIVATE driftMs=-80 baseSpeed=1.5 syncSpeed=1.59 {field}={token}'))
+                    self.assertEqual(result['invalidFieldCount'], 1)
+                    self.assertEqual(result['records'], [{'event': 'speed_correction_apply',
+                        'driftMs': -80, 'baseSpeed': 1.5, 'syncSpeed': 1.59,
+                        'ordinal': 1, 'timeStatus': 'unpaired_wall', 'wallOffsetMs': 0}])
+
+    def test_apply_remaining_field_does_not_relax_other_numeric_fields(self):
+        for key, token in (('driftMs', 'true'), ('driftMs', '86400001'),
+                ('baseSpeed', 'NaN'), ('baseSpeed', '0.49'),
+                ('syncSpeed', 'Infinity'), ('syncSpeed', '2.01')):
+            values = {'driftMs': '-80', 'baseSpeed': '1.5', 'syncSpeed': '1.59'}
+            values[key] = token
+            result = parse(log('[[EMO_FOLLOW_SYNC]] speedCorrection apply targetKey=PRIVATE '
+                + ' '.join(f'{name}={value}' for name, value in values.items()) + ' remainingMs=900'))
+            row = result['records'][0]
+            self.assertEqual(result['invalidFieldCount'], 1)
+            self.assertEqual(row['remainingMs'], 900)
+            self.assertNotIn(key, row)
+
+    def test_new_apply_form_preserves_first64_last64_and_unpaired_wall_order(self):
+        text = ''.join(log('[[EMO_FOLLOW_SYNC]] speedCorrection apply '
+            f'targetKey=PRIVATE driftMs=-80 baseSpeed=1.5 syncSpeed=1.59 remainingMs={ordinal}',
+            f'2026-10-22T15:00:00.{150 - ordinal:03d}') for ordinal in range(1, 151))
+        result = parse(text)
+        self.assertEqual(result['eventCount'], 150)
+        self.assertEqual(result['counts']['speed_correction_apply'], 150)
+        self.assertEqual(result['invalidFieldCount'], 0)
+        self.assertEqual(result['recordRetention'], 'first64_last64')
+        self.assertEqual(result['recordsDropped'], 22)
+        self.assertTrue(result['recordsTruncated'])
+        self.assertTrue(result['wallClockRegressionObserved'])
+        self.assertFalse(result['monotonicClockPaired'])
+        self.assertFalse(result['recoveryWindowStartObserved'])
+        expected = list(range(1, 65)) + list(range(87, 151))
+        self.assertEqual([row['ordinal'] for row in result['records']], expected)
+        self.assertEqual([row['remainingMs'] for row in result['records']], expected)
+        self.assertEqual([row['wallOffsetMs'] for row in result['records']], [1 - i for i in expected])
+        self.assertTrue(all(row['timeStatus'] == 'unpaired_wall' for row in result['records']))
+
+    def test_both_apply_forms_roundtrip_with_private_fields_filtered(self):
+        import current_native_check as native
+        text = ''.join(log('[[EMO_FOLLOW_SYNC]] speedCorrection apply '
+            f'targetKey=PRIVATE_TOKEN driftMs=-80 baseSpeed=1.5 syncSpeed=1.59 {field}=900')
+            for field in ('durationMs', 'remainingMs'))
+        value = {'stage': 'native-follow-command-observation',
+            'followLifecycle': {'ownedLog': obs.parse_log_slice(text.encode())}}
+        self.assertEqual(native.report_line(json.dumps(value)), value)
+        encoded = json.dumps(value)
+        for secret in ('PRIVATE_TOKEN', 'targetKey', '2026-10-22', 'rawLog'):
+            self.assertNotIn(secret, encoded)
+        dirty = copy.deepcopy(value)
+        for row in dirty['followLifecycle']['ownedLog']['correctionSequence']['records']:
+            row.update(targetKey='PRIVATE_TOKEN', rawLog='PRIVATE_RAW',
+                absoluteTimestamp='2026-10-22T15:00:00.000', extraDurationMs=900)
+        self.assertEqual(native.report_line(json.dumps(dirty)), value)
+
+    def test_export_rejects_invalid_duration_and_remaining_values(self):
+        import current_native_check as native
+        for field in ('durationMs', 'remainingMs'):
+            for bad in (True, False, -1, 5001, 1.5, float('nan'), float('inf'), '900', 'PRIVATE'):
+                with self.subTest(field=field, value=bad):
+                    row = {'event': 'speed_correction_apply', field: bad}
+                    value = {'stage': 'native-follow-command-observation', 'followLifecycle': {
+                        'ownedLog': {'correctionSequence': {'records': [row]}}}}
+                    output = native.report_line(json.dumps(value))
+                    self.assertEqual(output['followLifecycle']['ownedLog']['correctionSequence']['records'],
+                        [{'event': 'speed_correction_apply'}])
+
     def test_fixed_post_restore_cancellation_reasons_only(self):
         for reason in ('owner_changed', 'source_changed', 'restore_not_acknowledged', 'native_receipts_closed'):
             row = parse(log('[[EMO_FOLLOW_SYNC]] seekRecovery cancelled reason=' + reason))['records'][0]

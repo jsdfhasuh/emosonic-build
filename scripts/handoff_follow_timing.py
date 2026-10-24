@@ -8,15 +8,15 @@ import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 import native_recovery_check_observation as recovery_observation
 
-PARENT = 'aaa7cc0cd8ba476d1b90e6900ab4e65163e7292b'
-MESSAGE = 'test: validate ordinary Follow settlement native precision 20261024'
+PARENT = 'ee64ede80838ef3ecc2bcfd1b90be893d49bcbf2'
+MESSAGE = 'test: retain transfer native timing 20261024'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
 SOURCE_SHA = '72e524134c81becacf80ba8ff3f3d7562328347f'
 SOURCE_REF = 'refs/heads/fix/follow-ordinary-settlement-20261024'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=107, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=40051389321,
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=108, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=40051389321,
                auxiliary_observer_sha=recovery_observation.AUX_SHA, auxiliary_observer_ref=recovery_observation.AUX_REF)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
@@ -151,6 +151,10 @@ def main():
             stack.enter_context(patch.object(base.request,'SERVER_SHA',SERVER_SHA))
             stack.enter_context(patch.dict(base.native.RATE_SCHEMA,
                 {'nativeTiming': {'authority': timing.SCHEMA, 'follower': timing.SCHEMA}}))
+            stack.enter_context(patch.object(base.native, 'PUBLIC_STAGES',
+                base.native.PUBLIC_STAGES | {timing.TRANSFER_RECORD_STAGE}))
+            stack.enter_context(patch.dict(base.native.DIAGNOSTIC_SCHEMA,
+                {'transferNativeTiming': timing.TRANSFER_RECORD_SCHEMA}))
             if category == 'native' and stage != 'cleanup':
                 stack.enter_context(recovery_observation.lifecycle_pins(lifecycle))
                 if stage == 'prepare':

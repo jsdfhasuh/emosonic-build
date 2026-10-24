@@ -87,6 +87,7 @@ CORRECTION_SEQUENCE_SCHEMA = {
         'adaptiveFollowDelayMs': ('integer', 0, 60000), 'followLeadCompensationMs': ('integer', -60000, 60000),
         'followSyncToleranceMs': ('integer', 0, 60000),
         'driftMs': ('integer', -86400000, 86400000), 'durationMs': ('integer', 0, 5000),
+        'remainingMs': ('integer', 0, 5000),
         **{name: ('number', .5, 2) for name in ('rate', 'baseSpeed', 'syncSpeed')},
     }, 128),
 }

@@ -7,6 +7,7 @@ import importlib.util
 import math
 from pathlib import Path
 import unittest
+from native_seek_anchor_observation import retain_transfer_native_timing, emit_transfer_first_failure
 
 PRIOR = None
 FINAL = None
@@ -33,7 +34,9 @@ def load(clock, final):
     tree = ast.parse(FINAL if final else PRIOR)
     selected = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name in names]
     ns = {'math':math, 'time':clock, 'FOLLOW_CONDITIONS': {'steady_sample_precision', 'native_evidence', 'safe_follow_task', 'authority_rate', 'follower_rate', 'hard_drift_limit', 'lab_ten_second_convergence', 'native_35s_progression', 'rate_change', 'restoration'}, 'summarize_state':lambda *a,**kw: {},
-          'successful_follow_observation': lambda matrix: {}}
+          'successful_follow_observation': lambda matrix: {},
+          'retain_transfer_native_timing': retain_transfer_native_timing,
+          'emit_transfer_first_failure': emit_transfer_first_failure}
     exec(compile(ast.Module(body=selected,type_ignores=[]), '<owned-strict-precision>', 'exec'),ns)
     return ns
 
