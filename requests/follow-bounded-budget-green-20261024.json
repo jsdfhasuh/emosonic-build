@@ -1,0 +1,9 @@
+{
+  "source_repository": "jsdfhasuh/emosonic",
+  "source_ref": "refs/heads/fix/follow-bounded-budget-20261024",
+  "source_sha": "bfc1967a8eae65154bdd5e74491f99136dfc198d",
+  "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
+  "version": "1.0.10+27",
+  "mode": "follow-bounded-budget-full-green-validation",
+  "attempt": 112
+}
