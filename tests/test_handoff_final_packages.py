@@ -1,11 +1,14 @@
 import base64
 import copy
+import contextlib
 from contextlib import contextmanager
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -433,6 +436,220 @@ class FinalPackageTests(unittest.TestCase):
         self.assertEqual(c.p.NATIVE_CONTRACT_TEST_COUNT, 104)
         helper = (root / 'scripts/handoff_final_packages.py').read_text()
         self.assertNotIn('import native_recovery_check_observation', helper)
+
+
+class PackageSourceObservationTests(unittest.TestCase):
+    def fixture(self):
+        import test_source_validation as fixtures
+        return fixtures
+
+    def run_validation(self, stream=None, returncode=0, *, changed=False,
+                       process_error=False, observer_error=False, cap_reason=None):
+        import follow_recovery_check as observation
+        fixtures = self.fixture()
+        source = Path('/synthetic/owned-source')
+        paths = set(fixtures.TEST_PATHS) | {fixtures.VENDOR_CHECK, 'pubspec.yaml', 'lib/private.dart'}
+        raw = fixtures.report(fixtures.events() if stream is None else stream)
+        calls = []
+        environments = []
+        originals = (c.p.quiet, c.p.source_fingerprint, c.p.validate_source,
+                     c.p.flutter_test_summary, observation.inventory, observation.STAGE)
+        def original_quiet(args, cwd=None, env=None):
+            calls.append(tuple(args)); environments.append(dict(env or {}))
+            return 'PRIVATE_SETUP_CONTENT'
+        def process(args, **kwargs):
+            calls.append(tuple(args)); environments.append(dict(kwargs['env']))
+            self.assertEqual(kwargs['cwd'], source)
+            self.assertEqual(set(kwargs), {'cwd', 'env', 'stdout', 'stderr', 'check'})
+            self.assertIs(kwargs['stdout'], subprocess.PIPE)
+            self.assertIs(kwargs['stderr'], subprocess.PIPE)
+            self.assertIs(kwargs['check'], False)
+            self.assertIs(c.p.validate_source, originals[2])
+            if process_error:
+                raise OSError('PRIVATE_LAUNCH_ERROR')
+            if tuple(args) == observation.ANALYZE_COMMAND:
+                return subprocess.CompletedProcess(args, 0, b'PRIVATE_ANALYSIS_NOTE', b'PRIVATE_ANALYSIS_STDERR')
+            self.assertEqual(tuple(args), observation.FULL_TEST_COMMAND)
+            return subprocess.CompletedProcess(args, returncode, raw.encode(), b'PRIVATE_TEST_STDERR')
+        env = {name: 'PRIVATE_ENV_VALUE' for name in (
+            'SOURCE_READ_TOKEN', 'GITHUB_TOKEN', 'RELEASE_WRITE_TOKEN',
+            'ANDROID_KEYSTORE_BASE64', 'ANDROID_KEY_PASSWORD', 'ANDROID_KEY_ALIAS',
+            'DEFAULT_SERVER_URL', 'GITHUB_OUTPUT', 'GITHUB_STEP_SUMMARY', 'GITHUB_ENV', 'GITHUB_PATH')}
+        output = io.StringIO()
+        with contextlib.ExitStack() as scope:
+            scope.enter_context(patch.dict(os.environ, env, clear=True))
+            scope.enter_context(patch.object(sys, 'argv', ['wrapper', 'validate_source']))
+            scope.enter_context(patch.object(c.request, 'context'))
+            scope.enter_context(patch.object(c.p, 'source_context', return_value=(source, c.VERSION, c.SOURCE_SHA, None)))
+            fingerprint = scope.enter_context(patch.object(c.p, 'source_fingerprint', side_effect=[
+                ('before', paths), ('changed' if changed else 'before', paths)]))
+            scope.enter_context(patch.object(c.p, 'quiet', side_effect=original_quiet))
+            scope.enter_context(patch.object(subprocess, 'run', side_effect=process))
+            parser = scope.enter_context(patch.object(c.p, 'flutter_test_summary', wraps=originals[3]))
+            old_inventory = scope.enter_context(patch.object(observation, 'inventory', side_effect=AssertionError('Historical inventory must not load')))
+            if observer_error:
+                scope.enter_context(patch.object(observation, 'full_test_observation', side_effect=RuntimeError('PRIVATE_OBSERVER_ERROR')))
+            if cap_reason:
+                scope.enter_context(patch.object(observation, 'observe_green', return_value={'reason': cap_reason, 'errors': []}))
+            scope.enter_context(contextlib.redirect_stdout(output))
+            scope.enter_context(contextlib.redirect_stderr(output))
+            result = c.main()
+            old_inventory.assert_not_called()
+            fingerprint_count = fingerprint.call_count
+            parser_calls = list(parser.call_args_list)
+        self.assertEqual((c.p.quiet, c.p.source_fingerprint, c.p.validate_source,
+                          c.p.flutter_test_summary, observation.inventory, observation.STAGE), originals)
+        text = output.getvalue()
+        for private in ('PRIVATE_', 'private test secret', 'private loader',
+                        'private secret traceback path', str(source), *paths):
+            self.assertNotIn(private, text)
+        reports = [json.loads(line) for line in text.splitlines() if line.startswith('{')]
+        return dict(result=result, calls=calls, environments=environments,
+                    fingerprint_count=fingerprint_count, parser_calls=parser_calls,
+                    reports=reports, text=text, raw=raw, paths=paths, source=source)
+
+    def failed_stream(self):
+        fixtures = self.fixture()
+        stream = fixtures.events()
+        test = next(e['test'] for e in stream if e['type'] == 'testStart' and e['test']['groupIDs'])
+        suite = next(e['suite'] for e in stream if e['type'] == 'suite' and e['suite']['id'] == test['suiteID'])
+        done = next(e for e in stream if e['type'] == 'testDone' and e['testID'] == test['id'])
+        done['result'] = 'failure'
+        stream.insert(-1, {'type': 'error', 'testID': test['id'], 'time': 1,
+                          'isFailure': True,
+                          'error': 'TestFailure: PRIVATE_CASE_TOKEN\nExpected: true\nActual: <false>',
+                          'stackTrace': '/synthetic/owned-source/' + suite['path'] + ' 17:3 PRIVATE_STACK_TOKEN'})
+        stream[-1]['success'] = False
+        return stream, suite['path']
+
+    def test_only_validate_source_uses_observation_context(self):
+        for stage in c.request.STAGES:
+            with patch.object(sys, 'argv', ['wrapper', stage]), \
+                    patch.object(c.request, 'context'), patch.object(c, 'require_native_success'), \
+                    patch.object(c.request, 'main', return_value=0) as original, \
+                    patch.object(c, 'validate_source_observed', return_value=7) as observed:
+                self.assertEqual(c.main(), 7 if stage == 'validate_source' else 0)
+                if stage == 'validate_source':
+                    observed.assert_called_once_with(); original.assert_not_called()
+                else:
+                    original.assert_called_once_with(); observed.assert_not_called()
+
+    def test_complete_original_commands_counts_and_secret_free_environment(self):
+        result = self.run_validation()
+        fixtures = self.fixture()
+        self.assertEqual(result['result'], 0)
+        self.assertEqual(result['calls'], [
+            ('flutter', 'pub', 'get'),
+            ('dart', 'run', 'scripts/check_navigation_consistency.dart'),
+            ('dart', 'run', 'build_runner', 'build', '--delete-conflicting-outputs'),
+            (sys.executable, fixtures.VENDOR_CHECK),
+            ('flutter', 'analyze', '--no-pub', '--fatal-infos', '--fatal-warnings'),
+            ('flutter', 'test', '--no-pub', '--reporter=json'),
+        ])
+        self.assertEqual(result['fingerprint_count'], 2)
+        self.assertEqual(len(result['parser_calls']), 1)
+        self.assertEqual(result['parser_calls'][0].args[0], result['raw'])
+        self.assertEqual(result['parser_calls'][0].args[2], fixtures.TEST_PATHS)
+        self.assertTrue(all(not env for env in result['environments']))
+        full = next(r for r in result['reports'] if r['stage'] == 'full-tests-observation')
+        self.assertEqual(full['visibleTests'], 4)
+        self.assertEqual(full['hiddenTests'], 4)
+        self.assertEqual(full['completedTests'], 8)
+        self.assertEqual(full['results'], {'success': 8, 'failure': 0, 'error': 0})
+        self.assertIs(full['terminalSuccess'], True)
+        self.assertIn('4 tests; 2 suites; 4 hidden lifecycle events; 0 skipped; 0 failed.', result['text'])
+
+    def test_actual_failure_remains_failure_with_finite_counts_and_location(self):
+        stream, name = self.failed_stream()
+        result = self.run_validation(stream, 1)
+        self.assertEqual(result['result'], 1)
+        self.assertEqual(result['fingerprint_count'], 2)
+        self.assertEqual(result['parser_calls'], [])
+        full = next(r for r in result['reports'] if r['stage'] == 'full-tests-observation')
+        self.assertEqual(full['exitCode'], 1)
+        self.assertEqual(full['visibleTests'], 4)
+        self.assertEqual(full['completedTests'], 8)
+        self.assertEqual(full['results'], {'success': 7, 'failure': 1, 'error': 0})
+        self.assertIs(full['terminalSuccess'], False)
+        self.assertEqual(full['errors'][0]['fileOrdinal'], sorted(result['paths']).index(name) + 1)
+        self.assertEqual(full['errors'][0]['locations'], [{'line': 17, 'column': 3}])
+        self.assertEqual(full['errors'][0]['category'], 'TestFailure')
+        self.assertEqual(full['errors'][0]['expected'], True)
+        self.assertEqual(full['errors'][0]['actual'], False)
+        self.assertNotIn('testOrdinal', full['errors'][0])
+
+    def test_zero_diagnostic_failures_cannot_normalize_nonzero_exit(self):
+        result = self.run_validation(returncode=1)
+        full = next(r for r in result['reports'] if r['stage'] == 'full-tests-observation')
+        self.assertEqual(full['results']['failure'], 0)
+        self.assertIs(full['terminalSuccess'], True)
+        self.assertEqual(result['result'], 1)
+        self.assertEqual(result['fingerprint_count'], 2)
+        self.assertEqual(result['parser_calls'], [])
+
+    def test_success_exit_still_requires_original_strict_full_parser(self):
+        fixtures = self.fixture()
+        for mutation in ('missing-terminal', 'skip', 'hidden-failure', 'late-error', 'missing-suite'):
+            stream = fixtures.events()
+            if mutation == 'missing-terminal': stream.pop()
+            elif mutation == 'skip': next(e for e in stream if e['type'] == 'testDone')['skipped'] = True
+            elif mutation == 'hidden-failure': next(e for e in stream if e['type'] == 'testDone' and e['hidden'])['result'] = 'failure'
+            elif mutation == 'late-error': stream.insert(-1, {'type': 'error', 'time': 1, 'error': 'PRIVATE_LATE_ERROR'})
+            elif mutation == 'missing-suite': stream = [e for e in stream if e['type'] != 'suite']
+            with self.subTest(mutation=mutation):
+                result = self.run_validation(stream, 0)
+                self.assertEqual(result['result'], 1)
+                self.assertEqual(result['fingerprint_count'], 2)
+                self.assertEqual(len(result['parser_calls']), 1)
+                self.assertEqual(result['parser_calls'][0].args[0], result['raw'])
+
+    def test_frozen_source_change_still_overrides_passing_report(self):
+        result = self.run_validation(changed=True)
+        self.assertEqual(result['result'], 1)
+        self.assertEqual(result['fingerprint_count'], 2)
+        self.assertEqual(len(result['parser_calls']), 1)
+        self.assertIn('Frozen source fingerprint changed during validation.', result['text'])
+
+    def test_diagnostic_caps_do_not_truncate_or_replace_acceptance_stream(self):
+        for reason in ('output-limit', 'event-limit', 'invalid-output'):
+            with self.subTest(reason=reason):
+                result = self.run_validation(cap_reason=reason)
+                self.assertEqual(result['result'], 0)
+                self.assertEqual(result['parser_calls'][0].args[0], result['raw'])
+                full = next(r for r in result['reports'] if r['stage'] == 'full-tests-observation')
+                self.assertEqual(full['reason'], reason)
+                self.assertEqual(full['errors'], [])
+
+    def test_finite_error_location_and_scalar_caps_preserve_privacy(self):
+        stream, name = self.failed_stream()
+        error = next(e for e in stream if e['type'] == 'error')
+        error['error'] = 'TestFailure: PRIVATE_CASE_TOKEN\nExpected: 1000001\nActual: 99999999999999999'
+        error['stackTrace'] = '\n'.join('/synthetic/owned-source/' + name + f' {line}:3 PRIVATE_STACK_TOKEN' for line in range(1, 12))
+        stream[-1:-1] = [copy.deepcopy(error) for _ in range(25)]
+        result = self.run_validation(stream, 1)
+        full = next(r for r in result['reports'] if r['stage'] == 'full-tests-observation')
+        self.assertEqual(result['result'], 1)
+        self.assertEqual(full['errorCount'], 26)
+        self.assertEqual(len(full['errors']), 20)
+        self.assertTrue(all(len(item.get('locations', [])) <= 5 for item in full['errors']))
+        self.assertTrue(all('expected' not in item and 'actual' not in item for item in full['errors']))
+        self.assertLess(len(json.dumps(full)), 20000)
+
+    def test_observer_and_launch_exceptions_fail_closed_restore_and_recheck(self):
+        for options in ({'process_error': True}, {'observer_error': True}):
+            with self.subTest(options=options):
+                result = self.run_validation(**options)
+                self.assertEqual(result['result'], 1)
+                self.assertEqual(result['fingerprint_count'], 2)
+                self.assertEqual(result['parser_calls'], [])
+
+    def test_pending_witness_blocks_before_observer_context(self):
+        with patch.object(c, 'SECOND_WITNESS_ACCEPTED', False), \
+                patch.object(sys, 'argv', ['wrapper', 'validate_source']), \
+                patch.object(c, 'validate_source_observed') as observed, \
+                patch.object(c.request, 'main') as main, patch.object(c.p, 'api') as api:
+            self.assertEqual(c.main(), 1)
+            observed.assert_not_called(); main.assert_not_called(); api.assert_not_called()
 
 
 if __name__ == '__main__':

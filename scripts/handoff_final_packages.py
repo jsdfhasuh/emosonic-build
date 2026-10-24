@@ -9,8 +9,8 @@ from unittest.mock import patch
 import current_source_check as request
 
 p = request.p
-PARENT = 'ebf18d6e90a9682deab0b14a3a0529a2e02157f2'
-MESSAGE = 'test: build bounded native-proven TEST packages 20261024'
+PARENT = '185816dfbb86aa4966f51efc713cf7ba749918ea'
+MESSAGE = 'test: diagnose bounded TEST package full validation 20261024'
 WORKFLOW = 'handoff-final-packages.yml'
 REQUEST_PATH = 'requests/handoff-final-packages-20261022.json'
 SOURCE_REF = 'refs/heads/fix/follow-bounded-budget-20261024'
@@ -58,7 +58,7 @@ def witness_descriptors():
 
 REQUEST = dict(source_repository=p.SOURCE, source_ref=SOURCE_REF,
                source_sha=SOURCE_SHA, server_sha=SERVER_SHA, version=VERSION,
-               mode='native-proven-build-only', attempt=115,
+               mode='native-proven-build-only', attempt=116,
                auxiliary_observer_sha=AUXILIARY_SHA,
                auxiliary_observer_ref=AUXILIARY_REF,
                source_validation_run_id=SOURCE_VALIDATION_RUN,
@@ -242,6 +242,16 @@ def verify_windows():
     verify_package('windows')
 
 
+def validate_source_observed():
+    # Reuse only the existing finite observation context, not any historical
+    # green entrypoint or pin chain. Empty inventory removes name annotations;
+    # the original pipeline still discovers, runs and strictly verifies ALL tests.
+    import follow_recovery_check as source_validation
+    with patch.object(source_validation, 'inventory', return_value=[]), \
+            patch.object(source_validation, 'STAGE', source_validation.STAGE):
+        return source_validation.validate_full()
+
+
 def main():
     try:
         if len(sys.argv) != 2 or sys.argv[1] not in request.STAGES:
@@ -259,6 +269,8 @@ def main():
             if sys.argv[1] == 'prepare':
                 request.context()
                 require_native_success()
+            if sys.argv[1] == 'validate_source':
+                return validate_source_observed()
             return request.main()
     except Exception:
         print('ERROR: Fixed TEST package validation failed; private details suppressed.', file=sys.stderr)

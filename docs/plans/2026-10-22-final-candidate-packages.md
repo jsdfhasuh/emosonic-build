@@ -1,10 +1,16 @@
-# Dual-native-proven bounded-budget TEST packages
+# Finite diagnostic gate for bounded-budget TEST packages
 
-Local package-gate preparation only; no package build or publication has been
-performed by this draft. Both complete strict same-source native witnesses have
-now reached terminal success. Every productive stage still rejects pending or
-invalid pins before token access, network traffic or source fetch, and prepare
-rechecks the actual immutable evidence before source preparation.
+Request 115 reached the full Flutter test command and failed with exit 1 and
+unclassified suppressed output. Dependencies, navigation, code generation,
+vendor provenance and full analysis passed; cleanup succeeded, package jobs
+were skipped and no artifacts were produced. Its product cause remains unknown.
+Run 40089331968, builder 185816dfbb86aa4966f51efc713cf7ba749918ea and native
+validation history remain preserved; this is not a product fix or a claimed pass.
+
+Request 116 adds one fixed diagnostic gate, not an automatic or blind retry.
+Both complete strict same-source native witnesses remain unchanged. Every
+productive stage still rejects pending or invalid pins before token access,
+network traffic or source fetch, and prepare rechecks immutable evidence.
 
 Product bfc1967a8eae65154bdd5e74491f99136dfc198d on
 refs/heads/fix/follow-bounded-budget-20261024, version 1.0.10+27. Isolated native
@@ -25,7 +31,7 @@ completed success including every matrix and cleanup step. Its terminal evidence
 SHA256 is 30ccedcb575f0ef2700041805004b589449ba3058d60b6dcce902244f0dbcc0b.
 SECOND_WITNESS_ACCEPTED is now true, with both exact run/head/job pins fixed.
 The owner must still review the fresh builder-main parent and final five-file
-change before any authorized package publication. The package request is 115.
+change before any authorized package publication. The package request is 116.
 A running, failed, cancelled, partial or skipped witness cannot unlock it.
 Neither old c730 nor old 72e witnesses are admissible. Pending-state negative
 tests explicitly use false fixtures; they do not assert real witness failure.
@@ -37,10 +43,31 @@ compilation and both teardown steps must uniquely succeed. Immutable source
 declarations retain historical causal proof 39745934922 and recovery validation
 39767536382; those historical prerequisites do not count as native witnesses.
 
-Only five package-specific files are added. pipeline.py,
+Only the five package-specific files change relative to request 115. pipeline.py,
 current_source_check.py, policy.json, stable workflows and all native harness
 files remain unchanged. In particular native_recovery_check_observation.py is
 not modified or retried. The package wrapper does not import that module.
+
+The validate_source stage alone reuses follow_recovery_check.validate_full's
+existing scoped quiet/fingerprint observation context. Its inventory is locally
+patched to an empty list ONLY to omit private name/testOrdinal annotations and
+fixture-specific sample markers. It does not select or omit any test. No
+historical 282-green entrypoint, inventory pin chain or native task is invoked.
+The original pipeline still owns exact full analysis and test commands,
+dependency/codegen/vendor checks, complete stream parsing, zero exit requirement,
+all-suite inventory and pre/post source fingerprint checks. Nonzero exits remain
+failures even after diagnostic output. Successful exits still require the same
+strict original parser. The observation context and its STAGE state are restored
+on all paths; all other package stages are untouched.
+
+Only existing finite diagnostics may be printed: whole-stream counts, terminal
+flags, capped error categories and safe scalar comparisons, tracked fileOrdinal
+and bounded line/column locations. No private path, test name, assertion text,
+stack trace, raw JSON/stdout/stderr or Secret is published. An unknown or limited
+diagnostic status never supplies or overrides a pass verdict: the unchanged
+original parser and process result decide acceptance. The full original report
+is never truncated or substituted. An empty annotation inventory means no focused
+testOrdinal is promised, not that focused or full tests have been removed.
 
 The workflow reruns full source analysis, tests, vendor provenance and frozen
 byte integrity before either package build. Android keeps the existing pinned
