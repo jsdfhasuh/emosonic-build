@@ -55,15 +55,15 @@ class RecoveryAuxiliaryTests(unittest.TestCase):
         return invoke
 
     def test_exact_fixed_auxiliary_contract(self):
-        self.assertEqual(c.AUX_SHA,'5da1905945d819762dce740872d12a1186695711')
-        self.assertEqual(c.AUX_TREE,'c75b239c7102f0bdb81ebf82896ac905ff0496d7')
+        self.assertEqual(c.AUX_SHA,'7fa511fc73dfe3d91543965c189965105630c6fd')
+        self.assertEqual(c.AUX_TREE,'6998a607d80f7c1885d04cc1b958e8e5227b17b6')
         self.assertEqual(c.SOURCE_SHA,wrapper.SOURCE_SHA)
         self.assertEqual(set(c.FILES),{'transform.py','schema.json','play_policy_schema.json','admission_schema.json','README.md','test_transform.py'})
         self.assertEqual(c.FILES['schema.json'][0], '530496ee1d92ce2238ec7fc8769633bcb41aae36c4008920d63c7b026a0bf808')
         self.assertEqual(wrapper.REQUEST['auxiliary_observer_sha'],c.AUX_SHA)
         self.assertEqual(wrapper.REQUEST['auxiliary_observer_ref'],c.AUX_REF)
-        self.assertEqual(wrapper.REQUEST['attempt'],102)
-        self.assertEqual(wrapper.INGRESS_RUN,39966140487)
+        self.assertEqual(wrapper.REQUEST['attempt'],107)
+        self.assertEqual(wrapper.INGRESS_RUN,40051389321)
 
     def test_exact_three_file_manifest_and_policy_bounds(self):
         value=c.fingerprints()

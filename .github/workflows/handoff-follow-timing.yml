@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: 'f6251a2a0e6441f174d05b488bc0fb1b41d52e39'
+  SOURCE_SHA: '72e524134c81becacf80ba8ff3f3d7562328347f'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '8e887e171d9a92fcc5173c948bc68a90a6465d55' &&
-      github.event.head_commit.message == 'test: validate ten second Follow convergence 20261024' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == 'aaa7cc0cd8ba476d1b90e6900ab4e65163e7292b' &&
+      github.event.head_commit.message == 'test: validate ordinary Follow settlement native precision 20261024' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/follow-initial-apply-flow-lint-20261023
+          SOURCE_REF: refs/heads/fix/follow-ordinary-settlement-20261024
         run: python3 scripts/handoff_follow_timing.py source prepare
 
   native-macos-server:
