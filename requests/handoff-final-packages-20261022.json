@@ -1,0 +1,27 @@
+{
+  "source_repository": "jsdfhasuh/emosonic",
+  "source_ref": "refs/heads/fix/follow-bounded-budget-20261024",
+  "source_sha": "bfc1967a8eae65154bdd5e74491f99136dfc198d",
+  "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
+  "version": "1.0.10+27",
+  "mode": "native-proven-build-only",
+  "attempt": 115,
+  "auxiliary_observer_sha": "3e06d0a7faf99f3608a2d3734847e683f6d71d07",
+  "auxiliary_observer_ref": "refs/heads/test/bounded-budget-observation-20261024",
+  "source_validation_run_id": 40062350211,
+  "native_witnesses": [
+    {
+      "run_id": 40080780672,
+      "builder_sha": "68a208eb5b6fd712c1459f313e6222b0e885da2d",
+      "native_job_id": 120833766576,
+      "request_attempt": 113
+    },
+    {
+      "run_id": 40088297493,
+      "builder_sha": "ebf18d6e90a9682deab0b14a3a0529a2e02157f2",
+      "native_job_id": 120855662181,
+      "request_attempt": 114
+    }
+  ],
+  "native_witnesses_accepted": true
+}
