@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: '72e524134c81becacf80ba8ff3f3d7562328347f'
+  SOURCE_SHA: 'bfc1967a8eae65154bdd5e74491f99136dfc198d'
   BUILD_VERSION: '1.0.10+27'
 
 defaults:
@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '58621fd5d752f5993d4fc846a120d1dab5a55bc0' &&
-      github.event.head_commit.message == 'test: repeat native interval precision 20261024' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '99eff9a11146fe47d3cec5611d5207919f749514' &&
+      github.event.head_commit.message == 'test: validate bounded Follow budget native precision 20261024' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
@@ -46,7 +46,7 @@ jobs:
         env:
           SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_REF: refs/heads/fix/follow-ordinary-settlement-20261024
+          SOURCE_REF: refs/heads/fix/follow-bounded-budget-20261024
         run: python3 scripts/handoff_follow_timing.py source prepare
 
   native-macos-server:

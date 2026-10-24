@@ -8,15 +8,15 @@ import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 import native_recovery_check_observation as recovery_observation
 
-PARENT = '58621fd5d752f5993d4fc846a120d1dab5a55bc0'
-MESSAGE = 'test: repeat native interval precision 20261024'
+PARENT = '99eff9a11146fe47d3cec5611d5207919f749514'
+MESSAGE = 'test: validate bounded Follow budget native precision 20261024'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
-SOURCE_SHA = '72e524134c81becacf80ba8ff3f3d7562328347f'
-SOURCE_REF = 'refs/heads/fix/follow-ordinary-settlement-20261024'
+SOURCE_SHA = 'bfc1967a8eae65154bdd5e74491f99136dfc198d'
+SOURCE_REF = 'refs/heads/fix/follow-bounded-budget-20261024'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=110, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=40051389321,
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=113, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=40062350211,
                auxiliary_observer_sha=recovery_observation.AUX_SHA, auxiliary_observer_ref=recovery_observation.AUX_REF)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
@@ -87,10 +87,10 @@ def require_recovery_validation():
                       'Recovery tests, full validation, BOOL proof and cleanup must succeed.')
 
 
-INGRESS_RUN = 40051389321
-INGRESS_HEAD = 'aaa7cc0cd8ba476d1b90e6900ab4e65163e7292b'
+INGRESS_RUN = 40062350211
+INGRESS_HEAD = '99eff9a11146fe47d3cec5611d5207919f749514'
 INGRESS_STEPS = {'validate-source': (
-    'Validate all prior and ordinary settlement focused cases',
+    'Validate all 282 historical and bounded budget focused cases',
     'Validate complete source analysis, tests, provenance and byte integrity without user Secrets',
     'Remove private source and generated validation outputs',
 )}
@@ -102,7 +102,7 @@ def require_ingress_validation():
     run=p.api(endpoint)
     p.require(type(run) is dict and type(run.get('id')) is int and run['id']==INGRESS_RUN
               and run.get('head_sha')==INGRESS_HEAD
-              and run.get('path')=='.github/workflows/follow-ordinary-settle-green.yml'
+              and run.get('path')=='.github/workflows/follow-bounded-budget-green.yml'
               and run.get('event')=='push' and run.get('head_branch')=='main'
               and type(run.get('run_attempt')) is int and run['run_attempt']==1
               and run.get('status')=='completed' and run.get('conclusion')=='success',

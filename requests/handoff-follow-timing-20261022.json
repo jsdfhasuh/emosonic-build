@@ -1,14 +1,14 @@
 {
   "source_repository": "jsdfhasuh/emosonic",
-  "source_ref": "refs/heads/fix/follow-ordinary-settlement-20261024",
-  "source_sha": "72e524134c81becacf80ba8ff3f3d7562328347f",
+  "source_ref": "refs/heads/fix/follow-bounded-budget-20261024",
+  "source_sha": "bfc1967a8eae65154bdd5e74491f99136dfc198d",
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "native-follow-timing-observation",
-  "attempt": 110,
+  "attempt": 113,
   "proof_run_id": 39745934922,
   "validation_run_id": 39767536382,
-  "ingress_validation_run_id": 40051389321,
-  "auxiliary_observer_sha": "7fa511fc73dfe3d91543965c189965105630c6fd",
-  "auxiliary_observer_ref": "refs/heads/test/ordinary-settlement-observation-20261024"
+  "ingress_validation_run_id": 40062350211,
+  "auxiliary_observer_sha": "3e06d0a7faf99f3608a2d3734847e683f6d71d07",
+  "auxiliary_observer_ref": "refs/heads/test/bounded-budget-observation-20261024"
 }

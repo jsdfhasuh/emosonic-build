@@ -143,7 +143,7 @@ class RecoveryValidationGateTests(unittest.TestCase):
 class IngressValidationGateTests(unittest.TestCase):
     def evidence(self):
         run={'id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
-             'path':'.github/workflows/follow-ordinary-settle-green.yml','event':'push',
+             'path':'.github/workflows/follow-bounded-budget-green.yml','event':'push',
              'head_branch':'main','run_attempt':1,'status':'completed','conclusion':'success'}
         jobs={'jobs':[{'name':name,'run_id':c.INGRESS_RUN,'head_sha':c.INGRESS_HEAD,
                        'status':'completed','conclusion':'success',
@@ -152,29 +152,29 @@ class IngressValidationGateTests(unittest.TestCase):
         jobs['total_count']=len(jobs['jobs'])
         return run,jobs
 
-    def test_exact_ordinary_settlement_successor_pins_and_both_matrix_stages(self):
-        self.assertEqual(c.SOURCE_SHA,'72e524134c81becacf80ba8ff3f3d7562328347f')
-        self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-ordinary-settlement-20261024')
-        self.assertEqual(c.PARENT,'58621fd5d752f5993d4fc846a120d1dab5a55bc0')
-        self.assertEqual(c.REQUEST['attempt'],110)
-        self.assertEqual(c.INGRESS_RUN,40051389321)
-        self.assertEqual(c.INGRESS_HEAD,'aaa7cc0cd8ba476d1b90e6900ab4e65163e7292b')
+    def test_exact_bounded_budget_successor_pins_and_both_matrix_stages(self):
+        self.assertEqual(c.SOURCE_SHA,'bfc1967a8eae65154bdd5e74491f99136dfc198d')
+        self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-bounded-budget-20261024')
+        self.assertEqual(c.PARENT,'99eff9a11146fe47d3cec5611d5207919f749514')
+        self.assertEqual(c.REQUEST['attempt'],113)
+        self.assertEqual(c.INGRESS_RUN,40062350211)
+        self.assertEqual(c.INGRESS_HEAD,'99eff9a11146fe47d3cec5611d5207919f749514')
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)
-        self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate all prior and ordinary settlement focused cases')
+        self.assertEqual(c.INGRESS_STEPS['validate-source'][0],'Validate all 282 historical and bounded budget focused cases')
         self.assertIn('follow',c.NATIVE_STAGES);self.assertIn('handoff',c.NATIVE_STAGES)
 
-    def test_exact_275_case_current_inventory_not_stale_254_gate(self):
-        import follow_ordinary_settle_green as green
+    def test_exact_282_case_current_inventory_not_stale_275_gate(self):
+        import follow_bounded_budget_green as green
         self.assertEqual(c.SOURCE_SHA, green.SOURCE_SHA)
         self.assertEqual(c.SOURCE_REF, green.SOURCE_REF)
-        self.assertEqual(green.EXPECTED_COUNTS, (4, 17))
-        self.assertEqual(green.INVENTORY_PATH, 'tool/follow_smooth_settlement/green_inventory.json')
-        self.assertEqual(green.INVENTORY_SHA256, 'e086df2bfc30773f04d355c860075bff478ad6bbb7b9610188c6dfe2e4977f47')
-        self.assertEqual(c.INGRESS_STEPS['validate-source'][0], 'Validate all prior and ordinary settlement focused cases')
+        self.assertEqual(green.EXPECTED_COUNTS, (4, 3))
+        self.assertEqual(green.INVENTORY_PATH, 'tool/follow_bounded_budget/green_inventory.json')
+        self.assertEqual(green.INVENTORY_SHA256, '1eb1a52bcac9190ad9a1037b7c20e37f9e5e5c6ae15a78514e4c7571893f15e0')
+        self.assertEqual(c.INGRESS_STEPS['validate-source'][0], 'Validate all 282 historical and bounded budget focused cases')
         root = Path(__file__).resolve().parents[1]
-        workflow = (root / '.github/workflows/follow-ordinary-settle-green.yml').read_text()
+        workflow = (root / '.github/workflows/follow-bounded-budget-green.yml').read_text()
         self.assertIn(c.SOURCE_SHA, workflow)
-        self.assertIn('follow_ordinary_settle_green.py source focused', workflow)
+        self.assertIn('follow_bounded_budget_green.py source focused', workflow)
         self.assertIn(c.INGRESS_STEPS['validate-source'][0], workflow)
 
     def test_exact_current_candidate_green_required(self):
@@ -186,12 +186,43 @@ class IngressValidationGateTests(unittest.TestCase):
             with self.subTest(key=key),patch.object(c.base.request.p,'api',side_effect=[run,jobs]),self.assertRaises(c.base.request.p.GateError):c.require_ingress_validation()
 
     def test_failed_missing_or_duplicate_required_step_refused(self):
-        for change in ('failure','missing','duplicate'):
-            run,jobs=self.evidence();steps=jobs['jobs'][0]['steps']
-            if change=='failure':steps[0]['conclusion']='failure'
-            elif change=='missing':steps.pop()
-            else:steps.append(dict(steps[0]))
-            with self.subTest(change=change),patch.object(c.base.request.p,'api',side_effect=[run,jobs]),self.assertRaises(c.base.request.p.GateError):c.require_ingress_validation()
+        for ordinal in range(len(c.INGRESS_STEPS['validate-source'])):
+            for change in ('failure','missing','duplicate','skipped','pending'):
+                run,jobs=self.evidence();steps=jobs['jobs'][0]['steps']
+                if change=='missing':steps.pop(ordinal)
+                elif change=='duplicate':steps.append(dict(steps[ordinal]))
+                elif change=='pending':steps[ordinal]['status']='in_progress'
+                else:steps[ordinal]['conclusion']=change
+                with self.subTest(ordinal=ordinal,change=change),patch.object(c.base.request.p,'api',side_effect=[run,jobs]),self.assertRaises(c.base.request.p.GateError):c.require_ingress_validation()
+
+
+    def test_terminal_previous_275_source_gate_cannot_admit_bounded_candidate(self):
+        run,jobs=self.evidence()
+        run.update(id=40051389321, head_sha='aaa7cc0cd8ba476d1b90e6900ab4e65163e7292b',
+                   path='.github/workflows/follow-ordinary-settle-green.yml')
+        jobs['jobs'][0].update(run_id=run['id'], head_sha=run['head_sha'])
+        jobs['jobs'][0]['steps'][0]['name']='Validate all prior and ordinary settlement focused cases'
+        with patch.object(c.base.request.p,'api',side_effect=[run,jobs]),self.assertRaises(c.base.request.p.GateError):
+            c.require_ingress_validation()
+
+    def test_current_run_with_stale_275_focused_step_is_refused(self):
+        run,jobs=self.evidence()
+        jobs['jobs'][0]['steps'][0]['name']='Validate all prior and ordinary settlement focused cases'
+        with patch.object(c.base.request.p,'api',side_effect=[run,jobs]),self.assertRaises(c.base.request.p.GateError):
+            c.require_ingress_validation()
+
+    def test_bounded_gate_requires_matching_terminal_complete_job(self):
+        for mode in ('missing','duplicate','wrong-run','wrong-head','pending','failed','truncated'):
+            run,jobs=self.evidence();job=jobs['jobs'][0]
+            if mode=='missing':jobs['jobs'].clear()
+            elif mode=='duplicate':jobs['jobs'].append(dict(job))
+            elif mode=='wrong-run':job['run_id']=40051389321
+            elif mode=='wrong-head':job['head_sha']='aaa7cc0cd8ba476d1b90e6900ab4e65163e7292b'
+            elif mode=='pending':job['status']='in_progress'
+            elif mode=='failed':job['conclusion']='failure'
+            jobs['total_count']=101 if mode=='truncated' else len(jobs['jobs'])
+            with self.subTest(mode=mode),patch.object(c.base.request.p,'api',side_effect=[run,jobs]),self.assertRaises(c.base.request.p.GateError):
+                c.require_ingress_validation()
 
 
 class FixedNativeUnitAdapterTests(unittest.TestCase):

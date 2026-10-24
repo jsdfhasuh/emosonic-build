@@ -11,18 +11,18 @@ import sys
 import tempfile
 from unittest.mock import patch
 
-SOURCE_SHA = '72e524134c81becacf80ba8ff3f3d7562328347f'
-AUX_SHA = '7fa511fc73dfe3d91543965c189965105630c6fd'
-AUX_REF = 'refs/heads/test/ordinary-settlement-observation-20261024'
-AUX_TREE = '6998a607d80f7c1885d04cc1b958e8e5227b17b6'
+SOURCE_SHA = 'bfc1967a8eae65154bdd5e74491f99136dfc198d'
+AUX_SHA = '3e06d0a7faf99f3608a2d3734847e683f6d71d07'
+AUX_REF = 'refs/heads/test/bounded-budget-observation-20261024'
+AUX_TREE = '1d93a046e44c704deb3fca091dc0fde5b960fcb7'
 PREFIX = 'tool/native_playback_mac/recovery_check_observation/'
 STATE = '.native_recovery_check_observation'
-FILES = {'transform.py': ('d0b1e6337ecad04af540488451cf3582e40763d1e89f233ebf0ff5907e14af51', 51948, '01f7c7c2629877958ce0955a4d91a13130bcbce4'), 'schema.json': ('530496ee1d92ce2238ec7fc8769633bcb41aae36c4008920d63c7b026a0bf808', 6071, 'b1f01ab4e151e2d2228385fab69ac39259e576f7'), 'play_policy_schema.json': ('9104b050fcaef7db7111acc4d42fe845d11ff5fb8de9a30d70f992046985adc6', 5920, '0c0aa4375af980bcc22534daf338d703ad7e1fd3'), 'admission_schema.json': ('056abf764544781334ab3a906ad53177495bf422176f8c9d0c0b9cb619cc595a', 2640, '5d603420eeeff08085f0e0138b6a099dc1044f22'), 'README.md': ('dd6fdb813dca706ef144e33f2531040b5e88e860d6c4b59449f91744dc047b42', 19763, '1aa1c34cffd8334bb4d61d61787f3bde51ddf446'), 'test_transform.py': ('0b9de38999d11f9185626459533029f84a4824a2572debaa7bffa16a7296d8e9', 12917, '315b68ee1dfc4c48c715668c683efd72f2bab817')}
+FILES = {'transform.py': ('ae8129d2d78e1f9795c2f321c03685e0a259ab1b88cfdc128154155524b32d65', 51948, '759d25b0c7e2fdae5d4b93b4d156ccb4738ffa0d'), 'schema.json': ('530496ee1d92ce2238ec7fc8769633bcb41aae36c4008920d63c7b026a0bf808', 6071, 'b1f01ab4e151e2d2228385fab69ac39259e576f7'), 'play_policy_schema.json': ('9104b050fcaef7db7111acc4d42fe845d11ff5fb8de9a30d70f992046985adc6', 5920, '0c0aa4375af980bcc22534daf338d703ad7e1fd3'), 'admission_schema.json': ('056abf764544781334ab3a906ad53177495bf422176f8c9d0c0b9cb619cc595a', 2640, '5d603420eeeff08085f0e0138b6a099dc1044f22'), 'README.md': ('23f48e87964d558ee00c682ff90f2b6139bed37bb6d9e6c7c2ce1fc1e83b6b5e', 19768, '3ab8d05605a4e9665b8dc075cac9955af8544ad9'), 'test_transform.py': ('0b9de38999d11f9185626459533029f84a4824a2572debaa7bffa16a7296d8e9', 12917, '315b68ee1dfc4c48c715668c683efd72f2bab817')}
 CONTROLLER = 'lib/services/emo_follow_sync_controller.dart'
 SERVICE = 'lib/services/audio_player_service.dart'
 MAIN = 'tool/native_playback_mac/main.dart'
-BASE = {CONTROLLER: 'cec152bf09c7cf4a04726c0adae809adf1b3c44d1fb0d201ef04317921ae39d4', SERVICE: 'beffc2d192c0e6948c7d726f819513e47bfeb5fb6924698d30453e80d0c5a252', MAIN: '7e4b804a9eaeeec929768ddd9ce9a5479639f73f443a8f3e6693916e59565833'}
-AFTER = {'lib/services/emo_follow_sync_controller.dart': 'b64cb00e1df51fdadca505dcc591b7194701b66ab9c00921ced6332de6279387', 'lib/services/audio_player_service.dart': '37ecf264ecd3fbe2bf08ad79f8cccff324da7ae94a4b83b765751240ccfa3660', 'tool/native_playback_mac/main.dart': '8d93f02446c61bbf1e76325fc0ba513e02d88f5b20aea778aa414d8b83440b6e'}
+BASE = {CONTROLLER: '13c0e1c762a33c88d7ed477282a3072a1e6d3d50df277e4a5c327fecd529f3aa', SERVICE: 'beffc2d192c0e6948c7d726f819513e47bfeb5fb6924698d30453e80d0c5a252', MAIN: '7e4b804a9eaeeec929768ddd9ce9a5479639f73f443a8f3e6693916e59565833'}
+AFTER = {'lib/services/emo_follow_sync_controller.dart': '5a3184d816a664bcaa8097702aabcf63052476745f40d6e4238509cc3ad65470', 'lib/services/audio_player_service.dart': '37ecf264ecd3fbe2bf08ad79f8cccff324da7ae94a4b83b765751240ccfa3660', 'tool/native_playback_mac/main.dart': '8d93f02446c61bbf1e76325fc0ba513e02d88f5b20aea778aa414d8b83440b6e'}
 LOGGED_MAIN = 'd18752ba4db3bd89ba8bb89dedb3d777cd72608ba4d1a017fd749ccfba255026'
 LOG_OLD = b'  await Logger.setLogLevel(LogLevel.warning);\n'
 LOG_NEW = b'  await Logger.setLogLevel(LogLevel.debug);\n'
