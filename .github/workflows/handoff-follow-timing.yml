@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '99eff9a11146fe47d3cec5611d5207919f749514' &&
-      github.event.head_commit.message == 'test: validate bounded Follow budget native precision 20261024' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '68a208eb5b6fd712c1459f313e6222b0e885da2d' &&
+      github.event.head_commit.message == 'test: repeat bounded Follow budget native precision 20261024' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build

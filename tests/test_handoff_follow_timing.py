@@ -155,8 +155,8 @@ class IngressValidationGateTests(unittest.TestCase):
     def test_exact_bounded_budget_successor_pins_and_both_matrix_stages(self):
         self.assertEqual(c.SOURCE_SHA,'bfc1967a8eae65154bdd5e74491f99136dfc198d')
         self.assertEqual(c.SOURCE_REF,'refs/heads/fix/follow-bounded-budget-20261024')
-        self.assertEqual(c.PARENT,'99eff9a11146fe47d3cec5611d5207919f749514')
-        self.assertEqual(c.REQUEST['attempt'],113)
+        self.assertEqual(c.PARENT,'68a208eb5b6fd712c1459f313e6222b0e885da2d')
+        self.assertEqual(c.REQUEST['attempt'],114)
         self.assertEqual(c.INGRESS_RUN,40062350211)
         self.assertEqual(c.INGRESS_HEAD,'99eff9a11146fe47d3cec5611d5207919f749514')
         self.assertEqual(c.REQUEST['ingress_validation_run_id'],c.INGRESS_RUN)

@@ -8,15 +8,15 @@ import native_follow_lifecycle as lifecycle
 import native_seek_anchor_observation as timing
 import native_recovery_check_observation as recovery_observation
 
-PARENT = '99eff9a11146fe47d3cec5611d5207919f749514'
-MESSAGE = 'test: validate bounded Follow budget native precision 20261024'
+PARENT = '68a208eb5b6fd712c1459f313e6222b0e885da2d'
+MESSAGE = 'test: repeat bounded Follow budget native precision 20261024'
 WORKFLOW = 'handoff-follow-timing.yml'
 REQUEST_PATH = 'requests/handoff-follow-timing-20261022.json'
 SOURCE_SHA = 'bfc1967a8eae65154bdd5e74491f99136dfc198d'
 SOURCE_REF = 'refs/heads/fix/follow-bounded-budget-20261024'
 SERVER_SHA = '5adc23da173c5f20188d79aafe8fcc1e656eb38a'
 REQUEST = dict(base.REQUEST, source_sha=SOURCE_SHA, source_ref=SOURCE_REF,
-               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=113, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=40062350211,
+               server_sha=SERVER_SHA, mode='native-follow-timing-observation', attempt=114, proof_run_id=39745934922, validation_run_id=39767536382, ingress_validation_run_id=40062350211,
                auxiliary_observer_sha=recovery_observation.AUX_SHA, auxiliary_observer_ref=recovery_observation.AUX_REF)
 NATIVE_STAGES = ('prepare','dependencies','unit','preflight','attribution','build','handoff','follow','cleanup')
 
