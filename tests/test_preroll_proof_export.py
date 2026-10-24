@@ -19,7 +19,7 @@ class PrerollProofExportTests(unittest.TestCase):
 
     def test_unknown_ordinal_count_and_private_fields_are_dropped(self):
         value = {'stage': 'native-follow-readiness-proof', 'status': 'failed',
-                 'checks': 41, 'failedTestOrdinals': [0, 41, 'private assertion', True, 35],
+                 'checks': 47, 'failedTestOrdinals': [0, 47, 'private assertion', True, 35],
                  'privateTrace': 'not exportable'}
         self.assertEqual(native.report_line(json.dumps(value)), {
             'stage': 'native-follow-readiness-proof', 'status': 'failed',

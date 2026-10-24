@@ -1,5 +1,32 @@
 """Strict sampled Follow precision, using only already captured native states."""
 
+def follow_convergence_observation(matrix, kind, elapsed_ms, physical_ms=None):
+    """External sampled evidence only; no inference about internal recovery success.
+
+    The independent bounded recovery tape may be incomplete. A physical steady
+    witness does not turn product exhaustion into an internally settled attempt.
+    All times are relative to an already captured Python monotonic origin.
+    """
+    origins = {'initial': 'observed_task_ready', 'transfer': 'before_transfer_command',
+               'rate_change': 'before_rate_change_command'}
+    value = {'convergenceKind': kind, 'convergenceOrigin': origins[kind],
+        'convergenceBudgetMs': 10000, 'convergenceElapsedMs': elapsed_ms,
+        'convergenceState': 'pending' if physical_ms is None else 'sampled_steady',
+        'internalRecoveryOutcome': 'unknown'}
+    if physical_ms is not None: value['physicalConvergenceMs'] = physical_ms
+    measurement = getattr(matrix, 'rate_measurement', None)
+    if isinstance(measurement, dict):
+        measurement.update(value)
+        if kind == 'initial' and 'initialFollowCommandToConvergenceOriginMs' in measurement:
+            measurement['initialFollowCommandToObservationMs'] = measurement['initialFollowCommandToConvergenceOriginMs'] + elapsed_ms
+    transition = getattr(matrix, 'follow_precision_transition', None)
+    if transition is not None and transition['kind'] == kind:
+        transition['measurement'].update(value)
+        observation = getattr(matrix, 'follow_observation', None)
+        if isinstance(observation, dict): observation['precision'] = dict(transition['measurement'])
+    return value
+
+
 def follow_nominal_precision_ready(authority, follower, expected):
     # Property/requested-rate equality is not a physical slope measurement.
     assert type(follower.get('followSyncToleranceMs')) is int
@@ -94,7 +121,7 @@ def begin_follow_precision_transition(matrix, states, context, kind, expected, o
     queue = tuple(authority['queue']); index = authority['currentIndex']
     matrix.follow_precision_transition = {
         'kind': kind, 'context': context, 'expected': expected, 'origin': origin,
-        'deadline': origin + 5, 'settled': False, 'settledAt': None,
+        'deadline': origin + 10, 'settled': False, 'settledAt': None,
         'processes': tuple(_follow_process_identity(s) for s in states),
         'nativeIds': [tuple(p['id'] for p in players(s)) for s in states],
         'oldTargetTask': (states[1].get('contextId'), tuple(states[1].get('queue') or []),
@@ -229,8 +256,10 @@ def observe_follow_precision_transition(matrix, states):
         return
     pending_target = _follow_transition_ownership(transition, states)
     now = time.monotonic()
+    follow_convergence_observation(matrix, transition['kind'], (now-transition['origin'])*1000,
+        (transition['settledAt']-transition['origin'])*1000 if transition['settled'] else None)
     if not transition['settled'] and now >= transition['deadline']:
-        raise FollowPrecisionDeadline('Owned Follow transition exceeded command-origin five seconds')
+        raise FollowPrecisionDeadline('Owned Follow transition exceeded command-origin ten seconds')
     if pending_target:
         transition['candidate'] = None
         return
@@ -316,3 +345,5 @@ def observe_follow_precision_transition(matrix, states):
         transition['lastObservedAt'] = now
         transition['settled'] = True
         transition['settledAt'] = now
+        follow_convergence_observation(matrix, transition['kind'], (now-transition['origin'])*1000,
+            (now-transition['origin'])*1000)

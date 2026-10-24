@@ -26,13 +26,13 @@ def pair(at, expected=1.5):
 
 def load(clock, final):
     names = fixture.NAMES | {'native_requested_rate', 'follow_correction_identity',
-        'native_follow_readiness_pending', 'follow_nominal_precision_ready', 'follow_precision_sample',
+        'native_follow_readiness_pending', 'follow_nominal_precision_ready', 'follow_precision_sample', 'follow_convergence_observation',
         'FollowPrecisionUnsafe', 'FollowPrecisionDeadline', '_follow_process_identity', '_follow_canonical_identity',
         '_follow_transition_ownership', 'begin_follow_precision_transition', 'observe_follow_precision_transition',
         '_follow_handoff_matches', 'pin_follow_transfer_command', '_follow_owned_provisional_target'}
     tree = ast.parse(FINAL if final else PRIOR)
     selected = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name in names]
-    ns = {'math':math, 'time':clock, 'FOLLOW_CONDITIONS': {'steady_sample_precision', 'native_evidence', 'safe_follow_task', 'authority_rate', 'follower_rate', 'hard_drift_limit', 'lab_five_second_settling', 'native_35s_progression', 'rate_change', 'restoration'}, 'summarize_state':lambda *a,**kw: {},
+    ns = {'math':math, 'time':clock, 'FOLLOW_CONDITIONS': {'steady_sample_precision', 'native_evidence', 'safe_follow_task', 'authority_rate', 'follower_rate', 'hard_drift_limit', 'lab_ten_second_convergence', 'native_35s_progression', 'rate_change', 'restoration'}, 'summarize_state':lambda *a,**kw: {},
           'successful_follow_observation': lambda matrix: {}}
     exec(compile(ast.Module(body=selected,type_ignores=[]), '<owned-strict-precision>', 'exec'),ns)
     return ns
@@ -61,7 +61,7 @@ class PrecisionTests(unittest.TestCase):
         self.assertEqual(prior[-1][-1][0],'precision')
         current=self.setup_matrix(mutate=mutate)
         with self.assertRaises(TimeoutError):self.run_follow(current[2])
-        self.assertEqual(current[0].now,5);self.assertEqual(current[-1],[])
+        self.assertEqual(current[0].now,10);self.assertEqual(current[-1],[])
 
     def test_02_two_nominal_progress_pairs_required_before_window(self):
         def mutate(s,t):
@@ -75,22 +75,22 @@ class PrecisionTests(unittest.TestCase):
 
     def test_03_one_nominal_sample_before_deadline_is_not_enough(self):
         def mutate(s,t):
-            if t<4.8:s[2]['nativePlayers'][0].update(playbackRate=1.56,requestedRate=1.56)
+            if t<9.8:s[2]['nativePlayers'][0].update(playbackRate=1.56,requestedRate=1.56)
         clock,ns,matrix,reads,outcomes=self.setup_matrix(mutate=mutate)
         with self.assertRaises(TimeoutError):self.run_follow(matrix)
-        self.assertEqual(clock.now,5);self.assertEqual(outcomes,[])
+        self.assertEqual(clock.now,10);self.assertEqual(outcomes,[])
 
     def test_04_states_call_crossing_original_deadline_fails(self):
-        clock,ns,matrix,reads,outcomes=self.setup_matrix(read_cost=2.6)
+        clock,ns,matrix,reads,outcomes=self.setup_matrix(read_cost=5.1)
         with self.assertRaises(TimeoutError):self.run_follow(matrix)
-        self.assertEqual(clock.now,5.4);self.assertEqual(outcomes,[])
+        self.assertEqual(clock.now,10.4);self.assertEqual(outcomes,[])
 
     def test_05_requested_and_property_rates_both_must_be_nominal(self):
         for key in ('requestedRate','playbackRate'):
             def mutate(s,t):s[2]['nativePlayers'][0][key]=1.56
             clock,ns,matrix,reads,outcomes=self.setup_matrix(mutate=mutate)
             with self.subTest(key=key),self.assertRaises(TimeoutError):self.run_follow(matrix)
-            self.assertEqual(clock.now,5)
+            self.assertEqual(clock.now,10)
 
     def test_06_malformed_or_outside_cap_rates_fail_immediately(self):
         for key in ('requestedRate','playbackRate'):
@@ -109,7 +109,7 @@ class PrecisionTests(unittest.TestCase):
                 self.assertLessEqual(outcomes[-1][2]['precisionMaxWorstCaseMs'],50)
             else:
                 with self.assertRaises(TimeoutError):self.run_follow(matrix,expected)
-                self.assertEqual(clock.now,5)
+                self.assertEqual(clock.now,10)
 
     def test_08_prior_average_pass_does_not_mask_drift_excursion(self):
         def mutate(s,t):
@@ -224,7 +224,7 @@ class PrecisionTests(unittest.TestCase):
         original=matrix.outcome
         def expire(name,**metrics):
             original(name,**metrics)
-            if name=='native-follow-aligned':clock.now=5
+            if name=='native-follow-aligned':clock.now=10
         matrix.outcome=expire
         with self.assertRaises(TimeoutError):self.run_follow(matrix)
         self.assertFalse(any(row[0]=='precision' for row in outcomes))
@@ -319,15 +319,15 @@ class TransitionTests(PrecisionTests):
 
     def test_24_never_propagated_and_deadline_crossing_do_not_settle(self):
         for propagated in (False,True):
-            c,n,m=self.transition();self.consume(c,n,m,4.9,complete=True,propagated=propagated)
-            with self.assertRaises(n['FollowPrecisionDeadline']):self.consume(c,n,m,5.0,complete=True,propagated=propagated)
+            c,n,m=self.transition();self.consume(c,n,m,9.9,complete=True,propagated=propagated)
+            with self.assertRaises(n['FollowPrecisionDeadline']):self.consume(c,n,m,10.0,complete=True,propagated=propagated)
             self.assertFalse(m.follow_precision_transition['settled'])
 
     def test_25_wait_does_not_retry_owned_transition_timeout(self):
         c,n,m=self.transition();n.update(observe_follow_wait=lambda *a:None,URLError=OSError)
         reads=[]
         def states():
-            c.now=5.1;reads.append(c.now);m.last=transition_states(c.now);return m.last
+            c.now=10.1;reads.append(c.now);m.last=transition_states(c.now);return m.last
         m.states=states
         with self.assertRaises(n['FollowPrecisionDeadline']):m.wait('handoff-native-completion',lambda s:False)
         self.assertEqual(len(reads),1);self.assertEqual(c.sleeps,[])
@@ -375,9 +375,9 @@ class TransitionTests(PrecisionTests):
         self.assertIsNone(m.follow_precision_transition)
 
     def test_29_actual_rate_change_no_new_budget_after_overlap(self):
-        c,n,m,out=self.setup_change(command_seconds=4.95)
+        c,n,m,out=self.setup_change(command_seconds=9.95)
         with self.assertRaises(n['FollowPrecisionDeadline']):m.change_follow_rate('authority-context','fixture-a',['fixture-a','fixture-b'],0)
-        self.assertLess(c.now,5.2)
+        self.assertLess(c.now,10.2)
         self.assertFalse(any(k=='follower-after-follow-rate-change' for k,v in out))
 
         for wrong in (1.0,.832,.833):
@@ -385,7 +385,7 @@ class TransitionTests(PrecisionTests):
             c,n,m,out=self.setup_change(after_change=mutation)
             with self.subTest(rate=wrong),self.assertRaises((AssertionError,TimeoutError)):
                 m.change_follow_rate('authority-context','fixture-a',['fixture-a','fixture-b'],0)
-            self.assertLessEqual(c.now,5.2)
+            self.assertLessEqual(c.now,10.2)
             self.assertFalse(any(k=='follower-after-follow-rate-change' for k,v in out))
 
     def test_30_settled_then_reslew_during_source_window_fails(self):
@@ -448,7 +448,7 @@ class TransitionTests(PrecisionTests):
         c,n,m=self.transition();s=self.consume(c,n,m,4.8,complete=True)
         n['observe_follow_precision_transition'](m,s)
         self.assertFalse(m.follow_precision_transition['settled'])
-        with self.assertRaises(n['FollowPrecisionDeadline']):self.consume(c,n,m,5.1,complete=True)
+        with self.assertRaises(n['FollowPrecisionDeadline']):self.consume(c,n,m,10.1,complete=True)
 
         # A completed witness cannot become a fresh window after output stalls.
         c,n,m=self.transition();self.consume(c,n,m,.1,complete=True);self.consume(c,n,m,.3,complete=True)
@@ -471,7 +471,7 @@ class TransitionTests(PrecisionTests):
         c,n,m=self.transition();self.consume(c,n,m,4.7,complete=True);self.consume(c,n,m,4.9,complete=True)
         self.consume(c,n,m,8.2,complete=True)
         self.assertEqual(m.follow_precision_transition['settledAt'],4.9)
-        self.assertEqual(m.follow_precision_transition['deadline'],5)
+        self.assertEqual(m.follow_precision_transition['deadline'],10)
         s=transition_states(8.4,complete=True);s[2]['nativePlayers'][0]['requestedRate']=1.56;c.now=8.4
         with self.assertRaises(AssertionError):n['observe_follow_precision_transition'](m,s)
 
@@ -510,7 +510,7 @@ class TransitionTests(PrecisionTests):
             self.assertFalse(m.follow_precision_transition['settled'])
             self.assertIsNone(m.follow_precision_transition['candidate'])
             self.assertIsNone(m.follow_precision_transition['newCursors'])
-            self.assertEqual(m.follow_precision_transition['deadline'],5)
+            self.assertEqual(m.follow_precision_transition['deadline'],10)
         self.consume(c,n,m,1.2,complete=True);self.consume(c,n,m,1.4,complete=True)
         self.assertTrue(m.follow_precision_transition['settled'])
         self.assertEqual(m.follow_precision_transition['settledAt'],1.4)
@@ -555,13 +555,13 @@ class TransitionTests(PrecisionTests):
 
     def test_39_owned_pending_wait_expires_at_original_command_deadline(self):
         c,n,m,before=self.pending_transition();n.update(observe_follow_wait=lambda *a:None,URLError=OSError)
-        c.now=4.9;reads=[]
+        c.now=9.9;reads=[]
         def read():
             reads.append(c.now);m.last=self.pending_state(before,c.now);return m.last
         m.states=read
         with self.assertRaises(n['FollowPrecisionDeadline']):m.wait('handoff-native-completion',lambda states:False,timeout=45)
-        self.assertLessEqual(c.now,5.100001);self.assertEqual(len(reads),2)
-        self.assertEqual(m.follow_precision_transition['deadline'],5)
+        self.assertLessEqual(c.now,10.100001);self.assertEqual(len(reads),2)
+        self.assertEqual(m.follow_precision_transition['deadline'],10)
         self.assertFalse(m.follow_precision_transition['settled'])
 
     def test_40_pending_completion_cannot_skip_final_nominal_progress_or_expiry(self):
@@ -573,12 +573,98 @@ class TransitionTests(PrecisionTests):
         self.consume(c,n,m,4.6,complete=True);self.consume(c,n,m,4.8,complete=True)
         self.assertTrue(m.follow_precision_transition['settled']);self.assertEqual(m.follow_precision_transition['settledAt'],4.8)
         for late in ('no_canonical','one_nominal_pair','stale_final_id'):
-            c,n,m,before=self.pending_transition();c.now=4.9
-            if late=='one_nominal_pair':self.consume(c,n,m,4.9,complete=True)
-            else:n['observe_follow_precision_transition'](m,self.pending_state(before,4.9,'completed',True))
-            c.now=5.0;s=transition_states(5,complete=True)
+            c,n,m,before=self.pending_transition();c.now=9.9
+            if late=='one_nominal_pair':self.consume(c,n,m,9.9,complete=True)
+            else:n['observe_follow_precision_transition'](m,self.pending_state(before,9.9,'completed',True))
+            c.now=10.0;s=transition_states(10,complete=True)
             if late=='stale_final_id':s[1]['handoff']['id']='foreign'
             with self.subTest(late=late),self.assertRaises((n['FollowPrecisionDeadline'],n['FollowPrecisionUnsafe'])):n['observe_follow_precision_transition'](m,s)
+
+
+    def test_41_initial_nominal_two_pairs_after_five_before_ten_pass(self):
+        def mutation(states, at):
+            if at < 6: states[2]['nativePlayers'][0].update(playbackRate=1.56, requestedRate=1.56)
+        c,n,m,reads,outcomes=self.setup_matrix(mutate=mutation)
+        m.follow_initial_command_started=-1; m.follow_initial_acquisition_ms=1000
+        self.run_follow(m)
+        result=outcomes[-1][2]
+        self.assertEqual(outcomes[0][1]['waitDurationMs'],6200)
+        self.assertEqual(result['physicalConvergenceMs'],6200)
+        self.assertEqual(result['convergenceBudgetMs'],10000)
+        self.assertEqual(result['convergenceOrigin'],'observed_task_ready')
+        self.assertEqual(result['initialFollowCommandToObservationMs'],7200)
+        self.assertEqual(result['internalRecoveryOutcome'],'unknown')
+        self.assertGreaterEqual(outcomes[-1][1]['elapsedSeconds'],3)
+
+    def test_42_transfer_after_five_uses_original_origin_and_never_rearms(self):
+        c,n,m=self.transition()
+        self.consume(c,n,m,6,complete=True); self.consume(c,n,m,6.2,complete=True)
+        t=m.follow_precision_transition
+        self.assertTrue(t['settled']); self.assertEqual(t['deadline'],10)
+        self.assertEqual(t['measurement']['physicalConvergenceMs'],6200)
+        self.assertEqual(t['measurement']['convergenceOrigin'],'before_transfer_command')
+        s=transition_states(6.4,complete=True);s[2]['nativePlayers'][0]['positionMs']+=70;c.now=6.4
+        with self.assertRaises(AssertionError):n['observe_follow_precision_transition'](m,s)
+        self.assertEqual(t['deadline'],10); self.assertEqual(t['settledAt'],6.2)
+
+    def test_43_rate_change_after_five_keeps_both_full_windows(self):
+        c,n,m,out=self.setup_change(command_seconds=6)
+        snapshots=[]; original=m.outcome
+        def capture(name,**values):
+            snapshots.append((name,copy.deepcopy(m.rate_measurement)))
+            original(name,**values)
+        m.outcome=capture
+        m.change_follow_rate('authority-context','fixture-a',['fixture-a','fixture-b'],0)
+        source=next(v for k,v in out if k=='authority-after-follow-rate-change')
+        follower=next(v for k,v in out if k=='follower-after-follow-rate-change')
+        self.assertGreaterEqual(source['elapsedSeconds'],3);self.assertGreaterEqual(follower['elapsedSeconds'],3)
+        observation=next(v for k,v in snapshots if k=='follower-after-follow-rate-change')
+        self.assertEqual(observation['convergenceOrigin'],'before_rate_change_command')
+        self.assertGreater(observation['physicalConvergenceMs'],5000)
+        self.assertLess(observation['physicalConvergenceMs'],10000)
+        self.assertEqual(observation['internalRecoveryOutcome'],'unknown')
+        self.assertIsNone(m.follow_precision_transition)
+
+    def test_44_no_progress_or_alignment_never_passes_new_budget(self):
+        for mode in ('stall','drift'):
+            def mutation(states,at):
+                for value in (states[0],states[2]):
+                    if mode=='stall':value['nativePlayers'][0]['positionMs']=10000
+                if mode=='drift':states[2]['nativePlayers'][0]['positionMs']+=80
+            c,n,m,reads,outcomes=self.setup_matrix(mutate=mutation)
+            with self.subTest(mode=mode),self.assertRaises(TimeoutError):self.run_follow(m)
+            self.assertEqual(c.now,10);self.assertEqual(outcomes,[])
+            self.assertEqual(m.rate_measurement['convergenceState'],'pending')
+
+    def test_45_other_readiness_and_measurement_timeouts_stay_five(self):
+        c,n,m,reads,outcomes=self.setup_matrix()
+        original=m.states
+        def stall():
+            states=original();states[0]['nativePlayers'][0]['positionMs']=10000;return states
+        m.states=stall
+        with self.assertRaises(TimeoutError):m.rate(0,1.5,'single-player')
+        self.assertLess(c.now,5.2);self.assertGreaterEqual(c.now,5)
+        c,n,m,reads,outcomes=self.setup_matrix()
+        original=m.states
+        def late():
+            if c.now>.3:c.now+=5
+            return original()
+        m.states=late
+        with self.assertRaisesRegex(TimeoutError,'measurement exceeded original five seconds'):self.run_follow(m)
+        self.assertFalse(any(name=='precision' for name,_,_ in outcomes))
+
+    def test_46_exact_ten_second_second_sample_and_foreign_owner_refused(self):
+        for kind in ('transfer','rate_change'):
+            c,n,m=self.transition(kind)
+            rate=1.5 if kind=='transfer' else .8
+            self.consume(c,n,m,9.8,complete=True,rate=rate)
+            with self.assertRaises(n['FollowPrecisionDeadline']):self.consume(c,n,m,10,complete=True,rate=rate)
+            self.assertFalse(m.follow_precision_transition['settled'])
+            self.assertEqual(m.follow_precision_transition['measurement']['convergenceElapsedMs'],10000)
+            self.assertEqual(m.follow_precision_transition['measurement']['internalRecoveryOutcome'],'unknown')
+        c,n,m=self.transition();s=transition_states(6,complete=True)
+        s[2]['contexts']['authority-context']['authorityClientId']='foreign';c.now=6
+        with self.assertRaises(n['FollowPrecisionUnsafe']):n['observe_follow_precision_transition'](m,s)
 
 
 

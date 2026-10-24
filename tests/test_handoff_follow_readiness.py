@@ -83,7 +83,7 @@ class FollowReadinessOrchestrationTests(unittest.TestCase):
         self.assertEqual(safe['correctionReadinessPollCount'], 3)
         self.assertEqual(safe['rateMeasurement']['alignmentFollowerNative'], {'seekInProgress': True, 'playingIntent': True})
         self.assertNotIn('forbidden', json.dumps(safe))
-        raw['correctionReadinessPollCount'] = 26
+        raw['correctionReadinessPollCount'] = 52
         raw['correctionReadinessElapsedMs'] = float('nan')
         raw['rateMeasurement']['alignmentFollowerNative'] = {'seekInProgress': 'yes', 'playingIntent': 1}
         safe = c.native.report_line(json.dumps(raw))

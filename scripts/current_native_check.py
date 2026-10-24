@@ -122,18 +122,25 @@ CLIENT_SCHEMA = {
 DIAGNOSTIC_SCHEMA = {
     'unitLayer': frozenset({'inventory', 'prior', 'final_compatible', 'precision'}),
     'priorProvenanceChecks': ('integer', 70, 70), 'finalCompatibleChecks': ('integer', 63, 63),
-    'finalPrecisionChecks': ('integer', 40, 40),
+    'finalPrecisionChecks': ('integer', 46, 46),
     'failedCaseOrdinals': ('list', ('integer', 1, 70), 70),
-    'checks': ('integer', 0, 40),
-    'failedTestOrdinals': ('list', ('integer', 1, 40), 40),
+    'checks': ('integer', 0, 46),
+    'failedTestOrdinals': ('list', ('integer', 1, 46), 46),
     'errorCategory': frozenset({'assertion', 'runner'}),
+    'convergenceKind': frozenset({'initial', 'transfer', 'rate_change'}),
+    'convergenceOrigin': frozenset({'observed_task_ready', 'before_transfer_command', 'before_rate_change_command'}),
+    'convergenceState': frozenset({'pending', 'sampled_steady'}),
+    'internalRecoveryOutcome': frozenset({'unknown'}),
+    'convergenceBudgetMs': ('integer', 10000, 10000),
+    **{key: ('number', 0, 86400000) for key in ('convergenceElapsedMs', 'physicalConvergenceMs',
+        'initialFollowCommandToConvergenceOriginMs', 'initialFollowCommandToObservationMs')},
     'precisionSamples': ('integer', 0, 1000000),
     **{key: ('number', -86400000, 86400000) for key in ('precisionDriftMs', 'precisionUncertaintyMs',
         'precisionWorstCaseMs', 'precisionMaxWorstCaseMs', 'initialFollowAcquisitionMs',
         'initialFollowCommandToMeasurementEndMs')},
     'precisionSourceNative': NATIVE_SCHEMA, 'precisionFollowerNative': NATIVE_SCHEMA,
-    'correctionReadinessPollCount': ('integer', 0, 25),
-    'correctionReadinessElapsedMs': ('number', 0, 5000),
+    'correctionReadinessPollCount': ('integer', 0, 51),
+    'correctionReadinessElapsedMs': ('number', 0, 10000),
     'diagnostic': {
         'phase': frozenset({'baseline', 'patched'}),
         'category': frozenset({'assertion', 'compiler', 'reporter', 'process', 'runner'}),
@@ -255,7 +262,7 @@ DIAGNOSTIC_SCHEMA['serverCanonicalObservation'] = {
 
 
 # Finite failure/Follow evidence already produced by the reviewed lab.
-FOLLOW_CONDITIONS = frozenset(['steady_sample_precision', 'authority_rate', 'follower_rate', 'hard_drift_limit', 'lab_five_second_settling', 'native_35s_progression', 'native_evidence', 'rate_change', 'restoration', 'safe_follow_task'])
+FOLLOW_CONDITIONS = frozenset(['steady_sample_precision', 'authority_rate', 'follower_rate', 'hard_drift_limit', 'lab_ten_second_convergence', 'native_35s_progression', 'native_evidence', 'rate_change', 'restoration', 'safe_follow_task'])
 BRIDGE_SCHEMA = {
 'action': frozenset(['cancelHandoff', 'follow', 'handoff', 'next', 'pause', 'play', 'playQueue', 'refresh', 'seek', 'speed', 'stopFollow', 'unrecognized']),
 'exceptionCategory': frozenset(['ArgumentError', 'EmoInboundContractViolation', 'EmoProtocolException', 'EmoProtocolPayloadViolation', 'FormatException', 'HttpException', 'PlatformException', 'PlayerException', 'PlayerInterruptedException', 'SocketException', 'StateError', 'TimeoutException', 'unrecognized']),
@@ -267,13 +274,20 @@ BRIDGE_SCHEMA = {
         'queue_launch_missingPlaybackContext', 'queue_launch_syncTimeout'}),
 }
 RATE_SCHEMA = {
+    'convergenceKind': frozenset({'initial', 'transfer', 'rate_change'}),
+    'convergenceOrigin': frozenset({'observed_task_ready', 'before_transfer_command', 'before_rate_change_command'}),
+    'convergenceState': frozenset({'pending', 'sampled_steady'}),
+    'internalRecoveryOutcome': frozenset({'unknown'}),
+    'convergenceBudgetMs': ('integer', 10000, 10000),
+    **{key: ('number', 0, 86400000) for key in ('convergenceElapsedMs', 'physicalConvergenceMs',
+        'initialFollowCommandToConvergenceOriginMs', 'initialFollowCommandToObservationMs')},
     'precisionSamples': ('integer', 0, 1000000),
     **{key: ('number', -86400000, 86400000) for key in ('precisionDriftMs', 'precisionUncertaintyMs',
         'precisionWorstCaseMs', 'precisionMaxWorstCaseMs', 'initialFollowAcquisitionMs',
         'initialFollowCommandToMeasurementEndMs')},
     'precisionSourceNative': NATIVE_SCHEMA, 'precisionFollowerNative': NATIVE_SCHEMA,
-    'correctionReadinessPollCount': ('integer', 0, 25),
-    'correctionReadinessElapsedMs': ('number', 0, 5000),
+    'correctionReadinessPollCount': ('integer', 0, 51),
+    'correctionReadinessElapsedMs': ('number', 0, 10000),
     **{key: NUMBER for key in ('expectedRate', 'measurementWindowSeconds', 'requestedPositionMs',
         'readinessTimeoutMs', 'readinessElapsedMs', 'allowedNativeRateMin', 'allowedNativeRateMax',
         'advancementElapsedMs', 'totalReadinessElapsedMs', 'elapsedSeconds', 'nativePositionDeltaMs',

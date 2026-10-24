@@ -18,11 +18,11 @@ class StrictPrecisionPublicTests(unittest.TestCase):
         spec=importlib.util.spec_from_file_location('public_precision_fixture',r.ROOT/'native_follow_readiness_payload/precision_contract.py')
         m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
 
-    def test_exact_40_final_method_cases_and_distinct_prior_provenance(self):
-        m=self.load();self.assertEqual(len(m.TEST_NAMES),40);self.assertEqual(len(set(m.TEST_NAMES)),40)
-        self.assertEqual(r.PRECISION_CHECKS,40)
+    def test_exact_46_final_method_cases_and_distinct_prior_provenance(self):
+        m=self.load();self.assertEqual(len(m.TEST_NAMES),46);self.assertEqual(len(set(m.TEST_NAMES)),46)
+        self.assertEqual(r.PRECISION_CHECKS,46)
         self.assertNotEqual(r.PRECISION_PRIOR_SHA256,r.AFTER[r.LAB])
-        self.assertEqual(r.expected_proof()['precision']['checks'],40)
+        self.assertEqual(r.expected_proof()['precision']['checks'],46)
         self.assertEqual(r.expected_proof()['priorAcceptanceHarness'],r.PRECISION_PRIOR_SHA256)
 
     def test_exact_payload_and_chain_pins(self):
@@ -77,9 +77,9 @@ class StrictPrecisionPublicTests(unittest.TestCase):
         self.assertNotIn('privateIdentity',value['rateMeasurement']);self.assertNotIn('precisionDriftMs',value['rateMeasurement'])
 
     def test_exact_proof_count_ordinal_bounds_and_steady_failure_enum(self):
-        good={'stage':'native-follow-precision-proof','status':'failed','checks':40,'failedTestOrdinals':[1,40],'errorCategory':'assertion'}
+        good={'stage':'native-follow-precision-proof','status':'failed','checks':46,'failedTestOrdinals':[1,46],'errorCategory':'assertion'}
         self.assertEqual(public.report_line(json.dumps(good)),good)
-        bad=dict(good,checks=41,failedTestOrdinals=[0,41])
+        bad=dict(good,checks=47,failedTestOrdinals=[0,47])
         parsed=public.report_line(json.dumps(bad));self.assertNotIn('checks',parsed);self.assertEqual(parsed.get('failedTestOrdinals',[]),[])
         self.assertIn('steady_sample_precision',public.FOLLOW_CONDITIONS)
 

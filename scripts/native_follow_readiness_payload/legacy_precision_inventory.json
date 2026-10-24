@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "priorCount": 70,
   "finalCompatibleCount": 63,
-  "finalPrecisionCount": 35,
+  "finalPrecisionCount": 46,
   "claims": "overlapping_layer_executions_not_unique_tests",
   "cases": [
     {
@@ -68,7 +68,8 @@
     {
       "ordinal": 13,
       "caseSha256": "e2f1694afe161ec388ac7c4c42f42a2613e8c51f177c2605c7a6c903b536fef6",
-      "classification": "metadata_only_final"
+      "classification": "metadata_only_final",
+      "externalBudgetAdapted": true
     },
     {
       "ordinal": 14,
@@ -88,7 +89,8 @@
     {
       "ordinal": 17,
       "caseSha256": "8d44e2bd018be1033a97fb90136544c1176694249c325c22c036d83ca38beb30",
-      "classification": "metadata_only_final"
+      "classification": "metadata_only_final",
+      "externalBudgetAdapted": true
     },
     {
       "ordinal": 18,
@@ -135,7 +137,8 @@
     {
       "ordinal": 25,
       "caseSha256": "c232fcd36764671eeb89204f6cb4800102195c14b0c89a3196854b0de030a6b2",
-      "classification": "unchanged_final"
+      "classification": "unchanged_final",
+      "externalBudgetAdapted": true
     },
     {
       "ordinal": 26,
@@ -386,5 +389,67 @@
     "test_follow_readiness.py": "b1e150afb4b84f2219fcd2eb5522eb68b4701889e64efb3262c72befcd8b7614",
     "test_rate_measurement.py": "ffb02fda0c7e9701ee3f9040693e6f110cb5874a52a4c800adeb79cf5c840cd4"
   },
-  "priorAlignmentSha256": "d50cce294a52250a8236b34bf68b0e5e0e26bb599b301b3b9d94fd945efb79ad"
+  "priorAlignmentSha256": "d50cce294a52250a8236b34bf68b0e5e0e26bb599b301b3b9d94fd945efb79ad",
+  "externalConvergenceBudgetMs": 10000,
+  "classificationBasis": "prior_precision_layer_before_explicit_external_budget_adapter",
+  "externalBudgetAdaptations": {
+    "test_follow_alignment.py": [
+      {
+        "ordinal": 17,
+        "caseSha256": "8d44e2bd018be1033a97fb90136544c1176694249c325c22c036d83ca38beb30",
+        "beforeAstSha256": "3254f5b8f1e77c55badc3c9e5176d8c24d9d11443e6dcb04cad68ec5561388fd",
+        "afterAstSha256": "72796323b1054c9aab2d70cbb6f61f5499be2ac839a56c7591e887ae72d87dea",
+        "literals": [
+          {
+            "before": 5.25,
+            "after": 10.25,
+            "count": 1
+          }
+        ]
+      },
+      {
+        "ordinal": 13,
+        "caseSha256": "e2f1694afe161ec388ac7c4c42f42a2613e8c51f177c2605c7a6c903b536fef6",
+        "beforeAstSha256": "d4182278de4c089d1127fb6ca2bc66375527a9956e08b8397c1a80ae91d9165e",
+        "afterAstSha256": "61ed860cab9e3481ea590e55b8705acb82326c91e4e67b56b8f7979214a3b51d",
+        "literals": [
+          {
+            "before": 5.0,
+            "after": 10.0,
+            "count": 1
+          },
+          {
+            "before": 5.25,
+            "after": 10.25,
+            "count": 1
+          }
+        ]
+      }
+    ],
+    "test_follow_observation.py": [
+      {
+        "ordinal": 25,
+        "caseSha256": "c232fcd36764671eeb89204f6cb4800102195c14b0c89a3196854b0de030a6b2",
+        "beforeAstSha256": "319a927431064935563577fba435c966e070b831fff63612bc8985e0cc9c92dd",
+        "afterAstSha256": "a98c08ddd3845b84d6f65f1c86670c53621ed52916b73e6c4220521ba6607b37",
+        "literals": [
+          {
+            "before": 5.1,
+            "after": 10.1,
+            "count": 1
+          },
+          {
+            "before": "lab_five_second_settling",
+            "after": "lab_ten_second_convergence",
+            "count": 3
+          }
+        ]
+      }
+    ]
+  },
+  "finalBudgetTestFiles": {
+    "test_follow_alignment.py": "f3f5941d86fa5138860dc72e127afd42ffabe4ec45f59f025b8147cd157f9b66",
+    "test_follow_observation.py": "cdc5ce1277358f0a901ded24f9f2a209879cb6da019e4c83202ef714e32b8655"
+  },
+  "mappedPrecisionPrefixCount": 35
 }

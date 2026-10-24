@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == 'fdb853174dc19b4a52012a4959c1f9ab2afb9994' &&
-      github.event.head_commit.message == 'test: measure bounded recovery admission 20261023' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '8e887e171d9a92fcc5173c948bc68a90a6465d55' &&
+      github.event.head_commit.message == 'test: validate ten second Follow convergence 20261024' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build

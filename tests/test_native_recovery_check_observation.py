@@ -62,7 +62,7 @@ class RecoveryAuxiliaryTests(unittest.TestCase):
         self.assertEqual(c.FILES['schema.json'][0], '530496ee1d92ce2238ec7fc8769633bcb41aae36c4008920d63c7b026a0bf808')
         self.assertEqual(wrapper.REQUEST['auxiliary_observer_sha'],c.AUX_SHA)
         self.assertEqual(wrapper.REQUEST['auxiliary_observer_ref'],c.AUX_REF)
-        self.assertEqual(wrapper.REQUEST['attempt'],101)
+        self.assertEqual(wrapper.REQUEST['attempt'],102)
         self.assertEqual(wrapper.INGRESS_RUN,39966140487)
 
     def test_exact_three_file_manifest_and_policy_bounds(self):

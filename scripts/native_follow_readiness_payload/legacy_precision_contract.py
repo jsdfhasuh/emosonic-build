@@ -1,5 +1,7 @@
 """Exact private case identities by digest; finite output, no private names/source."""
 import contextlib
+import ast
+import copy
 import hashlib
 import json
 import os
@@ -21,13 +23,58 @@ def digest(data): return hashlib.sha256(data).hexdigest()
 
 def inventory():
     value=json.loads(INVENTORY.read_text())
-    assert value['priorCount']==70 and value['finalCompatibleCount']==63 and value['finalPrecisionCount']==35
+    assert value['priorCount']==70 and value['finalCompatibleCount']==63 and value['finalPrecisionCount']==46 and value['mappedPrecisionPrefixCount']==35
+    assert value['externalConvergenceBudgetMs']==10000
+    assert sorted(row['ordinal'] for rows in value['externalBudgetAdaptations'].values() for row in rows)==[13,17,25]
     cases=value['cases']
     assert len(cases)==70 and [x['ordinal'] for x in cases]==list(range(1,71))
     assert len({x['caseSha256'] for x in cases})==70
     assert sum(x['classification'] in ('unchanged_final','metadata_only_final') for x in cases)==63
     assert sum('finalPrecisionOrdinals' in x for x in cases)==7
     return value
+
+
+
+def adapt_budget_fixture(data, filename, contract, *, inverse=False):
+    """Exact three legacy cases only, inside the removed private unit copy.
+
+    Original discovery names and source hashes remain pinned. Only the listed
+    deadline stimuli/assertion constants and renamed finite condition change;
+    all other bytes are preserved, and the inverse is byte-exact.
+    """
+    specs = contract.get('externalBudgetAdaptations', {}).get(filename, [])
+    if not specs: return data
+    text=data.decode('utf-8'); lines=text.splitlines(keepends=True)
+    offsets=[]; at=0
+    for line in lines: offsets.append(at); at+=len(line)
+    tree=ast.parse(text); found={}; replacements=[]
+    for cls in tree.body:
+        if not isinstance(cls,ast.ClassDef): continue
+        for method in cls.body:
+            if not isinstance(method,ast.FunctionDef): continue
+            case=digest(f'{Path(filename).stem}.{cls.name}.{method.name}'.encode())
+            spec=next((row for row in specs if row['caseSha256']==case),None)
+            if spec is None: continue
+            assert case not in found
+            key='afterAstSha256' if inverse else 'beforeAstSha256'
+            assert digest(ast.dump(method,include_attributes=False).encode())==spec[key]
+            changed=copy.deepcopy(method)
+            for literal in spec['literals']:
+                old,new=(literal['after'],literal['before']) if inverse else (literal['before'],literal['after'])
+                nodes=[node for node in ast.walk(changed) if isinstance(node,ast.Constant)
+                    and type(node.value) is type(old) and node.value==old]
+                assert len(nodes)==literal['count']
+                for node in nodes:
+                    start=offsets[node.lineno-1]+node.col_offset
+                    end=offsets[node.end_lineno-1]+node.end_col_offset
+                    assert text[start:end]==repr(old)
+                    replacements.append((start,end,repr(new)));node.value=new
+            target='beforeAstSha256' if inverse else 'afterAstSha256'
+            assert digest(ast.dump(changed,include_attributes=False).encode())==spec[target]
+            found[case]=True
+    assert set(found)=={row['caseSha256'] for row in specs}
+    for start,end,replacement in sorted(replacements,reverse=True):text=text[:start]+replacement+text[end:]
+    return text.encode('utf-8')
 
 
 def flattened(suite):
@@ -54,6 +101,7 @@ def child(directory,layer):
         actual=directory/name
         assert actual.is_file() and not actual.is_symlink()
         if layer=='prior' and name=='test_follow_alignment.py':wanted=contract['priorAlignmentSha256']
+        elif layer=='final_compatible':wanted=contract['finalBudgetTestFiles'].get(name,wanted)
         assert digest(actual.read_bytes())==wanted
     assert {p.name for p in directory.glob('test_*.py')}==set(contract['testFiles'])
     sys.path.insert(0,str(directory))
@@ -90,6 +138,9 @@ def run_layer(source_directory,harness,layer):
                 assert data.count(HEALTH_LINE.encode())==1
                 data=data.replace(HEALTH_LINE.encode(),b'',1)
                 assert digest(data)==contract['priorAlignmentSha256']
+            if layer=='final_compatible' and name in contract['testFiles']:
+                original=data;data=adapt_budget_fixture(data,name,contract)
+                assert adapt_budget_fixture(data,name,contract,inverse=True)==original
             (directory/name).write_bytes(data)
         (directory/'run_lab.py').write_bytes(harness)
         env={k:v for k,v in os.environ.items() if k not in

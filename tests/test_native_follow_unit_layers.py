@@ -69,7 +69,7 @@ class UnitLayersTests(unittest.TestCase):
         self.assertIn('result.testsRun==len(selected)',source)
 
     def test_finite_layer_summary_and_invalid_ordinals(self):
-        sample={'stage':'native-follow-unit-layers','status':'passed','priorProvenanceChecks':70,'finalCompatibleChecks':63,'finalPrecisionChecks':40}
+        sample={'stage':'native-follow-unit-layers','status':'passed','priorProvenanceChecks':70,'finalCompatibleChecks':63,'finalPrecisionChecks':46}
         self.assertEqual(public.report_line(json.dumps(sample)),sample)
         sample={'stage':'native-follow-unit-layers','status':'failed','unitLayer':'prior','failedCaseOrdinals':[1,70],'errorCategory':'assertion'}
         self.assertEqual(public.report_line(json.dumps(sample)),sample)

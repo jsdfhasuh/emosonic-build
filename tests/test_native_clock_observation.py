@@ -107,7 +107,7 @@ class NativeClockObservationTests(unittest.TestCase):
             result=m.clock_history(prior,state,native,i*500,pair);prior={'clockHistory':result}
         self.assertEqual(result['count'],12);self.assertEqual(result['dropped'],4)
         self.assertEqual([v['ordinal'] for v in result['records']],[1,2,7,8,9,10,11,12])
-        self.assertEqual(result['records'][-1]['remainingReadinessBudgetMs'],0)
+        self.assertEqual(result['records'][-1]['remainingReadinessBudgetMs'],4500)
         self.assertEqual(result['records'][-1]['dartMinusNativeSampleMs'],7)
         self.assertEqual(result['records'][-1]['pairedNativeSampleDeltaMs'],-12)
         self.assertEqual(result['recoveryArmAge'],'unavailable')

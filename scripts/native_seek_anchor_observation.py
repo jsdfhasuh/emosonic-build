@@ -13,14 +13,14 @@ EXPECTED = {
     'AudioPlayer.m': 'dfc408d533c30fe95b8d0a9ad2284f2266fdbaba3377da2bde372fcaad4441c7',
 }
 PREPARE_SHA = 'dfdd215375ac1afd5a90e278733f5ca1a1ef5683317f95526933b5b6fe758532'
-HARNESS_SHA = '49e32674ea18b085887a13dad14cb69d3ee5f2a91c58cc5f9ae456c5c01b7a52'
+HARNESS_SHA = '008b2a068020bb1f620aa186a1e908cc93b546cc052cdeadd6b34afdbf969d67'
 LAB_ROOT = 'tool/native_playback_mac'
 PREPARE = LAB_ROOT + '/prepare_build.py'
 HARNESS = LAB_ROOT + '/run_lab.py'
 COPIED_HELPER = LAB_ROOT + '/native_seek_anchor_observation.py'
 STATE = '.native_timing_observation/manifest.json'
 PAYLOAD_DIRECTORY = 'native_seek_anchor_observation_payload'
-AFTER = {'tool/native_playback_mac/prepare_build.py': 'a7aea3aa0530bcd6a39c2e91788a4712093f02570ab631790f4d36dd550a6593', 'tool/native_playback_mac/run_lab.py': '0f80012bbf375e6ced6beafeb510e2767b3b98ae6fcc853bdb15de6ef2e32fa7'}
+AFTER = {'tool/native_playback_mac/prepare_build.py': 'a7aea3aa0530bcd6a39c2e91788a4712093f02570ab631790f4d36dd550a6593', 'tool/native_playback_mac/run_lab.py': 'a0eaed55fbc825512a8f0f81e213fa346bc224aba6f7887e7adbc538891204d4'}
 NATIVE_AFTER = {'AudioPlayer.h': '007d2925fa33997665d64c0a4e1dd6a74c0b21d69f746eae722e5de48b070201', 'AudioPlayer.m': '6e09059b4440a82c4f6d0e86beb37c38245c714a1f3a9163612d5218766b77e3'}
 REJECTION_NAMES = ('budget_or_clock', 'not_healthy', 'primary_identity',
                    'no_timebase', 'effective_rate', 'read_clock', 'capture_quality')
@@ -712,7 +712,7 @@ def clock_observation(raw):
 
 CLOCK_ROW_SCHEMA = {
     'ordinal':('integer',1,65535), 'readinessElapsedMs':('number',0,600000),
-    'remainingReadinessBudgetMs':('number',0,5000), 'serverClockOffsetMs':('number',-600000,600000),
+    'remainingReadinessBudgetMs':('number',0,10000), 'serverClockOffsetMs':('number',-600000,600000),
     'latencySampleCount':('integer',0,65535), 'nativePositionMs':('number',0,86400000),
     'nativeRate':('number',-2,4), 'requestedRate':('number',-2,4),
     'nativeSampleUncertaintyMs':('number',0,1000), 'dartSampleUncertaintyMs':('number',0,1000),
@@ -727,7 +727,7 @@ def clock_history(previous, state, native, elapsed_ms, paired_state):
     if type(count) is not int or not 0 <= count <= 65535: count=0
     count=min(65535,count+1)
     row={'ordinal':count}
-    if number(elapsed_ms,0,600000): row.update(readinessElapsedMs=elapsed_ms,remainingReadinessBudgetMs=max(0,5000-elapsed_ms))
+    if number(elapsed_ms,0,600000): row.update(readinessElapsedMs=elapsed_ms,remainingReadinessBudgetMs=max(0,10000-elapsed_ms))
     for data, old, new in ((state,'serverClockOffsetMs','serverClockOffsetMs'),(state,'latencySampleCount','latencySampleCount'),
             (state,'dartPositionSampleUncertaintyMs','dartSampleUncertaintyMs'),(native,'positionMs','nativePositionMs'),
             (native,'playbackRate','nativeRate'),(native,'requestedRate','requestedRate'),

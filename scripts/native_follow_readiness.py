@@ -15,7 +15,7 @@ STATE = '.native_follow_readiness/manifest.json'
 ORIGINAL_STATE = '.native_follow_readiness/original-run_lab.py'
 PROOF_STATE = '.native_follow_readiness/contract-proof.json'
 CONTRACT_CHECKS = 35
-PRECISION_CHECKS = 40
+PRECISION_CHECKS = 46
 PRECISION_PRIOR_SHA256 = '6eb44ffc54f90dab0df7bd320c68e39f0c764c1af126c05fa29e64da22acdc36'
 PROOF_LAYERS = {'priorReadiness': 23, 'finalCompatible': 19, 'sharedWitness': 12}
 SHARED_BASELINE_SHA256 = 'dad22e364b950e8f0b500dac13a084b0ac722f6d91dd265cef77759d2e4029ad'
@@ -27,9 +27,9 @@ BASELINE = {LAB: '96dda56b6d8d4e674cb35c7426af69e5f67cee869f977bbc1e09cf95c4bfd1
            PREPARE: '4dcb27fa7d93a74823d5727a271459ed6cd0901999bd33e5180afff0e363da0e',
            FIXTURE: 'f324d2f5106a26837aca41c4733e03f3a08c583b7d3cc1e12017bf34812bd8a5'}
 # Filled from independently reviewed exact transformations, not runtime source.
-AFTER = {'tool/native_playback_mac/run_lab.py': 'e7e7e3b67338867d4cc562ebb6350560d936678df5c5ee0c91bb93f8f3a15879', 'tool/native_playback_mac/prepare_build.py': 'dfdd215375ac1afd5a90e278733f5ca1a1ef5683317f95526933b5b6fe758532', 'tool/native_playback_mac/test_follow_alignment.py': 'cafbeaf89647915cab12d8664a03f186c016f9ca5c10dfc1738d0a3d2bdb63cd'}
+AFTER = {'tool/native_playback_mac/run_lab.py': 'caabd06cfa324592da807ee794a99dd3d726f58acc3d7a7db1c023ae6ed87f5c', 'tool/native_playback_mac/prepare_build.py': 'dfdd215375ac1afd5a90e278733f5ca1a1ef5683317f95526933b5b6fe758532', 'tool/native_playback_mac/test_follow_alignment.py': 'cafbeaf89647915cab12d8664a03f186c016f9ca5c10dfc1738d0a3d2bdb63cd'}
 NATIVE_HASHES = {'AudioPlayer.h': {'before': 'c8c6df3bc07f10677e0afbeb447c88da2a704b2c8323769247f78768c6a43138', 'after': '6b48fdf8e6bf67849126224151470cb8932d432f2dffd7e6fd8d09ef85796cb2'}, 'AudioPlayer.m': {'before': 'ecec29e1f913f0dca944ca3fb2e45a7ad96a138391af59f99ca3f46dfd5b65b3', 'after': 'dfc408d533c30fe95b8d0a9ad2284f2266fdbaba3377da2bde372fcaad4441c7'}}
-PAYLOAD_HASHES = {'alignment_fixture_compatibility.py': 'fcc46886d6091464d0d36b20615bbc88f09f3120deb8655ba2de49cdd1b613c0', 'follow_readiness_helpers.py': 'a23c172a5d009e4271efbcfe939810d3c2ca5da756bca853e8cdf0b86c60edd7', 'instrument_seek_observability.py': '678ccfe3e91b6257eb49144da60203e96bfed2183a75bed4acdd1552bf4a5bfa', 'readiness_contract.py': '0cd4fd059c0d6d0d82f87d10c06bb2dc929f184a14033ccada2fee62e33e0431', 'follow_precision_helpers.py': 'd50ab4f7853e336da4c019fa5d20f6338f88f012648e01f171bf04004788d805', 'precision_contract.py': '197c25f9c9dd0334f9f448753a8c8cf07d80f297879cc979420203df5eaea9d0', 'legacy_precision_contract.py': '3c6d9d1699b18cbb1ed7b62335eccf48a1dff68c3637166aa045c0b9b57488ad', 'legacy_precision_inventory.json': 'ec40c0cab8ac626cb535dca359e44b71fec1ed2b73e91a49379d16dd6056bd5e'}
+PAYLOAD_HASHES = {'alignment_fixture_compatibility.py': 'fcc46886d6091464d0d36b20615bbc88f09f3120deb8655ba2de49cdd1b613c0', 'follow_readiness_helpers.py': 'a23c172a5d009e4271efbcfe939810d3c2ca5da756bca853e8cdf0b86c60edd7', 'instrument_seek_observability.py': '678ccfe3e91b6257eb49144da60203e96bfed2183a75bed4acdd1552bf4a5bfa', 'readiness_contract.py': '0cd4fd059c0d6d0d82f87d10c06bb2dc929f184a14033ccada2fee62e33e0431', 'follow_precision_helpers.py': 'e10280fb4bf79e8d559accfb620791b57575a1d856c64d21eed15301b76cd78e', 'precision_contract.py': 'a25c52175b202d1860fa7952c4c3d71b1beecfadbc62a35111b72e130a44c1e9', 'legacy_precision_contract.py': 'ff02ebb56a0b39804ec2e8dc69f465d86312bc0c09af8ed5005153583eb2116b', 'legacy_precision_inventory.json': 'ce5c83811af1b67968907639d4dde3fe3b398a9f5b472209074a5c798721906f'}
 
 
 def digest(data): return hashlib.sha256(data).hexdigest()
@@ -180,7 +180,7 @@ def precision_operations():
          '            assert self.last[index] is first_state\n'
          '            precision_previous = follow_precision_sample(self, self.last, authority_index,\n'
          '                follow_context, expected, precision_identity)\n'),
-    ) + precision_transition_operations()
+    ) + precision_transition_operations() + convergence_operations()
 
 
 def precision_transition_operations():
@@ -344,6 +344,78 @@ def precision_transition_operations():
   '            except (URLError, ConnectionError, TimeoutError):\n'))
 
 
+
+def convergence_operations():
+    """Only external Follow convergence is ten seconds; measurement stays five."""
+    # Fifty 200 ms intervals plus the initial tuple; terminal polls are not eligible.
+    return (('        readiness_deadline = readiness_started + 5\n        transition =',
+  '        readiness_deadline = readiness_started + (10 if follow_context is not None else 5)\n'
+  '        transition ='),
+ ('        precision_previous = None\n        def observe():',
+  '        precision_previous = None\n'
+  '        if follow_context is not None:\n'
+  '            if transition is None:\n'
+  "                self.rate_measurement['initialFollowAcquisitionMs'] = getattr(self, "
+  "'follow_initial_acquisition_ms', 0)\n"
+  "                self.rate_measurement['initialFollowCommandToConvergenceOriginMs'] = "
+  "(readiness_started-getattr(self, 'follow_initial_command_started', readiness_started))*1000\n"
+  "                follow_convergence_observation(self, 'initial', 0)\n"
+  '            else:\n'
+  "                self.rate_measurement.update(transition['measurement'])\n"
+  '        def observe():'),
+ ("                    'correctionReadinessPollCount': min(25,",
+  "                    'correctionReadinessPollCount': min(51,"),
+ ("'correctionReadinessElapsedMs': round(min(5000, max(0, elapsed_ms)), 2)",
+  "'correctionReadinessElapsedMs': round(min(10000, max(0, elapsed_ms)), 2)"),
+ ('                if time.monotonic() >= deadline:\n'
+  "                    raise TimeoutError('Native Follow alignment exceeded five-second readiness budget')",
+  '                if self.follow_precision_transition is None:\n'
+  "                    follow_convergence_observation(self, 'initial', elapsed_ms)\n"
+  '                if time.monotonic() >= deadline:\n'
+  "                    raise TimeoutError('Native Follow alignment exceeded ten-second convergence budget')"),
+ ('            if time.monotonic() >= deadline:\n'
+  "                raise TimeoutError('Native Follow alignment exceeded five-second readiness budget')",
+  '            if self.follow_precision_transition is None:\n'
+  "                follow_convergence_observation(self, 'initial', "
+  "self.rate_measurement['alignmentElapsedMs'])\n"
+  '            if time.monotonic() >= deadline:\n'
+  "                raise TimeoutError('Native Follow alignment exceeded ten-second convergence budget')"),
+ ("            if stable:\n                self.outcome('native-follow-aligned',",
+  '            if stable:\n'
+  '                if self.follow_precision_transition is None:\n'
+  "                    follow_convergence_observation(self, 'initial', "
+  "self.rate_measurement['alignmentElapsedMs'],\n"
+  "                        self.rate_measurement['alignmentElapsedMs'])\n"
+  "                self.outcome('native-follow-aligned',"),
+ ('        deadline = started + 5\n'
+  "        self.rate_measurement = {'expectedRate': 0.8, 'readinessTimeoutMs': 5000}",
+  '        deadline = started + 10\n'
+  "        self.rate_measurement = {'expectedRate': 0.8, 'readinessTimeoutMs': 10000}"),
+ ('Explicit Follow rate change did not converge within five seconds',
+  'Explicit Follow rate change did not converge within ten seconds'),
+ ("\n                     'hard_drift_limit', 'lab_five_second_settling', 'native_35s_progression',\n",
+  "\n                     'hard_drift_limit', 'lab_ten_second_convergence', 'native_35s_progression',\n"),
+ ('\n'
+  "                condition = 'steady_sample_precision' if self.follow_precision_transition['settled'] else "
+  "'lab_five_second_settling'\n",
+  '\n'
+  "                condition = 'steady_sample_precision' if self.follow_precision_transition['settled'] else "
+  "'lab_ten_second_convergence'\n"),
+ ('\n'
+  "                    condition = 'steady_sample_precision' if self.follow_precision_transition['settled'] "
+  "else 'lab_five_second_settling'\n",
+  '\n'
+  "                    condition = 'steady_sample_precision' if self.follow_precision_transition['settled'] "
+  "else 'lab_ten_second_convergence'\n"),
+ ('\n'
+  "            self.record_follow_condition('lab_five_second_settling', "
+  "self.follow_precision_transition['settled'])\n",
+  '\n'
+  "            self.record_follow_condition('lab_ten_second_convergence', "
+  "self.follow_precision_transition['settled'])\n"),
+ ('        # Both readiness phases share the original five-second deadline.\n',
+  '        # Both phases share one deadline: ten seconds for Follow, five otherwise.\n'))
+
 def strengthen_follow_precision(original):
     text = original.decode('utf-8')
     for old, new in precision_operations(): text = replace_once(text, old, new)
@@ -410,6 +482,8 @@ def expected_manifest():
             'disposableOnly': True, 'nativeReadOnlyGetters': True, 'originalFixtureTestMethodsUnchanged': False, 'originalFixtureAssertionsUnchanged': True,
             'fixtureTestMethodsChanged': ['test_alignment_and_advancement_share_original_deadline'],
             'strictSampledFollowAcceptance': True,
+            'externalFollowConvergenceBudgetMs': 10000, 'strictMeasurementTimeoutMs': 5000,
+            'productRecoveryBudgetUnchanged': True, 'physicalConvergenceIsNotInternalRecoverySuccess': True,
             'strictFollowDriftBoundMs': 50, 'strictFollowPropertyEpsilon': 0.0001,
             'strictFollowPositionRoundingAllowanceMs': 1,
             'strictFollowCoverage': 'existing_sampled_tuples_not_between_samples',
@@ -557,9 +631,9 @@ def verify_contract(source_repo):
 
 
 def verify_units(source_repo):
-    """70 prior provenance, 63 final compatible, 40 final precision executions.
+    """70 prior provenance, 63 final compatible, 46 final precision executions.
 
-    These overlapping layers are not 173 unique tests. Every original discovery
+    These overlapping layers are not 179 unique tests. Every original discovery
     identity is verified before the seven explicitly mapped superseded cases are
     selected out of the final-compatible layer. The original 70 are still run.
     """
