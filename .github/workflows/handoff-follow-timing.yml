@@ -24,8 +24,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '17386c088c0e5b4b2c47caaf3fd4675637a7bc50' &&
-      github.event.head_commit.message == 'test: correct native interval precision 20261024' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '58621fd5d752f5993d4fc846a120d1dab5a55bc0' &&
+      github.event.head_commit.message == 'test: repeat native interval precision 20261024' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build
