@@ -5,7 +5,7 @@
   "server_sha": "5adc23da173c5f20188d79aafe8fcc1e656eb38a",
   "version": "1.0.10+27",
   "mode": "native-proven-build-only",
-  "attempt": 116,
+  "attempt": 117,
   "auxiliary_observer_sha": "3e06d0a7faf99f3608a2d3734847e683f6d71d07",
   "auxiliary_observer_ref": "refs/heads/test/bounded-budget-observation-20261024",
   "source_validation_run_id": 40062350211,

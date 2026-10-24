@@ -9,7 +9,9 @@ import os
 from pathlib import Path
 import sys
 import subprocess
+import struct
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -397,7 +399,15 @@ class FinalPackageTests(unittest.TestCase):
                             else:
                                 c.verify_package(platform)
                                 self.assertEqual(emit.call_args.args[0], output)
-                            inspect.assert_called_once_with(root / 'incoming' / c.delivery_name(c.VERSION, platform), c.VERSION)
+                            inspect.assert_called_once()
+                            inspected, version = inspect.call_args.args
+                            self.assertEqual(version, c.VERSION)
+                            if platform == 'android':
+                                self.assertEqual(inspected, root / 'incoming' / c.delivery_name(c.VERSION, platform))
+                            else:
+                                self.assertEqual(inspected.name, c.p.installer_name(c.VERSION))
+                                self.assertEqual(inspected.parent.parent, root)
+                                self.assertFalse(inspected.parent.exists())
 
     def test_full_request_and_workflow_contract(self):
         root = Path(__file__).resolve().parents[1]
@@ -436,6 +446,226 @@ class FinalPackageTests(unittest.TestCase):
         self.assertEqual(c.p.NATIVE_CONTRACT_TEST_COUNT, 104)
         helper = (root / 'scripts/handoff_final_packages.py').read_text()
         self.assertNotIn('import native_recovery_check_observation', helper)
+
+
+class WindowsDeliveryInspectionTests(unittest.TestCase):
+    pins = FinalPackageTests.pins
+    accepted = FinalPackageTests.accepted
+    package_context = FinalPackageTests.package_context
+    make_bundle = FinalPackageTests.make_bundle
+
+    @contextmanager
+    def incoming(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with self.package_context(root):
+                self.make_bundle(root, 'windows').rename(root / 'incoming')
+                package = root / 'incoming' / c.delivery_name(c.VERSION, 'windows')
+                yield root, package, c.p.file_digest(package)
+
+    @contextmanager
+    def unpack_model(self, *, stored_base='', fields=None, info=None, payload=None):
+        # Actual request116 header has empty BaseFilename. Pinned innounp
+        # RebuildScript.GetBaseFileName falls back to the input filename.
+        # Model only extraction/tool OS calls. The original setup_identity,
+        # inspect_windows, PE/payload and validate_windows_version remain real.
+        observed = []
+        identity = dict(AppName='EmoSonic', AppId=c.p.POLICY['windows_app_id'],
+                        AppVersion='1.0.10', DefaultDirName=c.p.POLICY['windows_install_dir'],
+                        PrivilegesRequired='lowest')
+        identity.update(fields or {})
+        version_info = dict(file=c.VERSION, product=c.VERSION,
+                            numeric=[1, 0, 10, 27], name='EmoSonic',
+                            original='emosonic.exe', debug=False, signature='NotSigned')
+        version_info.update(info or {})
+        def unpack(arguments, *args, **kwargs):
+            self.assertEqual(arguments[1:5], ['-x', '-b', '-q', '-o'])
+            installer = Path(arguments[-1])
+            observed.append(installer)
+            target = Path(next(a[2:] for a in arguments if a.startswith('-d')))
+            header = dict(identity, OutputBaseFilename=stored_base or installer.stem)
+            (target / 'install_script.iss').write_text(
+                '[Setup]\n' + '\n'.join(k + '=' + v for k, v in header.items()) + '\n[Files]\n')
+            app = target / '{app}'
+            app.mkdir()
+            pe = bytearray(70)
+            pe[:2] = b'MZ'
+            struct.pack_into('<I', pe, 60, 64)
+            pe[64:] = b'PE\0\0\x64\x86'
+            (app / 'emosonic.exe').write_bytes(pe)
+            for required in ('flutter_windows.dll', 'data/app.so', 'data/icudtl.dat',
+                             'data/flutter_assets/AssetManifest.bin'):
+                member = app / required
+                member.parent.mkdir(parents=True, exist_ok=True)
+                member.write_bytes(b'unit runtime, never executed')
+            if payload:
+                payload(app)
+            return ''
+        with patch.object(c.p, 'os', SimpleNamespace(name='nt', environ=os.environ)), \
+                patch.object(c.p, 'windows_tool', return_value=Path('unit-innounp')), \
+                patch.object(c.p, 'quiet', side_effect=unpack), \
+                patch.object(c.p, 'windows_version_info', return_value=version_info):
+            yield observed
+
+    def test_actual_empty_header_filename_model_red_then_green(self):
+        with self.incoming() as (root, package, digest), self.unpack_model() as observed:
+            canonical = root / c.p.installer_name(c.VERSION)
+            canonical.write_bytes(package.read_bytes())
+            c.p.inspect_windows(canonical, c.VERSION)
+            canonical.unlink()
+            # Request116's direct TEST-path inspection fails the real predicate.
+            with self.assertRaisesRegex(c.p.GateError, 'upgrade identity or version mismatch'):
+                c.p.inspect_windows(package, c.VERSION)
+            def emitted(name, value):
+                self.assertEqual((name, value), ('installer_sha256', digest))
+                self.assertFalse(list(root.glob('.test-windows-inspection-*')))
+                self.assertEqual(c.delivery_bundle(package.parent, c.VERSION, c.SOURCE_SHA, 'windows'), digest)
+            with patch.object(c.p, 'output', side_effect=emitted) as output:
+                c.verify_package('windows')
+                output.assert_called_once()
+            self.assertEqual([path.name for path in observed], [
+                c.p.installer_name(c.VERSION), package.name, c.p.installer_name(c.VERSION)])
+            self.assertEqual(c.p.file_digest(package), digest)
+
+    def test_wrong_stored_basename_and_all_identity_fields_still_rejected(self):
+        variants = [dict(stored_base='different-embedded-name')]
+        variants += [dict(fields={key: value}) for key, value in [
+            ('AppName', 'Other'), ('AppId', 'different-guid'), ('AppVersion', '1.0.9'),
+            ('DefaultDirName', '{pf}\\EmoSonic'), ('PrivilegesRequired', 'admin')]]
+        for variant in variants:
+            with self.subTest(variant=variant), self.incoming() as (root, package, digest), \
+                    self.unpack_model(**variant), patch.object(c.p, 'output') as output:
+                with self.assertRaises(c.p.GateError):
+                    c.verify_package('windows')
+                output.assert_not_called()
+                self.assertFalse(list(root.glob('.test-windows-inspection-*')))
+                self.assertEqual(c.p.file_digest(package), digest)
+
+    def test_real_embedded_version_signature_and_payload_predicates_still_reject(self):
+        variants = [dict(info={key: value}) for key, value in [
+            ('file', '1.0.9+26'), ('product', '1.0.9+26'), ('numeric', [1, 0, 9, 26]),
+            ('name', 'Other'), ('original', 'other.exe'), ('debug', True),
+            ('signature', 'Valid'), ('signature', 'HashMismatch')]]
+        variants += [dict(payload=action) for action in [
+            lambda app: (app / 'data/app.so').unlink(),
+            lambda app: (app / 'emosonic.exe').write_bytes(b'not a PE'),
+            lambda app: (app / 'private.dart').write_text('synthetic forbidden member')]]
+        for index, variant in enumerate(variants):
+            with self.subTest(index=index), self.incoming() as (root, package, digest), \
+                    self.unpack_model(**variant), patch.object(c.p, 'output') as output:
+                with self.assertRaises(c.p.GateError):
+                    c.verify_package('windows')
+                output.assert_not_called()
+                self.assertFalse(list(root.glob('.test-windows-inspection-*')))
+
+    def test_delivery_and_copy_mutation_or_removal_after_inspection_rejected(self):
+        for target in ('copy', 'delivery'):
+            for mutation in ('bytes', 'missing', 'symlink'):
+                with self.subTest(target=target, mutation=mutation), self.incoming() as (root, package, digest):
+                    def inspect(copied, candidate):
+                        path = copied if target == 'copy' else package
+                        if mutation == 'bytes': path.write_bytes(b'tampered')
+                        else:
+                            path.unlink()
+                            if mutation == 'symlink': path.symlink_to(root / 'original-built-package')
+                    with patch.object(c.p, 'inspect_windows', side_effect=inspect), \
+                            patch.object(c.p, 'output') as output:
+                        with self.assertRaises((c.p.GateError, FileNotFoundError)):
+                            c.verify_package('windows')
+                        output.assert_not_called()
+                    self.assertFalse(list(root.glob('.test-windows-inspection-*')))
+
+    def test_copy_corruption_or_link_before_inspection_rejected(self):
+        for mutation in ('bytes', 'missing', 'symlink', 'source-change'):
+            with self.subTest(mutation=mutation), self.incoming() as (root, package, digest):
+                def copy(source, destination):
+                    if mutation == 'bytes': destination.write_bytes(b'tampered')
+                    elif mutation == 'symlink': destination.symlink_to(source)
+                    elif mutation == 'source-change':
+                        destination.write_bytes(source.read_bytes())
+                        source.write_bytes(b'tampered')
+                with patch.object(c.shutil, 'copyfile', side_effect=copy), \
+                        patch.object(c.p, 'inspect_windows') as inspect, \
+                        patch.object(c.p, 'output') as output:
+                    with self.assertRaises(c.p.GateError): c.verify_package('windows')
+                    inspect.assert_not_called(); output.assert_not_called()
+                self.assertFalse(list(root.glob('.test-windows-inspection-*')))
+
+    def test_initial_delivery_mutation_or_missing_refuses_before_copy(self):
+        for mutation in ('bytes', 'missing', 'symlink'):
+            with self.subTest(mutation=mutation), self.incoming() as (root, package, digest):
+                if mutation == 'bytes': package.write_bytes(b'tampered')
+                else:
+                    package.unlink()
+                    if mutation == 'symlink': package.symlink_to(root / 'original-built-package')
+                with patch.object(c.shutil, 'copyfile') as copy, \
+                        patch.object(c.p, 'inspect_windows') as inspect:
+                    with self.assertRaises(c.p.GateError):
+                        c.inspect_windows_delivery(package, c.VERSION, digest)
+                    copy.assert_not_called(); inspect.assert_not_called()
+
+    def test_bundle_metadata_and_member_changes_during_inspection_rejected(self):
+        for mutation in ('manifest', 'checksum', 'extra', 'missing'):
+            with self.subTest(mutation=mutation), self.incoming() as (root, package, digest):
+                def inspect(*args):
+                    if mutation == 'manifest':
+                        (package.parent / 'windows-manifest.json').write_text('{}')
+                    elif mutation == 'checksum':
+                        (package.parent / (package.name + '.sha256')).write_text('0' * 64)
+                    elif mutation == 'extra': (package.parent / 'extra.txt').write_text('extra')
+                    else: (package.parent / 'windows-manifest.json').unlink()
+                with patch.object(c.p, 'inspect_windows', side_effect=inspect), \
+                        patch.object(c.p, 'output') as output:
+                    with self.assertRaises(c.p.GateError): c.verify_package('windows')
+                    output.assert_not_called()
+                self.assertFalse(list(root.glob('.test-windows-inspection-*')))
+
+    def test_cleanup_error_or_leftover_directory_never_emits_success(self):
+        original = tempfile.TemporaryDirectory
+        for mode in ('raise', 'leftover', 'delivery-change'):
+            with self.subTest(mode=mode), self.incoming() as (root, package, digest):
+                @contextmanager
+                def broken_cleanup(*args, **kwargs):
+                    with original(*args, **kwargs) as directory:
+                        yield directory
+                        if mode == 'raise': raise OSError('synthetic cleanup error')
+                    if mode == 'leftover': Path(directory).mkdir()
+                    if mode == 'delivery-change': package.write_bytes(b'tampered during cleanup')
+                with patch.object(c.tempfile, 'TemporaryDirectory', side_effect=broken_cleanup), \
+                        patch.object(c.p, 'inspect_windows'), patch.object(c.p, 'output') as output:
+                    with self.assertRaises((c.p.GateError, OSError)): c.verify_package('windows')
+                    output.assert_not_called()
+
+    def test_unsafe_or_preexisting_copy_destination_rejected(self):
+        for mode in ('outside', 'link', 'preexisting'):
+            with self.subTest(mode=mode), self.incoming() as (root, package, digest), \
+                    tempfile.TemporaryDirectory() as outside:
+                directory = Path(outside)
+                if mode == 'link':
+                    directory = root / 'link'
+                    directory.symlink_to(outside, target_is_directory=True)
+                if mode == 'preexisting':
+                    directory = root / 'owned'
+                    directory.mkdir()
+                    (directory / c.p.installer_name(c.VERSION)).write_bytes(b'existing')
+                @contextmanager
+                def substituted(*args, **kwargs): yield str(directory)
+                with patch.object(c.tempfile, 'TemporaryDirectory', side_effect=substituted), \
+                        patch.object(c.shutil, 'copyfile') as copy, \
+                        patch.object(c.p, 'inspect_windows') as inspect:
+                    with self.assertRaises(c.p.GateError):
+                        c.inspect_windows_delivery(package, c.VERSION, digest)
+                    copy.assert_not_called(); inspect.assert_not_called()
+
+    def test_inspection_exception_cleans_owned_copy_and_never_emits_success(self):
+        for error in (c.p.GateError('synthetic gate failure'), RuntimeError('synthetic tool failure')):
+            with self.subTest(error=type(error).__name__), self.incoming() as (root, package, digest), \
+                    patch.object(c.p, 'inspect_windows', side_effect=error), \
+                    patch.object(c.p, 'output') as output:
+                with self.assertRaises(type(error)): c.verify_package('windows')
+                output.assert_not_called()
+                self.assertFalse(list(root.glob('.test-windows-inspection-*')))
+                self.assertEqual(c.p.file_digest(package), digest)
 
 
 class PackageSourceObservationTests(unittest.TestCase):

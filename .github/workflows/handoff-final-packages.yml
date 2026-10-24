@@ -25,8 +25,8 @@ jobs:
   prepare:
     if: >-
       github.repository == 'jsdfhasuh/emosonic-build' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' && github.event.before == '185816dfbb86aa4966f51efc713cf7ba749918ea' &&
-      github.event.head_commit.message == 'test: diagnose bounded TEST package full validation 20261024' && github.event.forced == false
+      github.event_name == 'push' && github.event.before == '45a8dc2d9f6153ef39bbe4a97036713b695232bd' &&
+      github.event.head_commit.message == 'test: verify bounded TEST package Windows inspection naming 20261024' && github.event.forced == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: android-build

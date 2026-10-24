@@ -2,15 +2,17 @@
 import base64
 import json
 import os
+from pathlib import Path
 import shutil
 import sys
+import tempfile
 from unittest.mock import patch
 
 import current_source_check as request
 
 p = request.p
-PARENT = '185816dfbb86aa4966f51efc713cf7ba749918ea'
-MESSAGE = 'test: diagnose bounded TEST package full validation 20261024'
+PARENT = '45a8dc2d9f6153ef39bbe4a97036713b695232bd'
+MESSAGE = 'test: verify bounded TEST package Windows inspection naming 20261024'
 WORKFLOW = 'handoff-final-packages.yml'
 REQUEST_PATH = 'requests/handoff-final-packages-20261022.json'
 SOURCE_REF = 'refs/heads/fix/follow-bounded-budget-20261024'
@@ -58,7 +60,7 @@ def witness_descriptors():
 
 REQUEST = dict(source_repository=p.SOURCE, source_ref=SOURCE_REF,
                source_sha=SOURCE_SHA, server_sha=SERVER_SHA, version=VERSION,
-               mode='native-proven-build-only', attempt=116,
+               mode='native-proven-build-only', attempt=117,
                auxiliary_observer_sha=AUXILIARY_SHA,
                auxiliary_observer_ref=AUXILIARY_REF,
                source_validation_run_id=SOURCE_VALIDATION_RUN,
@@ -198,8 +200,7 @@ def package_metadata(candidate, sha, digest, platform='android'):
 
 
 def delivery_bundle(directory, candidate, sha, platform='android'):
-    # Never change installer_name: the original Windows build output and embedded
-    # Inno OutputBaseFilename must retain their original identity checks.
+    # Never change installer_name or the original Windows inspection contract.
     with patch.object(p, 'package_name', delivery_name):
         return _bundle(directory, candidate, sha, platform)
 
@@ -219,6 +220,30 @@ def stage_package(path, candidate, sha, platform):
     delivery_bundle(dist, candidate, sha, platform)
 
 
+def inspect_windows_delivery(package, candidate, digest):
+    # innounp reconstructs OutputBaseFilename from its input filename when the
+    # stored BaseFilename is empty. Keep the delivered TEST name and bytes, but
+    # inspect a private, digest-bound copy under the original build filename.
+    p.require(p.file_digest(package) == digest, 'Delivered Windows package changed.')
+    with tempfile.TemporaryDirectory(prefix='.test-windows-inspection-', dir=p.ROOT) as temporary:
+        directory = Path(temporary)
+        p.require(not directory.is_symlink() and directory.is_dir()
+                  and directory.resolve().parent == p.ROOT.resolve(),
+                  'Unsafe Windows inspection copy directory.')
+        original = directory / p.installer_name(candidate)
+        p.require(not original.exists() and not original.is_symlink(),
+                  'Windows inspection copy already exists.')
+        shutil.copyfile(package, original)
+        p.require(p.file_digest(original) == digest and p.file_digest(package) == digest,
+                  'Windows inspection copy differs from the delivered package.')
+        p.inspect_windows(original, candidate)
+        p.require(p.file_digest(original) == digest and p.file_digest(package) == digest,
+                  'Windows package changed during independent inspection.')
+    p.require(not directory.exists() and not directory.is_symlink(),
+              'Windows inspection copy cleanup incomplete.')
+    p.require(p.file_digest(package) == digest, 'Delivered Windows package changed after inspection.')
+
+
 def verify_package(platform):
     candidate, sha = os.environ['BUILD_VERSION'], p.checked_sha(os.environ['SOURCE_SHA'])
     directory = p.ROOT / 'incoming'
@@ -229,7 +254,9 @@ def verify_package(platform):
         p.output('apk_sha256', digest)
         print('Independent TEST APK signature, identity, version, ABI and provenance passed.')
     else:
-        p.inspect_windows(package, candidate)
+        inspect_windows_delivery(package, candidate, digest)
+        p.require(delivery_bundle(directory, candidate, sha, platform) == digest,
+                  'Windows delivery bundle changed during independent inspection.')
         p.output('installer_sha256', digest)
         print('Independent TEST Windows identity, version, x64, NotSigned and provenance passed.')
 
