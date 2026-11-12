@@ -437,7 +437,9 @@ class FinalPackageTests(unittest.TestCase):
         hashes = {
             'scripts/pipeline.py': 'ff731bbe84babf60b15346ec263a478972d2983fa6bdeac4cf1385ae24ff9e48',
             'scripts/current_source_check.py': 'adef0ecd3b00f8498a5325893cb7697e563c8f513bd3b4e6a073d414c8adbc88',
-            'policy.json': 'c888adbea5463b4c5cdaa1ae025766c3b2f87c11dca2e007ab903c9d765cb017',
+            # Reviewed innounp 2.71.3 pin refresh, 2026-11-12; all other
+            # protected files and the complete policy byte check remain fixed.
+            'policy.json': 'bc0b2b6ead32a118752fa715238b08cef579ba65b74762de5682c46092750d86',
             '.github/workflows/android.yml': '4dbee3059faab00e11935d374035583e24c13553ded5059004569a95be8cdeef',
             'scripts/native_recovery_check_observation.py': '4e58d0e18482cb8bbcc993c10fecde23e257b194f7d9b9f6d2d5e8d793b7f490',
         }

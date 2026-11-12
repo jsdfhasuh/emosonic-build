@@ -90,7 +90,7 @@ Android 固定包名 `com.example.emosonic` 和原证书 SHA-256 `6db83974a60fe2
 - Windows 原 Inno 模板路径 `windows/installer/emosonic.iss`、安装包输出目录 `build/windows/installer`、资产命名或安装身份变化。
 - 导航检查、build_runner 或包解析流程发生不兼容变更。
 
-Windows 继续调用受信任 master 的原构建入口且不传 `--upload`，pubspec 保持原样，不再临时替换版本。Android build-name/build-number 也仅来自同一源码版本。构建器自身只下载 policy 中固定 URL/哈希的 Inno Setup 6.7.3、innounp 2.71.2；不会因源脚本变化自动选择或下载替代工具。私有构建脚本和依赖自身的网络行为属于对 master 的信任范围，固定工具哈希不等于网络沙箱。
+Windows 继续调用受信任 master 的原构建入口且不传 `--upload`，pubspec 保持原样，不再临时替换版本。Android build-name/build-number 也仅来自同一源码版本。构建器自身只下载 policy 中固定 URL/哈希的 Inno Setup 6.7.3、innounp 2.71.3；不会因源脚本变化自动选择或下载替代工具。私有构建脚本和依赖自身的网络行为属于对 master 的信任范围，固定工具哈希不等于网络沙箱。
 
 每份 schema 3 manifest 包含固定来源仓库/分支、解析出的 SHA、builder SHA、run ID/attempt、版本、平台身份和包摘要。发布步骤比对双平台元数据、独立 verifier 摘要和远程上传资产的大小/摘要，再推广 latest。
 

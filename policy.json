@@ -19,9 +19,9 @@
   "inno_setup_version": "6.7.3",
   "inno_setup_url": "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe",
   "inno_setup_sha256": "9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732",
-  "innounp_version": "2.71.2",
+  "innounp_version": "2.71.3",
   "innounp_url": "https://github.com/jrathlev/InnoUnpacker-Windows-GUI/releases/download/ui_2_2_13/innounp-2.zip",
-  "innounp_sha256": "10fce27b6344b7674d5625cc34afca1c88c12183d957c6d93e401097fa2556cd",
-  "innounp_exe_sha256": "aecc0d7b1a2669711cd86d50061bb68911faa832ca3c69d4b1d2deb735cb1fcd",
+  "innounp_sha256": "f8e45c9676bebc7d7570108ab572673b541fcf7a7d3d24a04319ac6b5315b4e8",
+  "innounp_exe_sha256": "ab58400460cfda503ec88702dd3d82f6ee207b28e0548c9f8861ef008f85b644",
   "iscc_exe_sha256": "0a8757031b33777e4c9cbffee40f11a5062b36d25cbe144c1db73b6102b80ad7"
 }
